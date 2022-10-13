@@ -20,7 +20,7 @@ jobs:
         shell: powershell
         run: |
             Set-Location "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
-            $WorkLoads = '--add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --add Microsoft.Component.VC.Runtime.UCRTSDK --add Microsoft.VisualStudio.Component.WinXP'
+            $WorkLoads = '--add Microsoft.VisualStudio.Component.WinXP'
             $Arguments = ('/c', "vs_installer.exe", 'modify', '--channelId', 'VisualStudio.17.Release', '--productId', 'Microsoft.VisualStudio.Product.Enterprise', $WorkLoads, '--quiet', '--norestart', '--nocache')
             $process = Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
             if ($process.ExitCode -eq 0) {
