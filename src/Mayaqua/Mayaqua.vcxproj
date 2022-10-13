@@ -121,7 +121,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libeay32.lib;ssleay32.lib;zlib.lib;libintelaes.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_$(Configuration)\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_Release\</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <AdditionalOptions>/IGNORE:4199,4221,4006,4221 %(AdditionalOptions)</AdditionalOptions>
     </Lib>
@@ -155,7 +155,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libeay32.lib;ssleay32.lib;zlib.lib;libintelaes.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_$(Configuration)\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_Release\</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <AdditionalOptions>/IGNORE:4199,4221,4006,4221 %(AdditionalOptions)</AdditionalOptions>
     </Lib>
@@ -189,7 +189,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libeay32.lib;ssleay32.lib;zlib.lib;libintelaes.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_$(Configuration)\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_Release\</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <AdditionalOptions>/IGNORE:4199,4221,4006,4221 %(AdditionalOptions)</AdditionalOptions>
     </Lib>
@@ -224,7 +224,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libeay32.lib;ssleay32.lib;zlib.lib;libintelaes.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_$(Configuration)\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\BuildFiles\WindowsLibrary\$(PlatformName)_Release\</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <AdditionalOptions>/IGNORE:4199,4221,4006,4221 %(AdditionalOptions)</AdditionalOptions>
     </Lib>
