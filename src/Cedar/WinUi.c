@@ -4727,7 +4727,7 @@ void AboutDlgInit(HWND hWnd, WINUI_ABOUT *a)
 
 	SetFontMeiryo(hWnd, E_INFO2, 0);
 	UniFormat(tmp, sizeof(tmp), _UU("ABOUT_COPYRIGHT_INFO"), BUILD_DATE_Y, BUILD_DATE_Y, a->Cedar->BuildInfo);
-	UniReplaceStrEx(tmp, sizeof(tmp), tmp, L", ThinLib:", L".\r\ThinLib:", false);
+	UniReplaceStrEx(tmp, sizeof(tmp), tmp, L", ThinLib:", L".\r\nThinLib:", false);
 	SetText(hWnd, E_INFO2, tmp);
 
 	SetFont(hWnd, S_INFO3, GetFont("Arial", 7, false, false, false, false));
