@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -1023,11 +1023,11 @@ BUF *ReadHamcore(char *name)
 	GetFileNameFromFilePathW(exe_dir_single_1, sizeof(exe_dir_single_1), exe_dir);
 	GetFileNameFromFilePathW(exe_dir_single_2, sizeof(exe_dir_single_2), exe_dir_parent);
 
-	if (UniStrCmpi(exe_dir_single_1, HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE1) == 0 &&
-		UniStrCmpi(exe_dir_single_2, HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE2) == 0)
+	if (UniStrCmpi(exe_dir_single_1, HAMCORE_THINLIB_SUBMODULE_USE_IF_EXE_DIR_SIMPLE1) == 0 &&
+		UniStrCmpi(exe_dir_single_2, HAMCORE_THINLIB_SUBMODULE_USE_IF_EXE_DIR_SIMPLE2) == 0)
 	{
 		// Alternative hamcore real file in submodules/IPA-DN-ThinLib
-		UniFormat(tmp2, sizeof(tmp2), L"%s/%S/%S", exe_dir, HAMCORE_ULTRA_SUBMODULE_DIR_NAME, filename);
+		UniFormat(tmp2, sizeof(tmp2), L"%s/%S/%S", exe_dir, HAMCORE_THINLIB_SUBMODULE_DIR_NAME, filename);
 
 		b = ReadDumpW(tmp2);
 		if (b != NULL)

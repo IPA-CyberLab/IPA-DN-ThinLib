@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -975,7 +975,7 @@ L_RETRY:
 	PackAddStr(pack, "env_product_name_suite", DESK_PRODUCT_NAME_SUITE);
 	PackAddInt(pack, "env_build", CEDAR_BUILD);
 	PackAddInt(pack, "env_ver", CEDAR_VER);
-	PackAddStr(pack, "env_commit_id", ULTRA_COMMIT_ID);
+	PackAddStr(pack, "env_commit_id", THINLIB_COMMIT_ID);
 	LANGLIST current_lang = CLEAN;
 	GetCurrentLang(&current_lang);
 	PackAddStr(pack, "env_language", current_lang.Name);

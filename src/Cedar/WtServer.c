@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -674,7 +674,7 @@ void WtsConnectInner(TSESSION *session, SOCK *s, char *sni, bool *should_retry_p
 	PackAddInt(p, "ver", CEDAR_VER);
 	PackAddStr(p, "name_suite", DESK_PRODUCT_NAME_SUITE);
 	char ver_str[128] = CLEAN;
-	Format(ver_str, sizeof(ver_str), "Ver=%u,Build=%u,Release=%s,CommitId=%s,AppId=%s", CEDAR_VER, CEDAR_BUILD, ULTRA_VER_LABEL, ULTRA_COMMIT_ID, APP_ID_PREFIX);
+	Format(ver_str, sizeof(ver_str), "Ver=%u,Build=%u,Release=%s,CommitId=%s,AppId=%s", CEDAR_VER, CEDAR_BUILD, THINLIB_VER_LABEL, THINLIB_COMMIT_ID, APP_ID_PREFIX);
 	PackAddStr(p, "local_version", ver_str);
 	PackAddIp(p, "local_ip", &s->LocalIP);
 	wchar_t computer_name[128] = CLEAN;
@@ -691,7 +691,7 @@ void WtsConnectInner(TSESSION *session, SOCK *s, char *sni, bool *should_retry_p
 	PackAddStr(p, "env_product_name_suite", DESK_PRODUCT_NAME_SUITE);
 	PackAddInt(p, "env_build", CEDAR_BUILD);
 	PackAddInt(p, "env_ver", CEDAR_VER);
-	PackAddStr(p, "env_commit_id", ULTRA_COMMIT_ID);
+	PackAddStr(p, "env_commit_id", THINLIB_COMMIT_ID);
 	LANGLIST current_lang = CLEAN;
 	GetCurrentLang(&current_lang);
 	PackAddStr(p, "env_language", current_lang.Name);

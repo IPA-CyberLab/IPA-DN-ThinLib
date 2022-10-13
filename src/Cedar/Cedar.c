@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -1766,7 +1766,7 @@ CEDAR *NewCedar(X *server_x, K *server_k)
 	c->VerString = CopyStr(tmp);
 
 	Format(tmp, sizeof(tmp), "Compiled %04u/%02u/%02u %02u:%02u:%02u, ThinLib: %s - %s.",
-		BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D, BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE, ULTRA_COMMIT_ID, ULTRA_VER_LABEL);
+		BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D, BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE, THINLIB_COMMIT_ID, THINLIB_VER_LABEL);
 
 	c->BuildInfo = CopyStr(tmp);
 

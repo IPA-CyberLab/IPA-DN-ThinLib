@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -79,9 +79,9 @@
 
 // Constant
 #define	HAMCORE_DIR_NAME			"hamcore"
-#define HAMCORE_ULTRA_SUBMODULE_DIR_NAME	"../../submodules/IPA-DN-ThinLib/src/bin/hamcore"
-#define HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE1	L"bin"
-#define HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE2	L"src"
+#define HAMCORE_THINLIB_SUBMODULE_DIR_NAME	"../../submodules/IPA-DN-ThinLib/src/bin/hamcore"
+#define HAMCORE_THINLIB_SUBMODULE_USE_IF_EXE_DIR_SIMPLE1	L"bin"
+#define HAMCORE_THINLIB_SUBMODULE_USE_IF_EXE_DIR_SIMPLE2	L"src"
 #define	HAMCORE_FILE_NAME			"hamcore.se2"
 #define	HAMCORE_FILE_NAME_2			"_hamcore.se2"
 #define	HAMCORE_TEXT_NAME			"hamcore.txt"

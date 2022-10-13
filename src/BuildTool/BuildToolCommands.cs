@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -136,7 +136,7 @@ namespace BuildTool
 
 			if (Str.IsEmptyStr(hamcore_dir))
 			{
-				hamcore_dir = Path.Combine(Paths.UltraBinDirName, "hamcore");
+				hamcore_dir = Path.Combine(Paths.ThinLibBinDirName, "hamcore");
 			}
 
 			string[] stb_files = Directory.GetFiles(hamcore_dir, "*.stb", SearchOption.TopDirectoryOnly);
@@ -244,7 +244,7 @@ namespace BuildTool
 			string product_name = vl["PRODUCT"].StrValue;
 			string postfix = vl["POSTFIX"].StrValue;
 
-			Win32BuildTool.GenerateVersionInfoResource(targetFilename, outFilename, vl["RC"].StrValue, product_name, postfix, Paths.GetUltraSubmoduleCommitId(), Paths.GetUltraVersionLabel());
+			Win32BuildTool.GenerateVersionInfoResource(targetFilename, outFilename, vl["RC"].StrValue, product_name, postfix, Paths.GetThinLibSubmoduleCommitId(), Paths.GetThinLibVersionLabel());
 
 			return 0;
 		}

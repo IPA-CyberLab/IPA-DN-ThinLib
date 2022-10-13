@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 
@@ -38,6 +38,6 @@
 #define	BUILD_DATE_SE		12
 
 // IPA-DN-ThinLib library git commit id
-#define ULTRA_COMMIT_ID		"1d597240156f078765bf5d3e8af225cd7009c432"
-#define ULTRA_VER_LABEL		"beta7preview15"
+#define THINLIB_COMMIT_ID		"1d597240156f078765bf5d3e8af225cd7009c432"
+#define THINLIB_VER_LABEL		"beta7preview15"
 

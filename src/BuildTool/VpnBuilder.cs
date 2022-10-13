@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -106,11 +106,11 @@ namespace BuildTool
         public static readonly string SolutionBinDirName = ExeDirName;
         public static readonly string SolutionBaseDirName = IO.NormalizePath(Path.Combine(SolutionBinDirName, @"..\"));
         public static readonly string UtilityDirName = IO.NormalizePath(Path.Combine(SolutionBinDirName, @"..\BuildFiles\Utility"));
-        public static readonly bool IsIpaDnUltraSolution = false;
+        public static readonly bool IsIpaDnThinLibSolution = false;
 
-        public static readonly string UltraBaseDirName = IO.NormalizePath(Directory.Exists(Path.Combine(SolutionBinDirName, @"..\..\submodules\")) ? Path.Combine(SolutionBinDirName, @"..\..\submodules\IPA-DN-ThinLib\src") : Path.Combine(SolutionBinDirName, @"..\"));
-        public static readonly string UltraBinDirName = IO.NormalizePath(Path.Combine(UltraBaseDirName, "bin"));
-        public static readonly string UltraBuildFilesDirName = IO.NormalizePath(Path.Combine(UltraBaseDirName, "BuildFiles"));
+        public static readonly string ThinLibBaseDirName = IO.NormalizePath(Directory.Exists(Path.Combine(SolutionBinDirName, @"..\..\submodules\")) ? Path.Combine(SolutionBinDirName, @"..\..\submodules\IPA-DN-ThinLib\src") : Path.Combine(SolutionBinDirName, @"..\"));
+        public static readonly string ThinLibBinDirName = IO.NormalizePath(Path.Combine(ThinLibBaseDirName, "bin"));
+        public static readonly string ThinLibBuildFilesDirName = IO.NormalizePath(Path.Combine(ThinLibBaseDirName, "BuildFiles"));
 
         public static readonly string VisualStudioSolutionFileName;
 
@@ -118,7 +118,7 @@ namespace BuildTool
         public static readonly DateTime StartDateTime = DateTime.Now;
         public static readonly string StartDateTimeStr;
         public static readonly string CmdFileName;
-        public static readonly string ManifestsDir = Path.Combine(UltraBuildFilesDirName, "Manifests");
+        public static readonly string ManifestsDir = Path.Combine(ThinLibBuildFilesDirName, "Manifests");
         public static readonly string XCopyExeFileName = Path.Combine(Env.SystemDir, "xcopy.exe");
         public static readonly string MicrosoftSDKDir;
         public static readonly string MicrosoftSDKBinDir;
@@ -208,7 +208,7 @@ namespace BuildTool
                 string fn = Path.GetFileName(file);
                 if (Str.InStr(fn, "IPA-DN-ThinLib", false) && Str.InStr(fn, "IPA-DN-ThinLib-NativeUtilApp", false) == false && fn.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
                 {
-                    IsIpaDnUltraSolution = true;
+                    IsIpaDnThinLibSolution = true;
                 }
             }
         }
@@ -216,7 +216,7 @@ namespace BuildTool
         // Visual Studio 2022 の「VsDevCmd.bat」ファイルのパスを取得する
         public static string GetVsDevCmdFilePath()
         {
-            string vsWhere = Path.Combine(Paths.UltraBuildFilesDirName, @"Utility\vswhere.exe");
+            string vsWhere = Path.Combine(Paths.ThinLibBuildFilesDirName, @"Utility\vswhere.exe");
             string args = @"-version [17.0,18.0) -sort -requires Microsoft.Component.MSBuild -find Common7\Tools\VsDevCmd.bat";
 
             using (Process p = new Process())
@@ -265,13 +265,13 @@ namespace BuildTool
             return true;
         }
 
-        public static string GetUltraVersionLabel()
+        public static string GetThinLibVersionLabel()
         {
             string tmpPath = Paths.SolutionBaseDirName;
 
             string readmePath = Path.Combine(tmpPath, @"..\submodules\IPA-DN-ThinLib\README.md");
 
-            if (Paths.IsIpaDnUltraSolution)
+            if (Paths.IsIpaDnThinLibSolution)
             {
                 readmePath = Path.Combine(tmpPath, @"..\README.md");
             }
@@ -293,12 +293,12 @@ namespace BuildTool
             return "Unknown";
         }
 
-        public static string GetUltraSubmoduleCommitId()
+        public static string GetThinLibSubmoduleCommitId()
         {
             string tmpPath = Paths.SolutionBaseDirName;
 
             string headFilePath = @".git\modules\submodules\IPA-DN-ThinLib\HEAD";
-            if (Paths.IsIpaDnUltraSolution)
+            if (Paths.IsIpaDnThinLibSolution)
             {
                 headFilePath = @".git\HEAD";
             }

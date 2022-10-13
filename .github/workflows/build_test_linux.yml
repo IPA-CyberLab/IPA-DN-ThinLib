@@ -34,7 +34,7 @@ jobs:
 
       - name: Test Debug
         run: |
-          ./src/bin/UltraTest unittest
+          ./src/bin/ThinLibTest unittest
 
       - name: Build Release
         run: |
@@ -44,5 +44,5 @@ jobs:
 
       - name: Test Release
         run: |
-          ./src/bin/UltraTest unittest
+          ./src/bin/ThinLibTest unittest
 

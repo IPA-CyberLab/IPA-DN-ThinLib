@@ -1,4 +1,4 @@
-﻿// IPA-DN-Ultra Library Source Code
+﻿// IPA-DN-ThinLib Library Source Code
 // 
 // License: The Apache License, Version 2.0
 // https://www.apache.org/licenses/LICENSE-2.0
@@ -8,7 +8,7 @@
 // Copyright (c) Daiyuu Nobori.
 // Copyright (c) SoftEther VPN Project, University of Tsukuba, Japan.
 // Copyright (c) SoftEther Corporation.
-// Copyright (c) all contributors on IPA-DN-Ultra Library and SoftEther VPN Project in GitHub.
+// Copyright (c) all contributors on IPA-DN-ThinLib Library and SoftEther VPN Project in GitHub.
 // 
 // All Rights Reserved.
 // 
@@ -1839,8 +1839,8 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 	WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
 	WideLog(w, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
 		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
-	WideLog(w, "ULTRA_COMMIT_ID: %s", ULTRA_COMMIT_ID);
-	WideLog(w, "ULTRA_VER_LABEL: %s", ULTRA_VER_LABEL);
+	WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
+	WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
 
 	OS_INFO *os = GetOsInfo();
 	if (os != NULL)
@@ -2988,7 +2988,7 @@ void WideGatePackGateInfo(PACK *p, WT *wt)
 	PackAddInt(p, "Port", wt->Port);
 	PackAddInt64(p, "Caps", WG_CAPS_ALL);
 
-	PackAddStr(p, "UltraCommitId", ULTRA_COMMIT_ID);
+	PackAddStr(p, "UltraCommitId", THINLIB_COMMIT_ID);
 
 	// MAC アドレス
 	if (IsEmptyStr(wt->WanMacAddress))
@@ -4034,8 +4034,8 @@ WIDE *WideGateStart()
 		WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
 		WideLog(w, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
 			BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
-		WideLog(w, "ULTRA_COMMIT_ID: %s", ULTRA_COMMIT_ID);
-		WideLog(w, "ULTRA_VER_LABEL: %s", ULTRA_VER_LABEL);
+		WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
+		WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
 
 		OS_INFO* os = GetOsInfo();
 		if (os != NULL)
