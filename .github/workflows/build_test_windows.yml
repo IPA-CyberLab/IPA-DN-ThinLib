@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Add Microsoft.VisualStudio.Component.WinXP
         run: |
-          "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --channelId VisualStudio.17.Release --productId Microsoft.VisualStudio.Product.Enterprise -q --add Microsoft.VisualStudio.Component.WinXP
+          "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --channelId VisualStudio.17.Release --productId Microsoft.VisualStudio.Product.Enterprise -q --add Microsoft.VisualStudio.Component.WinXPzzz
         shell: cmd
 
       - name: Checkout
