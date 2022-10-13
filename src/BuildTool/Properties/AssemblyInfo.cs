@@ -2,11 +2,11 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("IPA Ultra Build Tool")]
+[assembly: AssemblyTitle("IPA ThinLib Build Tool")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("IPA CyberLab")]
-[assembly: AssemblyProduct("IPA Ultra Build Tool")]
+[assembly: AssemblyProduct("IPA ThinLib Build Tool")]
 [assembly: AssemblyCopyright("Copyright (c) IPA CyberLab. All Rights Reserved.")]
 [assembly: AssemblyCulture("")]
 

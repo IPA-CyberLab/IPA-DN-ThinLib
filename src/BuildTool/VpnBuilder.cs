@@ -108,7 +108,7 @@ namespace BuildTool
         public static readonly string UtilityDirName = IO.NormalizePath(Path.Combine(SolutionBinDirName, @"..\BuildFiles\Utility"));
         public static readonly bool IsIpaDnUltraSolution = false;
 
-        public static readonly string UltraBaseDirName = IO.NormalizePath(Directory.Exists(Path.Combine(SolutionBinDirName, @"..\..\submodules\")) ? Path.Combine(SolutionBinDirName, @"..\..\submodules\IPA-DN-Ultra\src") : Path.Combine(SolutionBinDirName, @"..\"));
+        public static readonly string UltraBaseDirName = IO.NormalizePath(Directory.Exists(Path.Combine(SolutionBinDirName, @"..\..\submodules\")) ? Path.Combine(SolutionBinDirName, @"..\..\submodules\IPA-DN-ThinLib\src") : Path.Combine(SolutionBinDirName, @"..\"));
         public static readonly string UltraBinDirName = IO.NormalizePath(Path.Combine(UltraBaseDirName, "bin"));
         public static readonly string UltraBuildFilesDirName = IO.NormalizePath(Path.Combine(UltraBaseDirName, "BuildFiles"));
 
@@ -201,12 +201,12 @@ namespace BuildTool
                 Directory.CreateDirectory(Paths.TmpDirName);
             }
 
-            // Determine if the solution is IPA-DN-Ultra itself
+            // Determine if the solution is IPA-DN-ThinLib itself
             string[] files = Directory.GetFiles(Paths.SolutionBaseDirName);
             foreach (string file in files)
             {
                 string fn = Path.GetFileName(file);
-                if (Str.InStr(fn, "IPA-DN-Ultra", false) && Str.InStr(fn, "IPA-DN-Ultra-NativeUtilApp", false) == false && fn.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+                if (Str.InStr(fn, "IPA-DN-ThinLib", false) && Str.InStr(fn, "IPA-DN-ThinLib-NativeUtilApp", false) == false && fn.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
                 {
                     IsIpaDnUltraSolution = true;
                 }
@@ -269,7 +269,7 @@ namespace BuildTool
         {
             string tmpPath = Paths.SolutionBaseDirName;
 
-            string readmePath = Path.Combine(tmpPath, @"..\submodules\IPA-DN-Ultra\README.md");
+            string readmePath = Path.Combine(tmpPath, @"..\submodules\IPA-DN-ThinLib\README.md");
 
             if (Paths.IsIpaDnUltraSolution)
             {
@@ -297,7 +297,7 @@ namespace BuildTool
         {
             string tmpPath = Paths.SolutionBaseDirName;
 
-            string headFilePath = @".git\modules\submodules\IPA-DN-Ultra\HEAD";
+            string headFilePath = @".git\modules\submodules\IPA-DN-ThinLib\HEAD";
             if (Paths.IsIpaDnUltraSolution)
             {
                 headFilePath = @".git\HEAD";

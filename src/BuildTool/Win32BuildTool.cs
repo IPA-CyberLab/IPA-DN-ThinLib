@@ -124,7 +124,7 @@ namespace BuildTool
 
             string exeFileName = Path.GetFileName(targetExeName);
 
-            exeFileName += " (Ultra: " + verLabel + ", " + commitId + ")";
+            exeFileName += " (ThinLib: " + verLabel + ", " + commitId + ")";
 
             if (Str.IsEmptyStr(product_name))
             {

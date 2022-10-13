@@ -37,7 +37,7 @@
 #define	BUILD_DATE_MI		48
 #define	BUILD_DATE_SE		12
 
-// IPA-DN-Ultra library git commit id
+// IPA-DN-ThinLib library git commit id
 #define ULTRA_COMMIT_ID		"1d597240156f078765bf5d3e8af225cd7009c432"
 #define ULTRA_VER_LABEL		"beta7preview15"
 

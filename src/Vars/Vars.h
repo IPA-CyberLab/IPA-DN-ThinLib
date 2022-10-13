@@ -15,16 +15,16 @@
 
 #include "VarsCurrentBuildInfo.h"
 
-#define APP_ID_PREFIX					"IPA_DN_Ultra"
-#define APP_ID_PREFIX_UNICODE			L"IPA_DN_Ultra"
+#define APP_ID_PREFIX					"IPA_DN_ThinLib"
+#define APP_ID_PREFIX_UNICODE			L"IPA_DN_ThinLib"
 
 #define DS_RPC_PORT						9825
 
-#define DESK_PUBLISHER_NAME_ANSI		"IPA_DN_Ultra"
+#define DESK_PUBLISHER_NAME_ANSI		"IPA_DN_ThinLib"
 
-#define	DESK_PRODUCT_NAME_SUITE			"IPA_DN_Ultra"
-#define	DESK_PRODUCT_NAME_SUITE_UNICODE		L"IPA_DN_Ultra"
-#define DESK_PUBLISHER_NAME_UNICODE		L"IPA_DN_Ultra"
+#define	DESK_PRODUCT_NAME_SUITE			"IPA_DN_ThinLib"
+#define	DESK_PRODUCT_NAME_SUITE_UNICODE		L"IPA_DN_ThinLib"
+#define DESK_PUBLISHER_NAME_UNICODE		L"IPA_DN_ThinLib"
 
 
 // 以下は必要に応じていじること

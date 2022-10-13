@@ -1,4 +1,4 @@
-# IPA-DN-Ultra UltraTest Source Code
+# IPA-DN-Ultra ThinLibTest Source Code
 # 
 # License: The Apache License, Version 2.0
 # https://www.apache.org/licenses/LICENSE-2.0
@@ -70,12 +70,12 @@ tmp/unix/$(DEBUG_OR_RELEASE)/submodules/./Cedar/%.o: ./Cedar/%.c $(CEDAR_HEADERS
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 
-# UltraTest source files
-ULTRATEST_SRCS := $(wildcard UltraTest/*.c)
-ULTRATEST_HEADERS := $(wildcard UltraTest/*.h)
-ULTRATEST_OBJS := $(addprefix tmp/unix/$(DEBUG_OR_RELEASE)/,$(addsuffix .o,$(sort $(basename $(ULTRATEST_SRCS)))))
+# ThinLibTest source files
+THINLIBTEST_SRCS := $(wildcard ThinLibTest/*.c)
+THINLIBTEST_HEADERS := $(wildcard ThinLibTest/*.h)
+THINLIBTEST_OBJS := $(addprefix tmp/unix/$(DEBUG_OR_RELEASE)/,$(addsuffix .o,$(sort $(basename $(THINLIBTEST_SRCS)))))
 
-tmp/unix/$(DEBUG_OR_RELEASE)/UltraTest/%.o: UltraTest/%.c $(ULTRATEST_HEADERS) $(CEDAR_HEADERS) $(MAYAQUA_HEADERS)
+tmp/unix/$(DEBUG_OR_RELEASE)/ThinLibTest/%.o: ThinLibTest/%.c $(THINLIBTEST_HEADERS) $(CEDAR_HEADERS) $(MAYAQUA_HEADERS)
 	@if [ ! -e `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(CC) $(CFLAGS) -o $@ -c $<
 
@@ -83,13 +83,13 @@ tmp/unix/$(DEBUG_OR_RELEASE)/UltraTest/%.o: UltraTest/%.c $(ULTRATEST_HEADERS) $
 # Targets and build rules
 all:	build
 
-build:	bin/UltraTest
+build:	bin/ThinLibTest
 
 clean:
 	-rm -fr tmp/unix/debug/ tmp/unix/release/
-	-rm -f bin/UltraTest
+	-rm -f bin/ThinLibTest
 
-bin/UltraTest:	$(MAYAQUA_OBJS) $(CEDAR_OBJS) $(ULTRATEST_OBJS)
+bin/ThinLibTest:	$(MAYAQUA_OBJS) $(CEDAR_OBJS) $(THINLIBTEST_OBJS)
 	$(CC) $(LDFLAGS_DEBUG) $^ $(LDLIBS) -o $@
 
 

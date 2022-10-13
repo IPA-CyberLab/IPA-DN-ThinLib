@@ -16,10 +16,10 @@
 public static class Vars
 {
     // ココを書換えます
-    public static readonly string ProductName = "IPA_DN_Ultra";
+    public static readonly string ProductName = "IPA_DN_ThinLib";
     public static readonly string CompanyName = "IPA CyberLab dnobori";
     public static readonly string Copyright = "IPA CyberLab dnobori";
-    public static readonly string APP_ID_PREFIX = "IPA_DN_Ultra";
+    public static readonly string APP_ID_PREFIX = "IPA_DN_ThinLib";
 
     // おまけ
     public static readonly string DistibutionPackagePrefix = APP_ID_PREFIX + "_";

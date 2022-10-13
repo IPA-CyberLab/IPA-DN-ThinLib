@@ -1026,7 +1026,7 @@ BUF *ReadHamcore(char *name)
 	if (UniStrCmpi(exe_dir_single_1, HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE1) == 0 &&
 		UniStrCmpi(exe_dir_single_2, HAMCORE_ULTRA_SUBMODULE_USE_IF_EXE_DIR_SIMPLE2) == 0)
 	{
-		// Alternative hamcore real file in submodules/IPA-DN-Ultra
+		// Alternative hamcore real file in submodules/IPA-DN-ThinLib
 		UniFormat(tmp2, sizeof(tmp2), L"%s/%S/%S", exe_dir, HAMCORE_ULTRA_SUBMODULE_DIR_NAME, filename);
 
 		b = ReadDumpW(tmp2);
