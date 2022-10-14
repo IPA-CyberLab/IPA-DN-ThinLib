@@ -1987,6 +1987,7 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 	UINT ret;
 	wchar_t lifetime_msg[MAX_PATH] = {0};
 	DESKTOP_WATERMARK *water = NULL;
+	bool restore_window = false;
 	// 引数チェック
 	if (hWnd == NULL || t == NULL || pcid == NULL)
 	{
@@ -2197,6 +2198,7 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 					// プロセス起動成功
 					Hide(hWnd, 0);
 					Hide(t->hWnd, 0);
+					restore_window = true;
 
 					if (UniIsEmptyStr(s->WatermarkStr1) == false)
 					{
@@ -2291,8 +2293,6 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 							}
 						}
 					}
-
-					Show(t->hWnd, 0);
 				}
 			}
 
@@ -2304,6 +2304,13 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 				}
 			}
 		}
+	}
+
+	if (restore_window)
+	{
+		Show(t->hWnd, 0);
+
+		DoEvents(t->hWnd);
 	}
 
 	ReleaseDcSession(s);
@@ -2999,6 +3006,10 @@ void DuMainDlgSetControlEnabled(HWND hWnd, bool b)
 	SetEnable(hWnd, B_SHARE, b);
 	SetEnable(hWnd, B_WOL, b);
 	SetEnable(hWnd, B_ERASE, b);
+	SetEnable(hWnd, B_WEB, b);
+	SetEnable(hWnd, E_SYSTEM, b);
+	SetEnable(hWnd, S_PCID, b);
+	SetEnable(hWnd, S_SYSTEM, b);
 
 	if (b)
 	{
