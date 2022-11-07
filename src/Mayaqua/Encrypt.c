@@ -154,6 +154,54 @@ typedef struct CB_PARAM
 	char *password;
 } CB_PARAM;
 
+static char ssl_version_cache[MAX_PATH] = CLEAN;
+
+void GetSslLibVersion(char *str, UINT size)
+{
+	if (IsEmptyStr(ssl_version_cache))
+	{
+		GetSslLibVersion_Internal(ssl_version_cache, sizeof(ssl_version_cache));
+	}
+
+	StrCpy(str, size, ssl_version_cache);
+}
+
+void GetSslLibVersion_Internal(char *str, UINT size)
+{
+	char tmp[MAX_PATH] = CLEAN;
+	if (str == NULL)
+	{
+		return;
+	}
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	Format(tmp, sizeof(tmp), "OpenSSL <= 1.0.2");
+#else	// OPENSSL_VERSION_NUMBER
+	UINT verint = OpenSSL_version_num();
+
+	UINT ver_major = (verint >> 28) & 0x0F;
+	UINT ver_minor = (verint >> 20) & 0xFF;
+	UINT ver_fix = (verint >> 12) & 0xFF;
+	UINT ver_patch = (verint >> 4) & 0xFF;
+
+	if (ver_major >= 3)
+	{
+		Format(tmp, sizeof(tmp), "OpenSSL %u.%u.%u", ver_major, ver_minor, ver_patch);
+	}
+	else
+	{
+		char c = 0;
+		if (ver_patch >= 1)
+		{
+			c = 'a' + (ver_patch - 1);
+		}
+		Format(tmp, sizeof(tmp), "OpenSSL %u.%u.%u%c", ver_major, ver_minor, ver_fix, c);
+	}
+
+#endif	// OPENSSL_VERSION_NUMBER
+
+	StrCpy(str, size, tmp);
+}
 
 LIST* BufToXList(BUF* b)
 {
@@ -5032,6 +5080,8 @@ void InitCryptLibrary()
 	ossl_provider_legacy = OSSL_PROVIDER_load(NULL, "legacy");
 	ossl_provider_default = OSSL_PROVIDER_load(NULL, "default");
 #endif
+
+	GetSslLibVersion(NULL, 0);
 
 	ERR_load_crypto_strings();
 	SSL_load_error_strings();

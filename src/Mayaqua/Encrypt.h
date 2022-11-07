@@ -415,6 +415,9 @@ bool CertsAndKeyAlwaysUseCallback(char* sni_name, void* param);
 LIST* BufToXList(BUF* b);
 void FreeXList(LIST* o);
 
+void GetSslLibVersion_Internal(char *str, UINT size);
+void GetSslLibVersion(char *str, UINT size);
+
 void CertTest();
 BIO *BufToBio(BUF *b);
 BUF *BioToBuf(BIO *bio);
