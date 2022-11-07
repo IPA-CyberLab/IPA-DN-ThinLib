@@ -19133,15 +19133,14 @@ bool GetIP6InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 			StrToUni(hostname_w, sizeof(hostname_w), hostname);
 
 			int r;
-			if (r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
-				timeout) != 0 ||
+			if ((r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
+				timeout)) != 0 ||
 				info2->ai_family != AF_INET6)
 			{
 				if (info2)
 				{
 					MsFreeAddrInfoExW(info2);
 				}
-				Debug("Error: %u\n", r);
 				return false;
 			}
 
