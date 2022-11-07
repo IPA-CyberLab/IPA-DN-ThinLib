@@ -19227,16 +19227,22 @@ bool GetIP4Inner(IP *ip, char *hostname)
 
 	return true;
 }
-bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured)
+bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured, UINT timeout)
 {
 	struct sockaddr_in in;
 	struct in_addr addr;
 	struct addrinfo hint;
 	struct addrinfo *info;
+	struct NT_addrinfoexW hint2 = CLEAN;
+	struct NT_addrinfoexW *info2 = NULL;
 	// Validate arguments
 	if (ip == NULL || hostname == NULL)
 	{
 		return false;
+	}
+	if (timeout == 0)
+	{
+		timeout = INFINITE;
 	}
 
 	if (IsEmptyStr(hostname))
@@ -19254,12 +19260,14 @@ bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 	{
 		// Forward resolution
 		Zero(&hint, sizeof(hint));
+		Zero(&hint2, sizeof(hint2));
 #ifdef OS_WIN32
 		if (MsIsVista())
 		{
 			if (only_if_address_configured)
 			{
 				hint.ai_flags |= AI_ADDRCONFIG;
+				hint2.ai_flags |= AI_ADDRCONFIG;
 			}
 		}
 #endif // OS_WIN32
@@ -19267,6 +19275,41 @@ bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 		hint.ai_socktype = SOCK_STREAM;
 		hint.ai_protocol = IPPROTO_TCP;
 		info = NULL;
+
+		hint2.ai_family = AF_INET;
+		hint2.ai_socktype = SOCK_STREAM;
+		hint2.ai_protocol = IPPROTO_TCP;
+		info2 = NULL;
+
+#ifdef OS_WIN32
+		if (timeout != INFINITE && MsIsGetAddrInfoExWSupported())
+		{
+			wchar_t hostname_w[MAX_PATH] = CLEAN;
+
+			StrToUni(hostname_w, sizeof(hostname_w), hostname);
+
+			int r;
+			if ((r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
+				timeout)) != 0 ||
+				info2->ai_family != AF_INET)
+			{
+				if (info2)
+				{
+					MsFreeAddrInfoExW(info2);
+				}
+				return false;
+			}
+
+			// Forward resolution success
+			Copy(&in, info2->ai_addr, sizeof(struct sockaddr_in));
+			MsFreeAddrInfoExW(info2);
+
+			Copy(&addr, &in.sin_addr, sizeof(addr));
+			InAddrToIP(ip, &addr);
+
+			return true;
+		}
+#endif // OS_WIN32
 
 		if (getaddrinfo(hostname, NULL, &hint, &info) != 0 ||
 			info->ai_family != AF_INET)

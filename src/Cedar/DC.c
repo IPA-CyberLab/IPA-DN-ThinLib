@@ -2881,7 +2881,7 @@ void DcGetBestHostnameForPcid(char *hostname, UINT hostname_size, char *pcid, bo
 	if (ipv6 == false)
 	{
 		// IPv4 の場合
-		if (GetIP4InnerWithNoCache(&ip, hostname, true) == false)
+		if (GetIP4InnerWithNoCache(&ip, hostname, true, 0) == false)
 		{
 			// IPv4 ホスト名の取得に失敗
 			b = false;
@@ -2912,7 +2912,7 @@ void DcGetBestHostnameForPcid(char *hostname, UINT hostname_size, char *pcid, bo
 		else
 		{
 			IP ip4 = CLEAN;
-			if (GetIP4InnerWithNoCache(&ip4, hostname, true))
+			if (GetIP4InnerWithNoCache(&ip4, hostname, true, 0))
 			{
 				// IPv4 ホスト名の取得に成功してしまった。これは使用できない。
 				b = false;
