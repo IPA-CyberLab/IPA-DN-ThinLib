@@ -1350,7 +1350,7 @@ void CleanupGetIPThreadParam(GETIP_THREAD_PARAM *p);
 bool GetIP4Inner(IP *ip, char *hostname);
 bool GetIP6Inner(IP *ip, char *hostname);
 bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured);
-bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configured);
+bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configured, UINT timeout);
 bool GetHostNameInner(char *hostname, UINT size, IP *ip);
 bool GetHostNameInner6(char *hostname, UINT size, IP *ip);
 bool GetHostName(char *hostname, UINT size, IP *ip);
@@ -1538,6 +1538,7 @@ void AddProtocolDetailsStr(char *dst, UINT dst_size, char *str);
 void AddProtocolDetailsKeyValueStr(char *dst, UINT dst_size, char *key, char *value);
 void AddProtocolDetailsKeyValueInt(char *dst, UINT dst_size, char *key, UINT value);
 void TryGetCurrentAcceptingIPv4Address(IP *ip);
+void MSecToTimeval(struct timeval *tv, UINT msec);
 
 void LockOpenSSL();
 void UnlockOpenSSL();

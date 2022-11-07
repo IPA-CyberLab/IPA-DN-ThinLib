@@ -334,7 +334,7 @@ void MsFreeAddrInfoExW(NT_PADDRINFOEXW pAddrInfoEx)
 
 bool MsIsGetAddrInfoExWSupported()
 {
-	if (IsNt() == false || ms->nt->GetAddrInfoExW == NULL || ms->nt->FreeAddrInfoExW == NULL)
+	if (IsNt() == false || MsIsWindows8() == false || ms->nt->GetAddrInfoExW == NULL || ms->nt->FreeAddrInfoExW == NULL)
 	{
 		return false;
 	}

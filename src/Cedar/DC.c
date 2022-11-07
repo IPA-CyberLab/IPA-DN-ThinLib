@@ -2889,7 +2889,7 @@ void DcGetBestHostnameForPcid(char *hostname, UINT hostname_size, char *pcid, bo
 		else
 		{
 			IP ip6 = CLEAN;
-			if (GetIP6InnerWithNoCache(&ip6, hostname, true))
+			if (GetIP6InnerWithNoCache(&ip6, hostname, true, 0))
 			{
 				// IPv6 ホスト名の取得に成功してしまった。これは使用できない。
 				b = false;
@@ -2904,7 +2904,7 @@ void DcGetBestHostnameForPcid(char *hostname, UINT hostname_size, char *pcid, bo
 	else
 	{
 		// IPv6 の場合
-		if (GetIP6InnerWithNoCache(&ip, hostname, true) == false)
+		if (GetIP6InnerWithNoCache(&ip, hostname, true, 0) == false)
 		{
 			// IPv6 ホスト名の取得に失敗
 			b = false;

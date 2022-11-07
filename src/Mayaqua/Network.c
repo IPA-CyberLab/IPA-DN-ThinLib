@@ -18988,6 +18988,19 @@ bool GetIP6(IP *ip, char *hostname)
 	return GetIP6Ex(ip, hostname, 0, NULL);
 }
 
+void MSecToTimeval(struct timeval *tv, UINT msec)
+{
+	if (tv == NULL)
+	{
+		return;
+	}
+
+	Zero(tv, sizeof(struct timeval));
+
+	tv->tv_sec = msec / 1000;
+	tv->tv_usec = (msec % 1000) * 1000;
+}
+
 // Perform a DNS forward lookup query
 bool GetIP(IP *ip, char *hostname)
 {
@@ -19058,7 +19071,7 @@ bool GetIP6Inner(IP *ip, char *hostname)
 
 	return true;
 }
-bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configured)
+bool GetIP6InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured, UINT timeout)
 {
 	struct sockaddr_in6 in = CLEAN;
 	struct in6_addr addr = CLEAN;
@@ -19070,6 +19083,10 @@ bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configu
 	if (ip == NULL || hostname == NULL)
 	{
 		return false;
+	}
+	if (timeout == 0)
+	{
+		timeout = INFINITE;
 	}
 
 	if (IsEmptyStr(hostname))
@@ -19109,14 +19126,17 @@ bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configu
 		info2 = NULL;
 
 #ifdef OS_WIN32
-		if (MsIsGetAddrInfoExWSupported())
+		if (timeout != INFINITE && MsIsGetAddrInfoExWSupported())
 		{
 			wchar_t hostname_w[MAX_PATH] = CLEAN;
+			struct timeval tv_timeout = CLEAN;
+
+			MSecToTimeval(&tv_timeout, timeout);
 
 			StrToUni(hostname_w, sizeof(hostname_w), hostname);
 
 			if (MsGetAddrInfoExW(hostname_w, NULL, 0, NULL, &hint2, &info2,
-				NULL, NULL, NULL, NULL) != 0 ||
+				&tv_timeout, NULL, NULL, NULL) != 0 ||
 				info2->ai_family != AF_INET6)
 			{
 				if (info2)
