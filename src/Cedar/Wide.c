@@ -1829,6 +1829,9 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 		return NULL;
 	}
 
+	char ssl_lib_ver[MAX_PATH] = CLEAN;
+	GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
 	w = ZeroMalloc(sizeof(WIDE));
 
 	w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
@@ -1841,6 +1844,7 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
 	WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
 	WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+	WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
 
 	OS_INFO *os = GetOsInfo();
 	if (os != NULL)
@@ -4029,6 +4033,10 @@ WIDE *WideGateStart()
 		w->WideLog = NewLog(WIDE_GATE_LOG_DIRNAME, "gate", LOG_SWITCH_DAY);
 		w->WideLog->Flush = w->IsStandaloneMode;
 
+		char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+		GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
 		WideLog(w, "-------------------- Start Thin Gate System --------------------");
 		WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
 		WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
@@ -4036,6 +4044,7 @@ WIDE *WideGateStart()
 			BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
 		WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
 		WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+		WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
 
 		OS_INFO* os = GetOsInfo();
 		if (os != NULL)
