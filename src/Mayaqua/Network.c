@@ -19129,20 +19129,19 @@ bool GetIP6InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 		if (timeout != INFINITE && MsIsGetAddrInfoExWSupported())
 		{
 			wchar_t hostname_w[MAX_PATH] = CLEAN;
-			struct timeval tv_timeout = CLEAN;
-
-			MSecToTimeval(&tv_timeout, timeout);
 
 			StrToUni(hostname_w, sizeof(hostname_w), hostname);
 
-			if (MsGetAddrInfoExW(hostname_w, NULL, 0, NULL, &hint2, &info2,
-				&tv_timeout, NULL, NULL, NULL) != 0 ||
+			int r;
+			if (r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
+				timeout) != 0 ||
 				info2->ai_family != AF_INET6)
 			{
 				if (info2)
 				{
 					MsFreeAddrInfoExW(info2);
 				}
+				Debug("Error: %u\n", r);
 				return false;
 			}
 

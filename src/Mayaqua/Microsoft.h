@@ -598,6 +598,7 @@ typedef struct NT_API
 	PVOID(WINAPI* FreeSid)(PSID);
 	int(WSAAPI *GetAddrInfoExW)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE);
 	void(WSAAPI *FreeAddrInfoExW)(NT_PADDRINFOEXW);
+	int(WSAAPI *GetAddrInfoExCancel)(LPHANDLE);
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -1368,6 +1369,7 @@ void MsTestFunc2();
 int MsGetAddrInfoExW(wchar_t *pName, wchar_t *pServiceName, DWORD dwNameSpace, void *lpNspId,
 	NT_ADDRINFOEXW *hints, NT_PADDRINFOEXW *ppResult, struct timeval *timeout,
 	void *lpOverlapped, void *lpCompletionRoutine, void **lpNameHandle);
+int MsGetAddrInfoExW_Easy(wchar_t *pName, NT_ADDRINFOEXW *hints, NT_PADDRINFOEXW *ppResult, UINT timeout);
 void MsFreeAddrInfoExW(NT_PADDRINFOEXW pAddrInfoEx);
 bool MsIsGetAddrInfoExWSupported();
 

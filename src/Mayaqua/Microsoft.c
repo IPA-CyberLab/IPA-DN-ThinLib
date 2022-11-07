@@ -307,6 +307,67 @@ void MsTestFunc1(HWND hWnd)
 	}
 }
 
+typedef struct _MS_GETADDRINFOEXW_CTX
+{
+	OVERLAPPED QueryOverlapped;
+	NT_PADDRINFOEXW *QueryResults;
+	HANDLE CompleteEvent;
+	int Err;
+} MS_GETADDRINFOEXW_CTX;
+
+void WINAPI MsGetAddrInfoExW_Easy_Callback(DWORD err, DWORD bytes, LPOVERLAPPED overlapped)
+{
+	MS_GETADDRINFOEXW_CTX *ctx = CONTAINING_RECORD(overlapped, MS_GETADDRINFOEXW_CTX, QueryOverlapped);
+
+	ctx->Err = err;
+
+	SetEvent(ctx->CompleteEvent);
+}
+
+// GetAddrInfoEx のスタブ (Vista 以降) - タイムアウト機能の簡易実装
+int MsGetAddrInfoExW_Easy(wchar_t *pName, NT_ADDRINFOEXW *hints, NT_PADDRINFOEXW *ppResult, UINT timeout)
+{
+	if (timeout == 0 || timeout == INFINITE)
+	{
+		return MsGetAddrInfoExW(pName, NULL, 0, NULL, hints, ppResult, NULL, NULL, NULL, NULL);
+	}
+
+	MS_GETADDRINFOEXW_CTX ctx = CLEAN;
+	HANDLE cancel_handle = NULL;
+
+	ctx.CompleteEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (ctx.CompleteEvent == NULL)
+	{
+		return 1;
+	}
+
+	UINT err = MsGetAddrInfoExW(pName, NULL, 0, NULL, hints, ppResult, NULL, &ctx.QueryOverlapped, MsGetAddrInfoExW_Easy_Callback, &cancel_handle);
+
+	if (err != WSA_IO_PENDING)
+	{
+		MsGetAddrInfoExW_Easy_Callback(err, 0, &ctx.QueryOverlapped);
+		CloseHandle(ctx.CompleteEvent);
+		return err;
+	}
+
+	if (WaitForSingleObject(ctx.CompleteEvent, timeout) == WAIT_TIMEOUT)
+	{
+		ms->nt->GetAddrInfoExCancel(&cancel_handle);
+
+		WaitForSingleObject(ctx.CompleteEvent, INFINITE);
+
+		err = WAIT_TIMEOUT;
+	}
+	else
+	{
+		err = ctx.Err;
+	}
+
+	CloseHandle(ctx.CompleteEvent);
+
+	return err;
+}
+
 // GetAddrInfoEx のスタブ (Vista 以降)
 int MsGetAddrInfoExW(wchar_t *pName, wchar_t *pServiceName, DWORD dwNameSpace, void *lpNspId,
 	NT_ADDRINFOEXW *hints, NT_PADDRINFOEXW *ppResult, struct timeval *timeout,
@@ -334,7 +395,7 @@ void MsFreeAddrInfoExW(NT_PADDRINFOEXW pAddrInfoEx)
 
 bool MsIsGetAddrInfoExWSupported()
 {
-	if (IsNt() == false || MsIsWindows8() == false || ms->nt->GetAddrInfoExW == NULL || ms->nt->FreeAddrInfoExW == NULL)
+	if (IsNt() == false || MsIsWindows8() == false || ms->nt->GetAddrInfoExW == NULL || ms->nt->FreeAddrInfoExW == NULL || ms->nt->GetAddrInfoExCancel == NULL)
 	{
 		return false;
 	}
@@ -14427,6 +14488,10 @@ NT_API *MsLoadNtApiFunctions()
 	nt->FreeAddrInfoExW =
 		(void(__stdcall *)(NT_PADDRINFOEXW))
 		GetProcAddress(nt->hWS2_32, "FreeAddrInfoExW");
+
+	nt->GetAddrInfoExCancel =
+		(int(__stdcall *)(LPHANDLE))
+		GetProcAddress(nt->hWS2_32, "GetAddrInfoExCancel");
 
 	// Determine WoW64
 	if (Is32())
