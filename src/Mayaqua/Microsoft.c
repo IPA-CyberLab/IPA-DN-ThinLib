@@ -3930,7 +3930,12 @@ void MsNoSleepThread(THREAD *thread, void *param)
 
 	while (e->Halt == false)
 	{
-		DWORD flag = ES_SYSTEM_REQUIRED;
+		DWORD flag = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
+
+		if (MsIsWindows10())
+		{
+			flag |= ES_AWAYMODE_REQUIRED;
+		}
 
 		if (e->NoScreenSaver)
 		{
@@ -3944,6 +3949,8 @@ void MsNoSleepThread(THREAD *thread, void *param)
 
 		Wait(e->HaltEvent, 30 * 1000);
 	}
+
+	_SetThreadExecutionState(ES_CONTINUOUS);
 
 	FreeLibrary(hKernel32);
 }
@@ -3961,7 +3968,14 @@ void MsStartEasyNoSleep()
 
 		if (_SetThreadExecutionState != NULL)
 		{
-			_SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
+			UINT flag = ES_SYSTEM_REQUIRED | ES_CONTINUOUS;
+
+			if (MsIsWindows10())
+			{
+				flag |= ES_AWAYMODE_REQUIRED;
+			}
+
+			_SetThreadExecutionState(flag);
 		}
 
 		FreeLibrary(hKernel32);
@@ -4012,7 +4026,13 @@ void MsNoSleepThreadVista(THREAD *thread, void *param)
 
 	while (e->Halt == false)
 	{
-		DWORD flag = ES_SYSTEM_REQUIRED;
+		DWORD flag = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
+
+		if (MsIsWindows10())
+		{
+			flag |= ES_AWAYMODE_REQUIRED;
+		}
+
 		UINT64 now = Tick64();
 		POINT p;
 		bool mouse_move = false;
@@ -4108,6 +4128,12 @@ void MsNoSleepThreadVista(THREAD *thread, void *param)
 		}
 
 		Wait(e->HaltEvent, 512);
+	}
+
+	// Restore
+	if (_SetThreadExecutionState != NULL)
+	{
+		_SetThreadExecutionState(ES_CONTINUOUS);
 	}
 
 	if (true)
