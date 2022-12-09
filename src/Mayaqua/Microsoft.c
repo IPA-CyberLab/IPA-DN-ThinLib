@@ -3950,7 +3950,10 @@ void MsNoSleepThread(THREAD *thread, void *param)
 		Wait(e->HaltEvent, 30 * 1000);
 	}
 
-	_SetThreadExecutionState(ES_CONTINUOUS);
+	if (_SetThreadExecutionState != NULL)
+	{
+		_SetThreadExecutionState(ES_CONTINUOUS);
+	}
 
 	FreeLibrary(hKernel32);
 }
