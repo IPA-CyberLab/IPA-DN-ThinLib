@@ -4898,6 +4898,9 @@ bool DsLoadConfigMain(DS *ds, FOLDER *root)
 	//CfgGetStr(root, "RegistrationPassword", ds->Wide->RegistrationPassword, sizeof(ds->Wide->RegistrationPassword));
 	CfgGetStr(root, "RegistrationEmail", ds->Wide->RegistrationEmail, sizeof(ds->Wide->RegistrationEmail));
 
+	ds->PeriodicHttpsPollingIntervalSecs = CfgGetInt(root, "PeriodicHttpsPollingIntervalSecs");
+	CfgGetStr(root, "PeriodicHttpsPollingTargetUrl", ds->PeriodicHttpsPollingTargetUrl, sizeof(ds->PeriodicHttpsPollingTargetUrl));
+
 	ds->EnableInspection = CfgGetBool(root, "EnableInspection");
 	ds->EnableMacCheck = CfgGetBool(root, "EnableMacCheck");
 	CfgGetStr(root, "MacAddressList", ds->MacAddressList, sizeof(ds->MacAddressList));
@@ -5015,6 +5018,9 @@ FOLDER *DsSaveConfigMain(DS *ds)
 		{
 			CfgAddStr(root, "RegistrationEmail", ds->Wide->RegistrationEmail);
 		}
+
+		CfgAddInt(root, "PeriodicHttpsPollingIntervalSecs", ds->PeriodicHttpsPollingIntervalSecs);
+		CfgAddStr(root, "PeriodicHttpsPollingTargetUrl", ds->PeriodicHttpsPollingTargetUrl);
 
 		CfgAddStr(root, "EmergencyOtp", ds->EmergencyOtp);
 
@@ -5625,10 +5631,47 @@ DS *NewDs(bool is_user_mode, bool force_share_disable)
 
 	DsLog(ds, "DSL_START4");
 
+	if (ds->PeriodicHttpsPollingIntervalSecs >= 1 && IsFilledStr(ds->PeriodicHttpsPollingTargetUrl))
+	{
+		ds->PeriodicHttpsPollingThreadHaltEvent = NewEvent();
+		ds->PeriodicHttpsPollingThread = NewThread(PeriodicHttpsPollingThread, ds);
+	}
+
 	return ds;
 #else   // OS_WIN32
 	return NULL;
 #endif  // OS_WIN32
+}
+
+// 定期的 HTTPS アクセススレッド
+void PeriodicHttpsPollingThread(THREAD *thread, void *param)
+{
+	DS *ds = (DS *)param;
+
+	if (ds == NULL)
+	{
+		return;
+	}
+
+	while (ds->PeriodicHttpsPollingThreadHaltFlag == false)
+	{
+		URL_DATA data = CLEAN;
+		INTERNET_SETTING setting = CLEAN;
+		UINT err = 0;
+
+		WideGetInternetSetting(ds->Wide, &setting);
+		ParseUrl(&data, ds->PeriodicHttpsPollingTargetUrl, false, NULL);
+
+		BUF *buf = HttpRequestEx6(&data, &setting, 0, 0, &err, false, NULL, NULL, NULL, NULL, 0,
+			&ds->PeriodicHttpsPollingThreadHaltFlag, 0, NULL, NULL, NULL,
+			false, false, NULL, NULL, 0);
+
+		FreeBuf(buf);
+
+		UINT interval = GenRandInterval2(ds->PeriodicHttpsPollingIntervalSecs * 1000, 0);
+
+		Wait(ds->PeriodicHttpsPollingThreadHaltEvent, interval);
+	}
 }
 
 // PowerKeep の設定に変更があった
@@ -5777,6 +5820,15 @@ void FreeDs(DS *ds)
 	}
 
 	DsLog(ds, "DSL_END1");
+
+	if (ds->PeriodicHttpsPollingThread != NULL)
+	{
+		ds->PeriodicHttpsPollingThreadHaltFlag = true;
+		Set(ds->PeriodicHttpsPollingThreadHaltEvent);
+		WaitThread(ds->PeriodicHttpsPollingThread, INFINITE);
+		ReleaseThread(ds->PeriodicHttpsPollingThread);
+		ReleaseEvent(ds->PeriodicHttpsPollingThreadHaltEvent);
+	}
 
 	// 生き残っている Guacd のゾンビ・プロセスを強制終了する
 	DsKillAllZombineGuacdProcesses(ds);
