@@ -48,7 +48,7 @@
                 - ただし、これは、開発者または運営者の方々が作成されている既存の手順書、スクリプト等のうちのテキストデータを検索して、『submodules/IPA-DN-Ultra』(スラッシュは、バックスラッシュである可能性もあります) という文字列がある部分を、『submodules/IPA-DN-ThinLib』(同じく、スラッシュは、バックスラッシュである可能性もあります) に適切に置換いただくことで (置換される際は、バックアップの確実な保存をしていただくことを推奨します)、ほとんどコストをかけることなく、自動的・機械的に実施いただくことが可能です。
                 - また、以前に『IPA-DN-Ultra』を直接編集されていた場合は、編集された変更内容を、そのまま、『IPA-DN-ThinLib』に適用していただければ、変更点は、問題無く適用されます。
                 - そして、この変更は、(今後、『submodules/IPA-DN-ThinLib』がさらに別の名前に変更にならない限り) 1 回だけで済みます。
-    - 上記の変更内容は、[rc1 のマニュアル] (https://github.com/IPA-CyberLab/IPA-DN-Docs/tree/master/Docs/ThinTeleworkSystem/ja/SystemManual/) にも、すでに反映されています。
+    - 上記の変更内容は、[rc1 のマニュアル](https://github.com/IPA-CyberLab/IPA-DN-Docs/tree/master/Docs/ThinTeleworkSystem/ja/SystemManual/) にも、すでに反映されています。
 
 ## beta8preview9 - 2022/08/08
 1. 一部の環境でポリシー規制サーバーの自動検出に失敗する問題があるという報告がありました。そこで、サーバー側設定で「詳細デバッグログ」を有効にしている場合は、「server_log」ディレクトリに保存されるログにポリシー規制サーバーの自動検出の状況 (デバッグメッセージ) を記録するようにしました。
