@@ -410,6 +410,7 @@ UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sock
 LABEL_RETRY:
 	Debug("Connecting to WideControl...\n");
 	ret = WideClientConnectInner(w, &c, pcid, ver, build, client_options, no_cache);
+
 	if (ret == ERR_NO_ERROR)
 	{
 		Debug("Redirect Host: %s (for proxy: %s):%u\n", c.HostName, c.HostNameForProxy, c.Port);
