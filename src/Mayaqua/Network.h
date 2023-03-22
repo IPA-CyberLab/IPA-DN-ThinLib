@@ -984,7 +984,7 @@ struct HTTP_HEADER
 #define DEFAULT_PROXY_USER_AGENT	DEFAULT_USER_AGENT
 #define DEFAULT_PROXY_USER_AGENT_IE	DEFAULT_USER_AGENT
 
-#define	DEFAULT_ACCEPT		"image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, application/x-shockwave-flash, application/msword, application/vnd.ms-powerpoint, application/vnd.ms-excel, */*"
+#define	DEFAULT_ACCEPT		"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*"
 #define	DEFAULT_ENCODING	"gzip, deflate"
 #define	HTTP_CONTENT_TYPE	"text/html; charset=iso-8859-1"
 #define	HTTP_CONTENT_TYPE2	"application/octet-stream"
