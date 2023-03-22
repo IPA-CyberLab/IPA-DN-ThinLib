@@ -980,9 +980,9 @@ struct HTTP_HEADER
 };
 
 // HTTPS server / client related string constant
-#define	DEFAULT_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0"
-#define DEFAULT_PROXY_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; WOW64) like Gecko"
-#define DEFAULT_PROXY_USER_AGENT_IE	"Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko"
+#define	DEFAULT_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) like Gecko"
+#define DEFAULT_PROXY_USER_AGENT	DEFAULT_USER_AGENT
+#define DEFAULT_PROXY_USER_AGENT_IE	DEFAULT_USER_AGENT
 
 #define	DEFAULT_ACCEPT		"image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, application/x-shockwave-flash, application/msword, application/vnd.ms-powerpoint, application/vnd.ms-excel, */*"
 #define	DEFAULT_ENCODING	"gzip, deflate"
