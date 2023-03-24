@@ -14277,7 +14277,7 @@ SSL_CTX_SHARED* NewSslCtxSharedInternal(SSL_CTX_SHARED_SETTINGS* settings)
 		ret->Expires = Tick64() + lifetime;
 	}
 
-	Debug("SSL_CTX New: %p\n", ret);
+	//Debug("SSL_CTX New: %p\n", ret);
 
 	return ret;
 }
@@ -14410,7 +14410,7 @@ void CleanupSslCtxShared(SSL_CTX_SHARED* s)
 		return;
 	}
 
-	Debug("SSL_CTX Free: %p\n", s);
+	//Debug("SSL_CTX Free: %p\n", s);
 
 	FreeSSLCtx(s->SslCtx);
 
@@ -14830,7 +14830,7 @@ bool StartSSLWithSettings(SOCK* sock, UINT ssl_timeout, char* sni_hostname, SSL_
 	}
 	UnlockOpenSSL();
 	StrCpy(sock->TlsVersion, sizeof(sock->TlsVersion), (char *)SSL_get_version(sock->ssl));
-	Debug("SSL connected with %s\n", sock->TlsVersion);
+//	Debug("SSL connected with %s\n", sock->TlsVersion);
 
 	Unlock(sock->ssl_lock);
 

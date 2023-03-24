@@ -4071,6 +4071,12 @@ WIDE *WideGateStart()
 		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 	}
 
+	if (true) // TODO
+	{
+		// ZTTP 中継ゲートウェイ機能を開始
+		w->wt->ZttpGw = NewZttpGw(NULL);
+	}
+
 	// 統計送付
 	STATMAN_CONFIG cfg = CLEAN;
 
@@ -4268,6 +4274,9 @@ void WideGateStopEx(WIDE* wide, bool daemon_force_exit)
 	{
 		FreeCertServerClient(wide->Standalone_WebAppCertDownloader);
 	}
+
+	// ZTTP 中継ゲートウェイ機能を停止
+	FreeZttpGw(wide->wt->ZttpGw);
 
 	ReleaseWt(wide->wt);
 

@@ -89,6 +89,580 @@
 
 #define g_show_debug_protocol	false
 
+#define	g_disable_zttp_relay	true
+
+// ZTTP ゲートウェイの作成
+ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings)
+{
+	if (g_disable_zttp_relay)
+	{
+		return NULL;
+	}
+
+	ZTTP_GW *gw = ZeroMalloc(sizeof(ZTTP_GW));
+
+	gw->CurrentIdCounter = NewCounter();
+
+	Copy(&gw->Settings, settings, sizeof(ZTTP_GW_SETTINGS));
+
+	if (gw->Settings.NumThreads == 0)
+	{
+		gw->Settings.NumThreads = GetNumberOfCpu() * 32;
+		gw->Settings.NumThreads = 1; // TODO
+	}
+
+	gw->ThreadList = NewList(NULL);
+
+	UINT i;
+	for (i = 0;i < gw->Settings.NumThreads;i++)
+	{
+		ZTTP_GW_THREAD *gt = NewZttpGwThread(gw);
+
+		Add(gw->ThreadList, gt);
+	}
+
+	return gw;
+}
+
+// ZTTP ゲートウェイの解放
+void FreeZttpGw(ZTTP_GW *gw)
+{
+	if (gw == NULL)
+	{
+		return;
+	}
+
+	UINT i;
+	for (i = 0; i < LIST_NUM(gw->ThreadList);i++)
+	{
+		ZTTP_GW_THREAD *gt = LIST_DATA(gw->ThreadList, i);
+
+		StopAndFreeZttpThread(gt);
+	}
+
+	ReleaseList(gw->ThreadList);
+
+	DeleteCounter(gw->CurrentIdCounter);
+
+	Free(gw);
+}
+
+// ZTTP GW スレッド
+void ZttpGwThread(THREAD *thread, void *param)
+{
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	ZTTP_GW_THREAD *gt = (ZTTP_GW_THREAD *)param;
+
+	NoticeThreadInit(thread);
+
+	UINT buf_size = ZTTP_WINDOW_SIZE;
+	UCHAR *buf = Malloc(buf_size);
+
+	while (gt->Halt == false)
+	{
+		UINT64 now = Tick64();
+
+		LIST *delete_list = NULL;
+
+		LockList(gt->SessionList);
+		{
+			UINT i;
+			for (i = 0;i < LIST_NUM(gt->SessionList);i++)
+			{
+				ZTTP_GW_SESSION *sess = LIST_DATA(gt->SessionList, i);
+
+L_TRY_AGAIN:
+				DoNothing();
+
+				bool state_changed = false;
+				bool disconnected = false;
+
+				// ターゲットサーバーからデータを受信してバッファに挿入する
+				while (disconnected == false && FifoSize(sess->FifoTargetToClient) < ZTTP_WINDOW_SIZE)
+				{
+					UINT sz = Recv(sess->TargetSock, buf, buf_size, sess->TargetSock->SecureMode);
+
+					if (sz == 0)
+					{
+						// ターゲットサーバーとの通信が切断された
+						disconnected = true;
+						break;
+					}
+					else if (sz == INFINITE)
+					{
+						// これ以上受信できるデータはない
+						break;
+					}
+
+					// 受信したデータをバッファに入れる
+					WriteFifo(sess->FifoTargetToClient, buf, sz);
+					state_changed = true;
+
+					sess->LastCommTick = now;
+				}
+
+				// クライアントからデータを受信してバッファに挿入する
+				while (disconnected == false && FifoSize(sess->FifoClientToTarget) < ZTTP_WINDOW_SIZE)
+				{
+					UINT sz = WsRecvAsync(sess->ClientWebSocket, buf, buf_size, now);
+
+					if (sz == 0)
+					{
+						// クライアントとの通信が切断された
+						disconnected = true;
+						break;
+					}
+					else if (sz == INFINITE)
+					{
+						// これ以上受信できるデータはない
+						break;
+					}
+
+					// 受信したデータをバッファに入れる
+					WriteFifo(sess->FifoClientToTarget, buf, sz);
+					state_changed = true;
+
+					sess->LastCommTick = now;
+				}
+
+				// ターゲットサーバーにデータを送信する
+				while (disconnected == false)
+				{
+					UINT remain_size = FifoSize(sess->FifoClientToTarget);
+					if (remain_size == 0)
+					{
+						// これ以上送信できるデータはない
+						break;
+					}
+
+					UINT sz = Send(sess->TargetSock, FifoPtr(sess->FifoClientToTarget), remain_size, sess->TargetSock->SecureMode);
+					if (sz == 0)
+					{
+						// ターゲットサーバーとの通信が切断された
+						disconnected = true;
+						break;
+					}
+					else if (sz == INFINITE)
+					{
+						// ターゲットサーバー宛の TCP 通信キューが詰まっている
+						break;
+					}
+
+					// 送信したデータをバッファから破棄する
+					ReadFifo(sess->FifoClientToTarget, NULL, sz);
+					state_changed = true;
+				}
+
+				// クライアントにデータを送信する
+				while (disconnected == false)
+				{
+					UINT remain_size = FifoSize(sess->FifoTargetToClient);
+					if (remain_size == 0)
+					{
+						// これ以上送信できるデータはない
+						break;
+					}
+
+					UINT sz = WsSendAsync(sess->ClientWebSocket, FifoPtr(sess->FifoTargetToClient), remain_size);
+					if (sz == 0)
+					{
+						// クライアントとの通信が切断された
+						disconnected = true;
+						break;
+					}
+					else if (sz == INFINITE)
+					{
+						// クライアント宛の TCP 通信キューが詰まっている
+						break;
+					}
+
+					// 送信したデータをバッファから破棄する
+					ReadFifo(sess->FifoTargetToClient, NULL, sz);
+					state_changed = true;
+				}
+
+				if ((sess->LastCommTick + ZTTP_COMM_TIMEOUT_MAIN) < now)
+				{
+					// 通信タイムアウトが発生
+					disconnected = true;
+				}
+
+				if (disconnected)
+				{
+					// 通信エラーが発生した
+					if (delete_list == NULL)
+					{
+						delete_list = NewListFast(NULL);
+					}
+
+					Add(delete_list, sess);
+				}
+				else if (state_changed)
+				{
+					// 何らかのデータの送受信に成功したならば、再度ループを回す
+					goto L_TRY_AGAIN;
+				}
+			}
+
+			if (delete_list != NULL)
+			{
+				// 1 つ以上のセッションでエラーが発生したので、そのセッションを切断・解放する
+				for (i = 0;i < LIST_NUM(delete_list);i++)
+				{
+					ZTTP_GW_SESSION *sess = LIST_DATA(delete_list, i);
+
+					Delete(gt->SessionList, sess);
+
+					ZttpFreeGwSession(sess);
+				}
+
+				ReleaseList(delete_list);
+			}
+		}
+		UnlockList(gt->SessionList);
+
+		WaitSockEvent(gt->SockEvent, 1234);
+	}
+
+	Free(buf);
+}
+
+// ZTTP GW セッションの解放
+void ZttpFreeGwSession(ZTTP_GW_SESSION *sess)
+{
+	if (sess == NULL)
+	{
+		return;
+	}
+	
+	ReleaseWs(sess->ClientWebSocket);
+	ReleaseSock(sess->TargetSock);
+	ReleaseSock(sess->ClientSock);
+
+	ReleaseFifo(sess->FifoClientToTarget);
+	ReleaseFifo(sess->FifoTargetToClient);
+
+	Free(sess);
+}
+
+// ZTTP GW スレッドの作成
+ZTTP_GW_THREAD *NewZttpGwThread(ZTTP_GW *gw)
+{
+	ZTTP_GW_THREAD *gt = ZeroMalloc(sizeof(ZTTP_GW_THREAD));
+
+	gt->Gw = gw;
+	gt->SockEvent = NewSockEvent();
+
+	gt->SessionList = NewList(NULL);
+
+	gt->Thread = NewThread(ZttpGwThread, gt);
+	WaitThreadInit(gt->Thread);
+
+	return gt;
+}
+
+// ZTTP GW スレッドの停止と解放
+void StopAndFreeZttpThread(ZTTP_GW_THREAD *gt)
+{
+	if (gt == NULL)
+	{
+		return;
+	}
+
+	gt->Halt = true;
+
+	SetSockEvent(gt->SockEvent);
+
+	WaitThread(gt->Thread, INFINITE);
+	ReleaseThread(gt->Thread);
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(gt->SessionList);i++)
+	{
+		ZTTP_GW_SESSION *sess = LIST_DATA(gt->SessionList, i);
+
+		ZttpFreeGwSession(sess);
+	}
+
+	ReleaseList(gt->SessionList);
+
+	ReleaseSockEvent(gt->SockEvent);
+
+	Free(gt);
+}
+
+// ZTTP_CONNECT_RESPONSE
+void ZttpInRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a, PACK *p)
+{
+	if (a == NULL || p == NULL)
+	{
+		return;
+	}
+
+	Zero(a, sizeof(ZTTP_CONNECT_RESPONSE));
+
+	a->ErrorCode = PackGetInt(p, "ErrorCode");
+	PackGetUniStr(p, "ErrorMessage", a->ErrorMessage, sizeof(a->ErrorMessage));
+	a->Flags = PackGetInt64(p, "Flags");
+	PackGetStr(p, "TargetIp", a->TargetIp, sizeof(a->TargetIp));
+	a->TargetPort = PackGetInt(p, "TargetPort");
+	PackGetStr(p, "LocalIp", a->LocalIp, sizeof(a->LocalIp));
+	a->LocalPort = PackGetInt(p, "LocalPort");
+	PackGetStr(p, "TargetFqdnReverse", a->TargetFqdnReverse, sizeof(a->TargetFqdnReverse));
+}
+void ZttpOutRpcConnectResponse(PACK *p, ZTTP_CONNECT_RESPONSE *a)
+{
+	if (a == NULL || p == NULL)
+	{
+		return;
+	}
+
+	PackAddInt(p, "ErrorCode", a->ErrorCode);
+	PackAddUniStr(p, "ErrorMessage", a->ErrorMessage);
+	PackAddInt64(p, "Flags", a->Flags);
+	PackAddStr(p, "TargetIp", a->TargetIp);
+	PackAddInt(p, "TargetPort", a->TargetPort);
+	PackAddStr(p, "LocalIp", a->LocalIp);
+	PackAddInt(p, "LocalPort", a->LocalPort);
+	PackAddStr(p, "TargetFqdnReverse", a->TargetFqdnReverse);
+}
+
+// ZTTP_CONNECT_REQUEST
+void ZttpInRpcConnectRequest(ZTTP_CONNECT_REQUEST *a, PACK* p)
+{
+	if (a == NULL || p == NULL)
+	{
+		return;
+	}
+
+	Zero(a, sizeof(ZTTP_CONNECT_REQUEST));
+
+	a->Flags = PackGetInt64(p, "Flags");
+	PackGetStr(p, "TargetFqdn", a->TargetFqdn, sizeof(a->TargetFqdn));
+	a->TargetPort = PackGetInt(p, "TargetPort");
+}
+void ZttpOutRpcConnectRequest(PACK *p, ZTTP_CONNECT_REQUEST *a)
+{
+	if (a == NULL || p == NULL)
+	{
+		return;
+	}
+
+	PackAddInt64(p, "Flags", a->Flags);
+	PackAddStr(p, "TargetFqdn", a->TargetFqdn);
+	PackAddInt(p, "TargetPort", a->TargetPort);
+}
+
+// ZTTP WebSocket Accept 相当処理
+bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
+{
+	bool ret = false;
+	if (gw == NULL || s == NULL || url_target == NULL)
+	{
+		return false;
+	}
+
+	SetTimeout(s, ZTTP_COMM_TIMEOUT_INIT);
+
+	WS *w = NewWs(s);
+	if (w != NULL)
+	{
+		// バッファサイズ変更
+		w->MaxBufferSize = WT_WEBSOCK_WINDOW_SIZE;
+		w->Wsp->MaxRecvPayloadSizeOverride = WT_WEBSOCK_WINDOW_SIZE;
+
+		// 接続指令を受信
+		PACK *connect_request_pack = WsRecvPack(w);
+
+		if (connect_request_pack != NULL)
+		{
+			ZTTP_CONNECT_REQUEST connect_request = CLEAN;
+
+			ZttpInRpcConnectRequest(&connect_request, connect_request_pack);
+
+			FreePack(connect_request_pack);
+
+			ZTTP_CONNECT_RESPONSE connect_response = CLEAN;
+
+			// 接続を実施
+			SOCK *target_sock = ZttpConnectToTarget(gw, &connect_request, &connect_response);
+
+			UniStrCpy(connect_response.ErrorMessage, sizeof(connect_response.ErrorMessage), _E(connect_response.ErrorCode));
+
+			// 結果を応答
+			PACK *connect_response_pack = NewPack();
+			ZttpOutRpcConnectResponse(connect_response_pack, &connect_response);
+
+			WsSendPack(w, connect_response_pack);
+
+			FreePack(connect_response_pack);
+
+			if (target_sock != NULL)
+			{
+				// ZTTP 中継セッションオブジェクトを作成
+				ZTTP_GW_SESSION *sess = ZeroMalloc(sizeof(ZTTP_GW_SESSION));
+
+				sess->FifoClientToTarget = NewFifo();
+				sess->FifoTargetToClient = NewFifo();
+
+				sess->ClientWebSocket = w;
+				sess->ClientSock = s;
+				AddRef(sess->ClientSock->ref);
+				AddRef(sess->ClientWebSocket->Ref);
+
+				sess->TargetSock = target_sock;
+
+				UINT id = Inc(gw->CurrentIdCounter) - 1;
+				UINT thread_id = id % LIST_NUM(gw->ThreadList);
+
+				ZTTP_GW_THREAD *gt = LIST_DATA(gw->ThreadList, thread_id);
+
+				SetTimeout(sess->ClientSock, INFINITE);
+				SetTimeout(sess->TargetSock, INFINITE);
+
+				JoinSockToSockEvent(sess->ClientSock, gt->SockEvent);
+				JoinSockToSockEvent(sess->TargetSock, gt->SockEvent);
+
+				sess->LastCommTick = Tick64();
+
+				LockList(gt->SessionList);
+				{
+					Add(gt->SessionList, sess);
+				}
+				UnlockList(gt->SessionList);
+
+				SetSockEvent(gt->SockEvent);
+
+				ret = true;
+			}
+
+
+			if (ret == false)
+			{
+				UCHAR uc = 0;
+				WsRecvSyncAll(w, &uc, 1);
+			}
+		}
+
+		ReleaseWs(w);
+	}
+
+	return ret;
+}
+
+// ZTTP のトンネル先のソケットをターゲットに接続する
+SOCK *ZttpConnectToTarget(ZTTP_GW *gw, ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response)
+{
+	if (gw == NULL || request == NULL || response == NULL)
+	{
+		return NULL;
+	}
+
+	SOCK *s = ConnectEx4(request->TargetFqdn, request->TargetPort, ZTTP_TARGET_CONNECT_TIMEOUT,
+		(bool *)&gw->Halt, NULL, NULL, false, false, false, NULL);
+
+	if (s == NULL)
+	{
+		response->ErrorCode = ERR_CONNECT_FAILED;
+		return NULL;
+	}
+
+	IPToStr(response->TargetIp, sizeof(response->TargetIp), &s->RemoteIP);
+	response->TargetPort = s->RemotePort;
+
+	IPToStr(response->LocalIp, sizeof(response->LocalIp), &s->LocalIP);
+	response->LocalPort = s->LocalPort;
+
+	StrCpy(response->TargetFqdnReverse, sizeof(response->TargetFqdnReverse), s->RemoteHostname);
+
+	return s;
+}
+
+// ZTTP GET Handler
+bool ZttpWebSocketGetHandler(WT *wt, SOCK *s, HTTP_HEADER *h, char *url_target)
+{
+	HTTP_VALUE *req_upgrade;
+	HTTP_VALUE *req_version;
+	HTTP_VALUE *req_key;
+	char response_key[64];
+	UINT client_ws_version = 0;
+	char *bad_request_body = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Bad Request</TITLE>\r\n<META HTTP-EQUIV=\"Content-Type\" Content=\"text/html; charset=us-ascii\"></HEAD>\r\n<BODY><h2>Bad Request</h2>\r\n<hr><p>HTTP Error 400. The request is badly formed.</p>\r\n</BODY></HTML>";
+	if (wt == NULL || s == NULL || h == NULL || url_target == NULL)
+	{
+		return false;
+	}
+
+	char log_prefix[MAX_PATH] = CLEAN;
+
+	Format(log_prefix, sizeof(log_prefix), "AcceptNewZttpSession(Zttp_WebSocket)/ClientIP=%r/ClientPort=%u/ServerIP=%r/ServerPort=%u", &s->RemoteIP, s->RemotePort, &s->LocalIP, s->LocalPort);
+	MakeFormatSafeString(log_prefix);
+
+	req_upgrade = GetHttpValue(h, "Upgrade");
+	if (req_upgrade == NULL || StrCmpi(req_upgrade->Data, "websocket") != 0)
+	{
+		MvpnSendReply(s, 400, "Bad Request", bad_request_body, StrLen(bad_request_body),
+			NULL, NULL, NULL, NULL, NULL, h, false);
+		WtLogEx(wt, log_prefix, "WebSocket Bad Request: Invalid headers");
+		return false;
+	}
+
+	req_version = GetHttpValue(h, "Sec-WebSocket-Version");
+	if (req_version != NULL) client_ws_version = ToInt(req_version->Data);
+	if (client_ws_version != 13)
+	{
+		MvpnSendReply(s, 400, "Bad Request", NULL, 0,
+			NULL, "Sec-WebSocket-Version", "13", NULL, NULL, h, false);
+		WtLogEx(wt, log_prefix, "WebSocket Bad Request: client_ws_version = %u, not 13", client_ws_version);
+		return false;
+	}
+
+	Zero(response_key, sizeof(response_key));
+	req_key = GetHttpValue(h, "Sec-WebSocket-Key");
+	if (req_key != NULL)
+	{
+		char tmp[MAX_SIZE];
+		UCHAR hash[SHA1_SIZE];
+		StrCpy(tmp, sizeof(tmp), req_key->Data);
+		StrCat(tmp, sizeof(tmp), "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		HashSha1(hash, tmp, StrLen(tmp));
+		B64_Encode(response_key, hash, SHA1_SIZE);
+	}
+	else
+	{
+		MvpnSendReply(s, 400, "Bad Request", NULL, 0,
+			NULL, "Sec-WebSocket-Version", "13", NULL, NULL, h, false);
+		WtLogEx(wt, log_prefix, "WebSocket Bad Request: No Sec-WebSocket-Key");
+		return false;
+	}
+
+	char protocol[128] = CLEAN;
+	HTTP_VALUE *protocol_value = GetHttpValue(h, "Sec-WebSocket-Protocol");
+	if (protocol_value != NULL)
+	{
+		StrCpy(protocol, sizeof(protocol), protocol_value->Data);
+	}
+
+	WtLogEx(wt, log_prefix, "WebSocket protocol header value: '%s'", protocol);
+
+	// TODO: クォータ処理
+
+	MvpnSendReply(s, 101, "Switching Protocols", NULL, 0, NULL,
+		"Sec-WebSocket-Accept", response_key,
+		"Sec-WebSocket-Protocol", IsFilledStr(protocol) ? protocol : NULL,
+		h, true);
+
+	//Debug("WebSocket: Session reconnect OK for URL %s\n", url_target);
+	//WtLogEx(wt, log_prefix, "WebSocket: Session reconnect OK for URL %s", url_target);
+
+	bool ret = ZttpWebSocketAccept(wt->ZttpGw, s, url_target);
+
+	return ret;
+}
+
 // WebApp のためのプロキシ (Standalone mode 用)
 bool WtgHttpProxyForWebApp(WT* wt, SOCK* s, HTTP_HEADER* first_header)
 {
@@ -709,6 +1283,7 @@ bool WtgSearchSessionAndTunnelByWebSocketUrl(WT* wt, char* url_target, TSESSION*
 
 	return (session != NULL && tunnel != NULL);
 }
+
 
 // WebSocket GET Handler
 bool WtgWebSocketGetHandler(WT* wt, SOCK* s, HTTP_HEADER* h, char* url_target)
@@ -4217,6 +4792,20 @@ bool WtgDownloadSignature(WT* wt, SOCK* s, bool* check_ssl_ok, char* gate_secret
 		{
 			// WebSocket Mode
 			bool ws_ok = WtgWebSocketGetHandler(wt, s, h, h->Target);
+
+			FreeHttpHeader(h);
+
+			if (ws_ok)
+			{
+				return false;
+			}
+
+			continue;
+		}
+		else if (wt->ZttpGw != NULL && StartWith(h->Target, "/tunnel_test/")) // Test
+		{
+			// Tunnel test mode
+			bool ws_ok = ZttpWebSocketGetHandler(wt, s, h, h->Target);
 
 			FreeHttpHeader(h);
 
