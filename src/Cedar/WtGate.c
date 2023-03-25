@@ -89,7 +89,7 @@
 
 #define g_show_debug_protocol	false
 
-#define	g_disable_zttp_relay	true
+#define	g_disable_zttp_relay	false
 
 // ZTTP ゲートウェイの作成
 ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings)
@@ -105,10 +105,25 @@ ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings)
 
 	Copy(&gw->Settings, settings, sizeof(ZTTP_GW_SETTINGS));
 
-	if (gw->Settings.NumThreads == 0)
+	ZTTP_GW_SETTINGS *st = &gw->Settings;
+
+	// 設定正規化
+	if (st->NumThreads == 0)
 	{
-		gw->Settings.NumThreads = GetNumberOfCpu() * 32;
-		gw->Settings.NumThreads = 1; // TODO
+		st->NumThreads = GetNumberOfCpu() * 32;
+		st->NumThreads = 1; // TODO
+	}
+	if (st->CommTimeoutInit == 0)
+	{
+		st->CommTimeoutInit = ZTTP_COMM_TIMEOUT_INIT;
+	}
+	if (st->CommTimeoutMain == 0)
+	{
+		st->CommTimeoutMain = ZTTP_COMM_TIMEOUT_MAIN;
+	}
+	if (st->ConnectTimeout == 0)
+	{
+		st->ConnectTimeout = ZTTP_TARGET_CONNECT_TIMEOUT;
 	}
 
 	gw->ThreadList = NewList(NULL);
@@ -156,6 +171,7 @@ void ZttpGwThread(THREAD *thread, void *param)
 	}
 
 	ZTTP_GW_THREAD *gt = (ZTTP_GW_THREAD *)param;
+	ZTTP_GW *gw = gt->Gw;
 
 	NoticeThreadInit(thread);
 
@@ -202,7 +218,7 @@ L_TRY_AGAIN:
 					WriteFifo(sess->FifoTargetToClient, buf, sz);
 					state_changed = true;
 
-					sess->LastCommTick = now;
+					sess->LastCommTick_TargetToClient = now;
 				}
 
 				// クライアントからデータを受信してバッファに挿入する
@@ -226,7 +242,7 @@ L_TRY_AGAIN:
 					WriteFifo(sess->FifoClientToTarget, buf, sz);
 					state_changed = true;
 
-					sess->LastCommTick = now;
+					sess->LastCommTick_ClientToTarget = now;
 				}
 
 				// ターゲットサーバーにデータを送信する
@@ -285,7 +301,13 @@ L_TRY_AGAIN:
 					state_changed = true;
 				}
 
-				if ((sess->LastCommTick + ZTTP_COMM_TIMEOUT_MAIN) < now)
+				if ((sess->LastCommTick_ClientToTarget + gw->Settings.CommTimeoutMain) < now)
+				{
+					// 通信タイムアウトが発生
+					disconnected = true;
+				}
+
+				if ((sess->LastCommTick_TargetToClient + gw->Settings.CommTimeoutMain) < now)
 				{
 					// 通信タイムアウトが発生
 					disconnected = true;
@@ -319,7 +341,6 @@ L_TRY_AGAIN:
 
 					ZttpFreeGwSession(sess);
 				}
-
 				ReleaseList(delete_list);
 			}
 		}
@@ -527,7 +548,7 @@ bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
 				JoinSockToSockEvent(sess->ClientSock, gt->SockEvent);
 				JoinSockToSockEvent(sess->TargetSock, gt->SockEvent);
 
-				sess->LastCommTick = Tick64();
+				sess->LastCommTick_ClientToTarget = sess->LastCommTick_TargetToClient = Tick64();
 
 				LockList(gt->SessionList);
 				{
@@ -554,7 +575,7 @@ bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
 	return ret;
 }
 
-// ZTTP のトンネル先のソケットをターゲットに接続する
+// ZTTP のトンネル先ターゲットに接続する
 SOCK *ZttpConnectToTarget(ZTTP_GW *gw, ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response)
 {
 	if (gw == NULL || request == NULL || response == NULL)
@@ -562,7 +583,7 @@ SOCK *ZttpConnectToTarget(ZTTP_GW *gw, ZTTP_CONNECT_REQUEST *request, ZTTP_CONNE
 		return NULL;
 	}
 
-	SOCK *s = ConnectEx4(request->TargetFqdn, request->TargetPort, ZTTP_TARGET_CONNECT_TIMEOUT,
+	SOCK *s = ConnectEx4(request->TargetFqdn, request->TargetPort, gw->Settings.ConnectTimeout,
 		(bool *)&gw->Halt, NULL, NULL, false, false, false, NULL);
 
 	if (s == NULL)

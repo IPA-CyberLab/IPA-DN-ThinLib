@@ -247,6 +247,9 @@ struct ZTTP_CONNECT_RESPONSE
 struct ZTTP_GW_SETTINGS
 {
 	UINT NumThreads;
+	UINT CommTimeoutInit;
+	UINT CommTimeoutMain;
+	UINT ConnectTimeout;
 };
 
 // ZTTP 中継ゲートウェイ
@@ -278,7 +281,8 @@ struct ZTTP_GW_SESSION
 	FIFO *FifoClientToTarget;			// クライアント -> ターゲット方向のデータ
 	FIFO *FifoTargetToClient;			// ターゲット -> クライアント方向のデータ
 
-	UINT64 LastCommTick;				// 最後に通信がなされた日時
+	UINT64 LastCommTick_ClientToTarget;		// 最後に通信がなされた日時
+	UINT64 LastCommTick_TargetToClient;		// 最後に通信がなされた日時
 };
 
 // ZTTP 接続要求フラグ

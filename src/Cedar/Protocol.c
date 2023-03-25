@@ -9021,6 +9021,167 @@ void MvpnAccept(CONNECTION *c, SOCK *s)
 	ReleaseWs(w);
 }
 
+// WebSocket Client Connect
+bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
+{
+	if (s == NULL || data == NULL || result == NULL)
+	{
+		Zero(result, sizeof(WSC_CONNECT_RESULT));
+		if (result != NULL)
+		{
+			result->ErrorCode = ERR_INTERNAL_ERROR;
+		}
+		return false;
+	}
+
+	UINT prev_timeout = GetTimeout(s);
+
+	SetTimeout(s, WSC_TIMEOUT_INIT);
+
+	UCHAR nonce[16] = CLEAN;
+	Rand(nonce, sizeof(nonce));
+
+	char request_key[64] = CLEAN;
+	B64_Encode(request_key, nonce, sizeof(nonce));
+
+	char origin_url[128] = CLEAN;
+	Format(origin_url, sizeof(origin_url), "https://%s/", data->HostName);
+
+	HTTP_HEADER *h = NewHttpHeader(data->Method, data->Target, "HTTP/1.1");
+	AddHttpValue(h, NewHttpValue("Host", data->HeaderHostName));
+	AddHttpValue(h, NewHttpValue("User-Agent", WPC_USER_AGENT));
+	AddHttpValue(h, NewHttpValue("Accept", DEFAULT_ACCEPT));
+	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Version", "13"));
+	AddHttpValue(h, NewHttpValue("Origin", origin_url));
+	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Key", request_key));
+	AddHttpValue(h, NewHttpValue("Connection", "keep-alive, Upgrade"));
+	AddHttpValue(h, NewHttpValue("Pragma", "no-cache"));
+	AddHttpValue(h, NewHttpValue("Cache-Control", "no-cache"));
+	AddHttpValue(h, NewHttpValue("Upgrade", "websocket"));
+
+	if (IsEmptyStr(data->AdditionalHeaderName) == false && IsEmptyStr(data->AdditionalHeaderValue) == false)
+	{
+		AddHttpValue(h, NewHttpValue(data->AdditionalHeaderName, data->AdditionalHeaderValue));
+	}
+
+	char *send_str = HttpHeaderToStr(h, 0);
+	FreeHttpHeader(h);
+
+	BUF *send_buf = NewBuf();
+	WriteBuf(send_buf, send_str, StrLen(send_str));
+	Free(send_str);
+
+	// Send
+	if (SendAll(s, send_buf->Buf, send_buf->Size, s->SecureMode) == false)
+	{
+		FreeBuf(send_buf);
+
+		result->ErrorCode = ERR_DISCONNECTED;
+
+		WriteBufLine(result->ErrorLines, "Send HTTP request failed.");
+
+		return false;
+	}
+
+	FreeBuf(send_buf);
+
+	// Receive
+	h = RecvHttpHeader(s, 0, 0);
+	if (h == NULL)
+	{
+		result->ErrorCode = ERR_DISCONNECTED;
+
+		WriteBufLine(result->ErrorLines, "Receive HTTP response failed.");
+
+		return false;
+	}
+
+	UINT http_error_code = 0;
+	if (StrLen(h->Method) == 8)
+	{
+		if (Cmp(h->Method, "HTTP/1.", 7) == 0)
+		{
+			http_error_code = ToInt(h->Target);
+		}
+	}
+
+	char errstr[128] = CLEAN;
+
+	Format(errstr, sizeof(errstr), "HTTP error code: %u (%s)", http_error_code, h->Method);
+
+	HTTP_VALUE *upgrade_value = GetHttpValue(h, "Upgrade");
+	HTTP_VALUE *accept_key_value = GetHttpValue(h, "Sec-WebSocket-Accept");
+
+	char upgrade_str[128] = CLEAN;
+	char accept_key_str[128] = CLEAN;
+
+	if (upgrade_value != NULL)
+	{
+		StrCpy(upgrade_str, sizeof(upgrade_str), upgrade_value->Data);
+	}
+
+	if (accept_key_value != NULL)
+	{
+		StrCpy(accept_key_str, sizeof(accept_key_str), accept_key_value->Data);
+	}
+
+	FreeHttpHeader(h);
+
+	switch (http_error_code)
+	{
+	case 101:
+		// Continue
+		break;
+
+	default:
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		return false;
+	}
+
+	if (StrCmpi(upgrade_str, "websocket") != 0)
+	{
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		Format(errstr, sizeof(errstr), "HTTP server responsed invalid upgrade str: '%s'", upgrade_str);
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		return false;
+	}
+
+	char key_calc_str[128] = CLEAN;
+	StrCpy(key_calc_str, sizeof(key_calc_str), request_key);
+	StrCat(key_calc_str, sizeof(key_calc_str), "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+
+	UCHAR key_calc_hash[SHA1_SIZE];
+	HashSha1(key_calc_hash, key_calc_str, StrLen(key_calc_str));
+
+	char key_calc_hash_b64[64] = CLEAN;
+
+	B64_Encode(key_calc_hash_b64, key_calc_hash, sizeof(key_calc_hash));
+
+	if (StrCmp(key_calc_hash_b64, accept_key_str) != 0)
+	{
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		Format(errstr, sizeof(errstr), "HTTP server responsed wrong accept key: '%s'", accept_key_str);
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		return false;
+	}
+
+	SetTimeout(s, prev_timeout);
+
+	return true;
+}
+
 // New WebSocket
 WS *NewWs(SOCK *s)
 {
@@ -9522,22 +9683,51 @@ void WspTrySendFrame(WSP *p, UCHAR opcode, void *data, UINT size)
 	flag_and_opcode = 0x80 | (opcode & 0x0F);
 	WriteBufChar(b, flag_and_opcode);
 
+	UCHAR mask_bit = p->IsClientMode ? 0x80 : 0x00;
+
 	if (size <= 125)
 	{
-		WriteBufChar(b, size);
+		WriteBufChar(b, size | mask_bit);
 	}
 	else if (size <= 65536)
 	{
-		WriteBufChar(b, 126);
+		WriteBufChar(b, 126 | mask_bit);
 		WriteBufShort(b, size);
 	}
 	else
 	{
-		WriteBufChar(b, 127);
+		WriteBufChar(b, 127 | mask_bit);
 		WriteBufInt64(b, size);
 	}
 
-	WriteBuf(b, data, size);
+	if (p->IsClientMode)
+	{
+		// Client mode: mask data
+		UCHAR mask_key[4];
+		Rand(mask_key, sizeof(mask_key));
+
+		WriteBuf(b, mask_key, 4);
+
+		UCHAR *masked_data = Malloc(size);
+
+		if (size >= 1)
+		{
+			UINT i;
+			for (i = 0;i < size;i++)
+			{
+				masked_data[i] = ((UCHAR *)data)[i] ^ mask_key[i % 4];
+			}
+		}
+
+		WriteBuf(b, masked_data, size);
+
+		Free(masked_data);
+	}
+	else
+	{
+		// Server mode: raw data
+		WriteBuf(b, data, size);
+	}
 
 	WriteFifo(p->PhysicalSendFifo, b->Buf, b->Size);
 
