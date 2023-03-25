@@ -501,6 +501,30 @@ bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
 	SetTimeout(s, ZTTP_COMM_TIMEOUT_INIT);
 
 	WS *w = NewWs(s);
+
+	if (true)
+	{
+		UINT i;
+		for (i = 0;;i++)
+		{
+			char buf[4096];
+			Rand(buf, sizeof(buf));
+			if (WsRecvSyncAll(w, buf, sizeof(buf)) == false)
+			{
+				Print("WsRecvSync error.\n");
+				break;
+			}
+			if (WsSendSync(w, buf, sizeof(buf)) == false)
+			{
+				Print("WsSendSync error.\n");
+				break;
+			}
+			Print("%u\n", i);
+		}
+		ReleaseWs(w);
+		return false;
+	}
+
 	if (w != NULL)
 	{
 		// バッファサイズ変更

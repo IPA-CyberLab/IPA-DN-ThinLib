@@ -248,6 +248,7 @@ struct WSC_CONNECT_RESULT
 {
 	UINT ErrorCode;
 	BUF *ErrorLines;
+	char RedirectUrl[384];
 };
 
 

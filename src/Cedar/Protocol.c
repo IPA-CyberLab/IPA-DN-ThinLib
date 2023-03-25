@@ -9052,9 +9052,10 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 	AddHttpValue(h, NewHttpValue("User-Agent", WPC_USER_AGENT));
 	AddHttpValue(h, NewHttpValue("Accept", DEFAULT_ACCEPT));
 	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Version", "13"));
+	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Protocol", "guacamole"));
 	AddHttpValue(h, NewHttpValue("Origin", origin_url));
 	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Key", request_key));
-	AddHttpValue(h, NewHttpValue("Connection", "keep-alive, Upgrade"));
+	AddHttpValue(h, NewHttpValue("Connection", "Upgrade"));
 	AddHttpValue(h, NewHttpValue("Pragma", "no-cache"));
 	AddHttpValue(h, NewHttpValue("Cache-Control", "no-cache"));
 	AddHttpValue(h, NewHttpValue("Upgrade", "websocket"));
@@ -9111,9 +9112,11 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 
 	HTTP_VALUE *upgrade_value = GetHttpValue(h, "Upgrade");
 	HTTP_VALUE *accept_key_value = GetHttpValue(h, "Sec-WebSocket-Accept");
+	HTTP_VALUE *location_value = GetHttpValue(h, "Location");
 
 	char upgrade_str[128] = CLEAN;
 	char accept_key_str[128] = CLEAN;
+	char location_str[384] = CLEAN;
 
 	if (upgrade_value != NULL)
 	{
@@ -9123,6 +9126,11 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 	if (accept_key_value != NULL)
 	{
 		StrCpy(accept_key_str, sizeof(accept_key_str), accept_key_value->Data);
+	}
+
+	if (location_value != NULL)
+	{
+		StrCpy(location_str, sizeof(location_str), location_value->Data);
 	}
 
 	FreeHttpHeader(h);
@@ -9138,6 +9146,15 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 		result->ErrorCode = ERR_PROTOCOL_ERROR;
 
 		WriteBufLine(result->ErrorLines, errstr);
+
+		if (IsFilledStr(location_str))
+		{
+			char tmp[450] = CLEAN;
+			Format(tmp, sizeof(tmp), "Please see the responsed URL: %s", location_str);
+			WriteBufLine(result->ErrorLines, location_str);
+		}
+
+		StrCpy(result->RedirectUrl, sizeof(result->RedirectUrl), location_str);
 
 		return false;
 	}
