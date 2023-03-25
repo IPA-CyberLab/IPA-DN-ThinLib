@@ -222,6 +222,10 @@ struct WG_MACHINE
 	char WolMacList[1024];				// WoL MAC アドレスリスト
 };
 
+// ZTTP 接続要求フラグ
+#define ZTTP_CONNECT_REQUEST_FLAG_NONE			0
+#define	ZTTP_CONNECT_REQUEST_FLAG_STARTSSL		1
+
 // ZTTP 接続要求メッセージ
 struct ZTTP_CONNECT_REQUEST
 {
@@ -229,6 +233,10 @@ struct ZTTP_CONNECT_REQUEST
 	char TargetFqdn[MAX_PATH];			// 接続先サーバー FQDN
 	UINT TargetPort;					// 接続先ポート
 };
+
+// ZTTP 接続応答フラグ
+#define ZTTP_CONNECT_RESPONSE_FLAG_NONE			0
+#define	ZTTP_CONNECT_RESPONSE_FLAG_STARTSSL		1
 
 // ZTTP 接続応答メッセージ
 struct ZTTP_CONNECT_RESPONSE
@@ -241,6 +249,7 @@ struct ZTTP_CONNECT_RESPONSE
 	char LocalIp[64];					// 接続元 IP アドレス
 	UINT LocalPort;						// 接続元ポート番号
 	char TargetFqdnReverse[MAX_PATH];	// DNS 逆引き応答結果
+	X *TargetSslCert;					// 接続先 SSL 証明書
 };
 
 // ZTTP 中継ゲートウェイ設定
@@ -284,12 +293,6 @@ struct ZTTP_GW_SESSION
 	UINT64 LastCommTick_ClientToTarget;		// 最後に通信がなされた日時
 	UINT64 LastCommTick_TargetToClient;		// 最後に通信がなされた日時
 };
-
-// ZTTP 接続要求フラグ
-#define ZTTP_CONNECT_REQUEST_FLAG_NONE		0
-
-// ZTTP 接続応答フラグ
-#define ZTTP_CONNECT_RESPONSE_FLAG_NONE		0
 
 #define ZTTP_WINDOW_SIZE			WT_WEBSOCK_WINDOW_SIZE					// ZTTP ウインドウサイズ
 
@@ -399,6 +402,7 @@ void ZttpOutRpcConnectRequest(PACK *p, ZTTP_CONNECT_REQUEST *a);
 
 void ZttpInRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a, PACK *p);
 void ZttpOutRpcConnectResponse(PACK *p, ZTTP_CONNECT_RESPONSE *a);
+void ZttpFreeRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a);
 
 ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings);
 ZTTP_GW_THREAD *NewZttpGwThread(ZTTP_GW *gw);

@@ -434,6 +434,7 @@ void ZttpInRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a, PACK *p)
 	PackGetStr(p, "LocalIp", a->LocalIp, sizeof(a->LocalIp));
 	a->LocalPort = PackGetInt(p, "LocalPort");
 	PackGetStr(p, "TargetFqdnReverse", a->TargetFqdnReverse, sizeof(a->TargetFqdnReverse));
+	a->TargetSslCert = PackGetX(p, "TargetSslCert");
 }
 void ZttpOutRpcConnectResponse(PACK *p, ZTTP_CONNECT_RESPONSE *a)
 {
@@ -450,6 +451,16 @@ void ZttpOutRpcConnectResponse(PACK *p, ZTTP_CONNECT_RESPONSE *a)
 	PackAddStr(p, "LocalIp", a->LocalIp);
 	PackAddInt(p, "LocalPort", a->LocalPort);
 	PackAddStr(p, "TargetFqdnReverse", a->TargetFqdnReverse);
+	PackAddX(p, "TargetSslCert", a->TargetSslCert);
+}
+void ZttpFreeRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a)
+{
+	if (a == NULL)
+	{
+		return;
+	}
+
+	FreeX(a->TargetSslCert);
 }
 
 // ZTTP_CONNECT_REQUEST
@@ -517,6 +528,7 @@ bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
 			// 結果を応答
 			PACK *connect_response_pack = NewPack();
 			ZttpOutRpcConnectResponse(connect_response_pack, &connect_response);
+			ZttpFreeRpcConnectResponse(&connect_response);
 
 			WsSendPack(w, connect_response_pack);
 
@@ -599,6 +611,20 @@ SOCK *ZttpConnectToTarget(ZTTP_GW *gw, ZTTP_CONNECT_REQUEST *request, ZTTP_CONNE
 	response->LocalPort = s->LocalPort;
 
 	StrCpy(response->TargetFqdnReverse, sizeof(response->TargetFqdnReverse), s->RemoteHostname);
+
+	if (request->Flags & ZTTP_CONNECT_REQUEST_FLAG_STARTSSL)
+	{
+		if (StartSSL(s, NULL, NULL) == false)
+		{
+			response->ErrorCode = ERR_PROTOCOL_ERROR;
+			Disconnect(s);
+			ReleaseSock(s);
+			return NULL;
+		}
+
+		response->TargetSslCert = CloneX(s->RemoteX);
+		response->Flags |= ZTTP_CONNECT_RESPONSE_FLAG_STARTSSL;
+	}
 
 	return s;
 }
