@@ -14277,7 +14277,7 @@ SSL_CTX_SHARED* NewSslCtxSharedInternal(SSL_CTX_SHARED_SETTINGS* settings)
 		ret->Expires = Tick64() + lifetime;
 	}
 
-	Debug("SSL_CTX New: %p\n", ret);
+	//Debug("SSL_CTX New: %p\n", ret);
 
 	return ret;
 }
@@ -14410,7 +14410,7 @@ void CleanupSslCtxShared(SSL_CTX_SHARED* s)
 		return;
 	}
 
-	Debug("SSL_CTX Free: %p\n", s);
+	//Debug("SSL_CTX Free: %p\n", s);
 
 	FreeSSLCtx(s->SslCtx);
 
@@ -14830,7 +14830,7 @@ bool StartSSLWithSettings(SOCK* sock, UINT ssl_timeout, char* sni_hostname, SSL_
 	}
 	UnlockOpenSSL();
 	StrCpy(sock->TlsVersion, sizeof(sock->TlsVersion), (char *)SSL_get_version(sock->ssl));
-	Debug("SSL connected with %s\n", sock->TlsVersion);
+//	Debug("SSL connected with %s\n", sock->TlsVersion);
 
 	Unlock(sock->ssl_lock);
 
@@ -18988,6 +18988,19 @@ bool GetIP6(IP *ip, char *hostname)
 	return GetIP6Ex(ip, hostname, 0, NULL);
 }
 
+void MSecToTimeval(struct timeval *tv, UINT msec)
+{
+	if (tv == NULL)
+	{
+		return;
+	}
+
+	Zero(tv, sizeof(struct timeval));
+
+	tv->tv_sec = msec / 1000;
+	tv->tv_usec = (msec % 1000) * 1000;
+}
+
 // Perform a DNS forward lookup query
 bool GetIP(IP *ip, char *hostname)
 {
@@ -19058,7 +19071,7 @@ bool GetIP6Inner(IP *ip, char *hostname)
 
 	return true;
 }
-bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configured)
+bool GetIP6InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured, UINT timeout)
 {
 	struct sockaddr_in6 in = CLEAN;
 	struct in6_addr addr = CLEAN;
@@ -19070,6 +19083,10 @@ bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configu
 	if (ip == NULL || hostname == NULL)
 	{
 		return false;
+	}
+	if (timeout == 0)
+	{
+		timeout = INFINITE;
 	}
 
 	if (IsEmptyStr(hostname))
@@ -19109,14 +19126,15 @@ bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configu
 		info2 = NULL;
 
 #ifdef OS_WIN32
-		if (MsIsGetAddrInfoExWSupported())
+		if (timeout != INFINITE && MsIsGetAddrInfoExWSupported())
 		{
 			wchar_t hostname_w[MAX_PATH] = CLEAN;
 
 			StrToUni(hostname_w, sizeof(hostname_w), hostname);
 
-			if (MsGetAddrInfoExW(hostname_w, NULL, 0, NULL, &hint2, &info2,
-				NULL, NULL, NULL, NULL) != 0 ||
+			int r;
+			if ((r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
+				timeout)) != 0 ||
 				info2->ai_family != AF_INET6)
 			{
 				if (info2)
@@ -19209,16 +19227,22 @@ bool GetIP4Inner(IP *ip, char *hostname)
 
 	return true;
 }
-bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured)
+bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured, UINT timeout)
 {
 	struct sockaddr_in in;
 	struct in_addr addr;
 	struct addrinfo hint;
 	struct addrinfo *info;
+	struct NT_addrinfoexW hint2 = CLEAN;
+	struct NT_addrinfoexW *info2 = NULL;
 	// Validate arguments
 	if (ip == NULL || hostname == NULL)
 	{
 		return false;
+	}
+	if (timeout == 0)
+	{
+		timeout = INFINITE;
 	}
 
 	if (IsEmptyStr(hostname))
@@ -19236,12 +19260,14 @@ bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 	{
 		// Forward resolution
 		Zero(&hint, sizeof(hint));
+		Zero(&hint2, sizeof(hint2));
 #ifdef OS_WIN32
 		if (MsIsVista())
 		{
 			if (only_if_address_configured)
 			{
 				hint.ai_flags |= AI_ADDRCONFIG;
+				hint2.ai_flags |= AI_ADDRCONFIG;
 			}
 		}
 #endif // OS_WIN32
@@ -19249,6 +19275,41 @@ bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configu
 		hint.ai_socktype = SOCK_STREAM;
 		hint.ai_protocol = IPPROTO_TCP;
 		info = NULL;
+
+		hint2.ai_family = AF_INET;
+		hint2.ai_socktype = SOCK_STREAM;
+		hint2.ai_protocol = IPPROTO_TCP;
+		info2 = NULL;
+
+#ifdef OS_WIN32
+		if (timeout != INFINITE && MsIsGetAddrInfoExWSupported())
+		{
+			wchar_t hostname_w[MAX_PATH] = CLEAN;
+
+			StrToUni(hostname_w, sizeof(hostname_w), hostname);
+
+			int r;
+			if ((r = MsGetAddrInfoExW_Easy(hostname_w, &hint2, &info2,
+				timeout)) != 0 ||
+				info2->ai_family != AF_INET)
+			{
+				if (info2)
+				{
+					MsFreeAddrInfoExW(info2);
+				}
+				return false;
+			}
+
+			// Forward resolution success
+			Copy(&in, info2->ai_addr, sizeof(struct sockaddr_in));
+			MsFreeAddrInfoExW(info2);
+
+			Copy(&addr, &in.sin_addr, sizeof(addr));
+			InAddrToIP(ip, &addr);
+
+			return true;
+		}
+#endif // OS_WIN32
 
 		if (getaddrinfo(hostname, NULL, &hint, &info) != 0 ||
 			info->ai_family != AF_INET)

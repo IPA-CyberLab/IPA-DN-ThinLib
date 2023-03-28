@@ -296,6 +296,8 @@ struct WT
 	LOCK* ErrorControllersListLock;
 	char WebAppProxyBaseUrl[MAX_PATH];
 
+	ZTTP_GW *ZttpGw;					// ZTTP 中継ゲートウェイ機能
+
 	// Client / Server / Gate 共通
 	char EntranceUrl[MAX_PATH];			// エントランス URL
 	char FixedEntranceUrl[MAX_PATH];	// 固定されたエントランス URL

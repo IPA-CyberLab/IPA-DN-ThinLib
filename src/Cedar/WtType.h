@@ -92,6 +92,12 @@ typedef struct TTCP TTCP;
 typedef struct TUNNEL TUNNEL;
 typedef struct DATABLOCK DATABLOCK;
 typedef struct WG_MACHINE WG_MACHINE;
+typedef struct ZTTP_CONNECT_REQUEST ZTTP_CONNECT_REQUEST;
+typedef struct ZTTP_CONNECT_RESPONSE ZTTP_CONNECT_RESPONSE;
+typedef struct ZTTP_GW_SESSION ZTTP_GW_SESSION;
+typedef struct ZTTP_GW_THREAD ZTTP_GW_THREAD;
+typedef struct ZTTP_GW ZTTP_GW;
+typedef struct ZTTP_GW_SETTINGS ZTTP_GW_SETTINGS;
 
 // WtServer.h
 typedef struct WT_CONNECT WT_CONNECT;

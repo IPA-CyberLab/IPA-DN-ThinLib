@@ -410,6 +410,7 @@ UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sock
 LABEL_RETRY:
 	Debug("Connecting to WideControl...\n");
 	ret = WideClientConnectInner(w, &c, pcid, ver, build, client_options, no_cache);
+
 	if (ret == ERR_NO_ERROR)
 	{
 		Debug("Redirect Host: %s (for proxy: %s):%u\n", c.HostName, c.HostNameForProxy, c.Port);
@@ -1829,6 +1830,9 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 		return NULL;
 	}
 
+	char ssl_lib_ver[MAX_PATH] = CLEAN;
+	GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
 	w = ZeroMalloc(sizeof(WIDE));
 
 	w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
@@ -1841,6 +1845,7 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
 	WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
 	WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+	WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
 
 	OS_INFO *os = GetOsInfo();
 	if (os != NULL)
@@ -4029,6 +4034,10 @@ WIDE *WideGateStart()
 		w->WideLog = NewLog(WIDE_GATE_LOG_DIRNAME, "gate", LOG_SWITCH_DAY);
 		w->WideLog->Flush = w->IsStandaloneMode;
 
+		char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+		GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
 		WideLog(w, "-------------------- Start Thin Gate System --------------------");
 		WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
 		WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
@@ -4036,6 +4045,7 @@ WIDE *WideGateStart()
 			BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
 		WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
 		WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+		WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
 
 		OS_INFO* os = GetOsInfo();
 		if (os != NULL)
@@ -4059,6 +4069,12 @@ WIDE *WideGateStart()
 		WideLog(w, "Memory - TotalPhys: %I64u", mem.TotalPhys);
 		WideLog(w, "Memory - UsedPhys: %I64u", mem.UsedPhys);
 		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
+	}
+
+	if (true) // TODO
+	{
+		// ZTTP 中継ゲートウェイ機能を開始
+		w->wt->ZttpGw = NewZttpGw(NULL);
 	}
 
 	// 統計送付
@@ -4258,6 +4274,9 @@ void WideGateStopEx(WIDE* wide, bool daemon_force_exit)
 	{
 		FreeCertServerClient(wide->Standalone_WebAppCertDownloader);
 	}
+
+	// ZTTP 中継ゲートウェイ機能を停止
+	FreeZttpGw(wide->wt->ZttpGw);
 
 	ReleaseWt(wide->wt);
 

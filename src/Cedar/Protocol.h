@@ -187,6 +187,7 @@ struct WS
 // WebSocket Protocol
 struct WSP
 {
+	bool IsClientMode;
 	UINT MaxBufferSize;
 	FIFO *PhysicalSendFifo;		// WSP -> Network
 	FIFO *PhysicalRecvFifo;		// WSP <- Network
@@ -240,6 +241,15 @@ struct WSP
 
 #define MVPN_AUTHTYPE_ALL_SUPPORTED			MVPN_AUTHTYPE_ANONYMOUS "," MVPN_AUTHTYPE_PASSWORD_PLAIN "," MVPN_AUTHTYPE_PASSWORD_MSCHAPV2 "," MVPN_AUTHTYPE_CERT
 
+
+#define	WSC_TIMEOUT_INIT				(15 * 1000)
+
+struct WSC_CONNECT_RESULT
+{
+	UINT ErrorCode;
+	BUF *ErrorLines;
+	char RedirectUrl[384];
+};
 
 
 
@@ -387,6 +397,7 @@ void WspTry(WSP *p);
 BLOCK *WspTryRecvNextFrame(WSP *p, UINT *read_buffer_size);
 void WspTrySendFrame(WSP *p, UCHAR opcode, void *data, UINT size);
 
+bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result);
 
 
 
