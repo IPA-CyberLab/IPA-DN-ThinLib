@@ -2401,7 +2401,10 @@ void InsertRecord(LOG *g, void *data, RECORD_PARSE_PROC *proc)
 		WriteRecordToBuffer(buf, rec);
 
 		MakeDirEx(g->DirName);
+
+#ifdef OS_WIN32
 		Win32SetFolderCompress(g->DirName, true);
+#endif // OS_WIN32
 
 		DumpBufAppendToFile(buf, filename);
 
