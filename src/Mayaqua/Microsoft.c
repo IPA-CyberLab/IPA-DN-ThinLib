@@ -4020,7 +4020,13 @@ void MsTest01()
 
 	while (true)
 	{
-		DWORD flag = ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED;
+		DWORD flag = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
+
+		if (MsIsWindows10())
+		{
+			flag |= ES_AWAYMODE_REQUIRED;
+		}
+		flag |= ES_DISPLAY_REQUIRED;
 
 		MsRegWriteStrW(REG_CURRENT_USER, key, "ScreenSaveActive", L"0");
 		MsRegDeleteValue(REG_CURRENT_USER, key, "SCRNSAVE.EXE");
