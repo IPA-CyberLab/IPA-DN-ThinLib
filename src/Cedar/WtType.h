@@ -98,6 +98,7 @@ typedef struct ZTTP_GW_SESSION ZTTP_GW_SESSION;
 typedef struct ZTTP_GW_THREAD ZTTP_GW_THREAD;
 typedef struct ZTTP_GW ZTTP_GW;
 typedef struct ZTTP_GW_SETTINGS ZTTP_GW_SETTINGS;
+typedef struct ZTTP_CONNECT_PARAM ZTTP_CONNECT_PARAM;
 
 // WtServer.h
 typedef struct WT_CONNECT WT_CONNECT;

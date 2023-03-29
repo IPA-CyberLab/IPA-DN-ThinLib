@@ -251,7 +251,11 @@ struct WSC_CONNECT_RESULT
 	char RedirectUrl[384];
 };
 
-
+struct WSC_ASYNC_RELAY_THREAD_PARAM
+{
+	SOCK *Socket;
+	WS *WebSocket;
+};
 
 
 // Function prototype
@@ -399,6 +403,7 @@ void WspTrySendFrame(WSP *p, UCHAR opcode, void *data, UINT size);
 
 bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result);
 
+void WscAsyncRelayThread(THREAD *thread, void *param);
 
 
 #endif	// PROTOCOL_H

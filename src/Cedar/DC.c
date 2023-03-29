@@ -2978,30 +2978,7 @@ void DcGenerateHostname(char *hostname, UINT hostname_size, char *pcid, bool ipv
 // 新しいポートを開いて Listen する
 SOCK *DcListen(bool ipv6)
 {
-	UINT port;
-
-	for (port = DC_RDP_PORT_START;port < 10000;port++)
-	{
-		SOCK* s;
-
-		if (ipv6 == false)
-		{
-			// IPv4
-			s = ListenEx(port, true);
-		}
-		else
-		{
-			// IPv6
-			s = ListenEx6(port, true);
-		}
-
-		if (s != NULL)
-		{
-			return s;
-		}
-	}
-
-	return NULL;
+	return ListenLocalTcpPort(ipv6, DC_RDP_PORT_START);
 }
 
 // localhost 接続許可フラグ (デバッグ用)

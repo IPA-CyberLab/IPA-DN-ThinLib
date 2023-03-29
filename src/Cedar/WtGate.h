@@ -226,6 +226,7 @@ struct WG_MACHINE
 #define ZTTP_CONNECT_REQUEST_FLAG_NONE			0
 #define	ZTTP_CONNECT_REQUEST_FLAG_STARTSSL		1
 
+
 // ZTTP 接続要求メッセージ
 struct ZTTP_CONNECT_REQUEST
 {
@@ -242,7 +243,7 @@ struct ZTTP_CONNECT_REQUEST
 struct ZTTP_CONNECT_RESPONSE
 {
 	UINT ErrorCode;						// エラーコード
-	wchar_t ErrorMessage[MAX_PATH];		// エラーメッセージ
+	wchar_t ErrorMessage[768];			// エラーメッセージ
 	UINT64 Flags;						// フラグ
 	char TargetIp[64];					// 接続先 IP アドレス
 	UINT TargetPort;					// 接続先ポート
@@ -410,6 +411,11 @@ void StopAndFreeZttpThread(ZTTP_GW_THREAD *gt);
 void FreeZttpGw(ZTTP_GW *gw);
 void ZttpGwThread(THREAD *thread, void *param);
 void ZttpFreeGwSession(ZTTP_GW_SESSION *s);
+
+SOCK *ZttpStartClientOverlaySock(ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response,
+	char *zttp_server_hostname,
+	SOCK *underlay_socket,
+	char *redirect_url, UINT redirect_url_size);
 
 
 #endif	// WTGATE_H

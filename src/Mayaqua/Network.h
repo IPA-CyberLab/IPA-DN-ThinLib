@@ -318,6 +318,10 @@ struct SOCK
 	SHARED_BUFFER *BulkRecvKey;	// Bulk receive key
 	UINT RUDP_OptimizedMss;		// Optimal MSS value
 
+	// TCP over TCP overlay socket
+	bool IsOverlayUpperSock;
+	THREAD *OverlayUpperThread;
+
 #ifdef	OS_UNIX
 	pthread_t CallingThread;	// Thread that is calling the system call
 #endif	// OS_UNIX
@@ -1811,6 +1815,14 @@ bool SmtpSendMail(char* server_host, UINT server_port, char* from, char* to, cha
 bool SmtpSendMailEx(char* server_host, UINT server_port, char* from, char* to, char* body, BUF *error, char *username, char *password, UINT timeout, UINT ssl_type, UINT auth_type);
 
 void MSecsToTimeval(struct timeval *tv, UINT msecs);
+
+
+SOCK *ListenLocalTcpPort(bool ipv6, UINT start_port);
+
+#define ENTANGLED_SOCK_LISTEN_PORT_START	3601
+
+bool CreateEntagledSock(SOCK **server, SOCK **client);
+
 
 
 #endif	// NETWORK_H

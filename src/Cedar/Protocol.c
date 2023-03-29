@@ -9199,6 +9199,196 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 	return true;
 }
 
+// WebSocket <--> Physical Socket relay thread
+void WscAsyncRelayThread(THREAD *thread, void *param)
+{
+	UINT window_size = 256 * 1024;
+	UINT64 timeout = 30 * 1000;
+
+	if (thread == NULL || param == NULL)
+	{
+		DelWaitThread(thread);
+		return;
+	}
+
+	WSC_ASYNC_RELAY_THREAD_PARAM *ctx = (WSC_ASYNC_RELAY_THREAD_PARAM *)param;
+
+	UINT buf_size = window_size;
+
+	UCHAR *buf = Malloc(buf_size);
+
+	SOCK *s = ctx->Socket;
+	WS *ws = ctx->WebSocket;
+	SOCK_EVENT *event = NewSockEvent();
+
+	FIFO *fifo_s_to_ws = NewFifo();
+	FIFO *fifo_ws_to_s = NewFifo();
+
+	if (s == NULL || ws == NULL)
+	{
+		NoticeThreadInit(thread);
+
+		goto L_CLEANUP;
+	}
+
+	JoinSockToSockEvent(s, event);
+	JoinSockToSockEvent(ws->Sock, event);
+
+	NoticeThreadInit(thread);
+
+	UINT64 lastcomm_s_to_ws = Tick64();
+	UINT64 lastcomm_ws_to_s = lastcomm_s_to_ws;
+
+	while (true)
+	{
+		UINT64 now = Tick64();
+
+		bool state_changed = false;
+		bool disconnected = false;
+
+		// Socket --> WebSocket [to buffer]
+		while (disconnected == false && FifoSize(fifo_s_to_ws) < window_size)
+		{
+			UINT remain_fifo_size = window_size - FifoSize(fifo_s_to_ws);
+			remain_fifo_size = MIN(remain_fifo_size, buf_size);
+
+			UINT sz = Recv(s, buf, remain_fifo_size, s->SecureMode);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			WriteFifo(fifo_s_to_ws, buf, sz);
+			state_changed = true;
+
+			lastcomm_s_to_ws = now;
+		}
+
+		// WebSocket --> Socket [to buffer]
+		while (disconnected == false && FifoSize(fifo_ws_to_s) < window_size)
+		{
+			UINT remain_fifo_size = window_size - FifoSize(fifo_ws_to_s);
+			remain_fifo_size = MIN(window_size, buf_size);
+
+			UINT sz = WsRecvAsync(ws, buf, remain_fifo_size, now);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			WriteFifo(fifo_ws_to_s, buf, sz);
+			state_changed = true;
+
+			lastcomm_ws_to_s = now;
+		}
+
+		// WebSocket --> Socket [from buffer]
+		while (disconnected == false)
+		{
+			UINT remain_size = FifoSize(fifo_ws_to_s);
+			if (remain_size == 0)
+			{
+				break;
+			}
+
+			UINT sz = Send(s, FifoPtr(fifo_ws_to_s), remain_size, s->SecureMode);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			ReadFifo(fifo_ws_to_s, NULL, sz);
+			state_changed = true;
+		}
+
+		// Sock --> WebSocket [from buffer]
+		while (disconnected == false)
+		{
+			UINT remain_size = FifoSize(fifo_s_to_ws);
+			if (remain_size == 0)
+			{
+				break;
+			}
+
+			UINT sz = WsSendAsync(ws, FifoPtr(fifo_s_to_ws), remain_size);
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			ReadFifo(fifo_s_to_ws, NULL, sz);
+			state_changed = true;
+		}
+
+		if ((lastcomm_s_to_ws + timeout) < now)
+		{
+			disconnected = true;
+		}
+
+		if ((lastcomm_ws_to_s + timeout) < now)
+		{
+			disconnected = true;
+		}
+
+		if (disconnected)
+		{
+			break;
+		}
+
+		if (state_changed)
+		{
+			continue;
+		}
+
+		WaitSockEvent(event, 1234);
+	}
+
+L_CLEANUP:
+
+	Disconnect(s);
+	ReleaseSock(s);
+
+	if (ws != NULL)
+	{
+		Disconnect(ws->Sock);
+		ReleaseSock(ws->Sock);
+
+		ReleaseWs(ws);
+	}
+
+	ReleaseSockEvent(event);
+
+	ReleaseFifo(fifo_s_to_ws);
+	ReleaseFifo(fifo_ws_to_s);
+
+	Free(buf);
+
+	DelWaitThread(thread);
+}
+
 // New WebSocket
 WS *NewWs(SOCK *s)
 {

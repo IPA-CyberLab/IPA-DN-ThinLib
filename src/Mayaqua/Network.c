@@ -1214,10 +1214,9 @@ void GenerateDefaultUserProxyAgentStr(char *str, UINT str_size)
 	}
 	else
 	{
-		Format(str, str_size, "Mozilla/5.0 (Windows NT %u.%u%s) like Gecko",
+		Format(str, str_size, "Mozilla/5.0 (Windows NT %u.%u; Win64; x64) like Gecko",
 			ver.dwMajorVersion,
-			ver.dwMinorVersion,
-			(MsIs64BitWindows() && Is32() ? "; WOW64" : ""));
+			ver.dwMinorVersion);
 	}
 #else	// OS_WIN32
 	StrCpy(str, str_size, DEFAULT_PROXY_USER_AGENT);
@@ -16339,6 +16338,131 @@ void Disconnect(SOCK *sock)
 	Unlock(sock->disconnect_lock);
 
 	Unlock(disconnect_function_lock);
+}
+
+typedef struct ENT_SOCK_THREAD_CTX
+{
+	SOCK *ListenSock;
+	SOCK *Ret_AcceptSock;
+} ENT_SOCK_THREAD_CTX;
+
+void EntangledSockAcceptThread(THREAD *thread, void *param)
+{
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	ENT_SOCK_THREAD_CTX *ctx = (ENT_SOCK_THREAD_CTX *)param;
+
+	NoticeThreadInit(thread);
+
+	SOCK *new_sock = Accept(ctx->ListenSock);
+
+	if (new_sock != NULL)
+	{
+		ctx->Ret_AcceptSock = new_sock;
+	}
+
+	ReleaseSock(ctx->ListenSock);
+}
+
+// 相互接続が完了した状態のソケットのペアを作成する
+bool CreateEntagledSock(SOCK **server, SOCK **client)
+{
+	if (server == NULL || client == NULL)
+	{
+		if (server != NULL) *server = NULL;
+		if (client != NULL) *client = NULL;
+		return false;
+	}
+
+	*server = NULL;
+	*client = NULL;
+
+	SOCK *listen_sock = ListenLocalTcpPort(false, ENTANGLED_SOCK_LISTEN_PORT_START);
+	if (listen_sock == NULL)
+	{
+		return false;
+	}
+
+	ENT_SOCK_THREAD_CTX ctx = CLEAN;
+
+	ctx.ListenSock = listen_sock;
+	AddRef(listen_sock->ref);
+
+	THREAD *t = NewThread(EntangledSockAcceptThread, &ctx);
+
+	WaitThreadInit(t);
+
+	SOCK *client_sock = NULL;
+
+	UINT i;
+	for (i = 0;i < 3;i++)
+	{
+		client_sock = ConnectEx4("127.0.0.1", listen_sock->LocalPort, 5000, NULL, NULL,
+			NULL, false, false, true, NULL);
+
+		if (client_sock != NULL)
+		{
+			break;
+		}
+	}
+
+	Disconnect(listen_sock);
+
+	WaitThread(t, INFINITE);
+	ReleaseThread(t);
+
+	ReleaseSock(listen_sock);
+
+	if (client_sock != NULL)
+	{
+		if (ctx.Ret_AcceptSock == NULL)
+		{
+			ReleaseSock(client_sock);
+			client_sock = NULL;
+		}
+	}
+
+	if (client_sock != NULL)
+	{
+		*client = client_sock;
+		*server = ctx.Ret_AcceptSock;
+
+		return true;
+	}
+
+	return false;
+}
+
+// 新しいポートを開いて Listen する
+SOCK *ListenLocalTcpPort(bool ipv6, UINT start_port)
+{
+	UINT port;
+
+	for (port = start_port;port < 10000;port++)
+	{
+		SOCK *s;
+
+		if (ipv6 == false)
+		{
+			// IPv4
+			s = ListenEx(port, true);
+		}
+		else
+		{
+			// IPv6
+			s = ListenEx6(port, true);
+		}
+
+		if (s != NULL)
+		{
+			return s;
+		}
+	}
+
+	return NULL;
 }
 
 typedef struct TCP_PORT_CHECK

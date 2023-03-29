@@ -990,12 +990,24 @@ L_RETRY:
 	WriteBufInt(b, 0);
 	SeekBuf(b, 0, 0);
 
-	recv = HttpRequestEx5(&data, NULL, timeout, timeout, &error,
-		wt->CheckSslTrust, b->Buf, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL, wt, global_ip_only, false);
+	BUF *error_lines = NewBuf();
+
+	recv = HttpRequestEx6(&data, NULL, timeout, timeout, &error,
+		wt->CheckSslTrust, b->Buf, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL, wt, global_ip_only, false,
+		error_lines, NULL, HTTP_REQUEST_FLAG_NONE, NULL, 0);
+
+	SeekBufToEnd(error_lines);
+	WriteBufChar(error_lines, 0);
 
 	if (recv == NULL)
 	{
-		WtLog(wt, "HttpRequestEx5 error: %u", error);
+		WtLog(wt, "HttpRequestEx6 error code: %u", error);
+		WtLog(wt, "HttpRequestEx6 error str: %S", _E(error));
+
+		if (error_lines->Size >= 2)
+		{
+			WtLog(wt, "HttpRequestEx6 additional error str: %s", error_lines->Buf);
+		}
 	}
 	else
 	{
@@ -1003,6 +1015,8 @@ L_RETRY:
 	}
 
 	FreeBuf(b);
+
+	FreeBuf(error_lines);
 
 	if (recv == NULL)
 	{

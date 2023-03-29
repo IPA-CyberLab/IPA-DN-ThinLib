@@ -91,6 +91,123 @@
 
 #define	g_disable_zttp_relay	false
 
+// ZTTP オーバーレイソケットの開始
+SOCK *ZttpStartClientOverlaySock(ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response,
+	char *zttp_server_hostname,
+	SOCK *underlay_socket, char *redirect_url, UINT redirect_url_size)
+{
+	if (request == NULL || response == NULL || underlay_socket == NULL)
+	{
+		return NULL;
+	}
+
+	Zero(response, sizeof(ZTTP_CONNECT_RESPONSE));
+
+	// SSL の開始
+	if (StartSSLEx(underlay_socket, NULL, NULL, true, 0, zttp_server_hostname) == false)
+	{
+		response->ErrorCode = ERR_PROTOCOL_ERROR;
+		UniStrCpy(response->ErrorMessage, sizeof(response->ErrorMessage), L"ZTTP: Start SSL failed.");
+		return NULL;
+	}
+
+	// WebSocket の開始
+	URL_DATA data = CLEAN;
+	data.Secure = true;
+	StrCpy(data.HostName, sizeof(data.HostName), zttp_server_hostname);
+	StrCpy(data.HeaderHostName, sizeof(data.HeaderHostName), zttp_server_hostname);
+	StrCpy(data.Method, sizeof(data.Method), "GET");
+	StrCpy(data.Target, sizeof(data.Target), "/tunnel_teszt/");
+
+	WSC_CONNECT_RESULT result = CLEAN;
+
+	result.ErrorLines = NewBuf();
+
+	if (WscConnect(underlay_socket, &data, &result) == false)
+	{
+		WriteBufChar(result.ErrorLines, 0);
+		response->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		if (IsFilledStr(result.RedirectUrl) == false)
+		{
+			UniFormat(response->ErrorMessage, sizeof(response->ErrorMessage), L"ZTTP: Start WebSocket failed. Error details: %S", result.ErrorLines->Buf);
+		}
+		else
+		{
+			UniFormat(response->ErrorMessage, sizeof(response->ErrorMessage),
+				L"ZTTP: Start WebSocket failed. Error details: %S / Security gateway in your network returned the following URL: %S", result.ErrorLines->Buf, result.RedirectUrl);
+
+			StrCpy(redirect_url, redirect_url_size, result.RedirectUrl);
+		}
+
+		FreeBuf(result.ErrorLines);
+		return NULL;
+	}
+
+	FreeBuf(result.ErrorLines);
+
+	WS *ws = NewWs(underlay_socket);
+	ws->Wsp->IsClientMode = true;
+
+	// ZTTP 接続要求 JSON の送信
+	PACK *req_pack = NewPack();
+
+	ZttpOutRpcConnectRequest(req_pack, request);
+
+	WsSendPack(ws, req_pack);
+
+	FreePack(req_pack);
+	ZTTP_CONNECT_RESPONSE res = CLEAN;
+
+	// ZTTP 接続要求応答 JSON の受信
+	PACK *res_pack = WsRecvPack(ws);
+	if (res_pack != NULL)
+	{
+		ZttpInRpcConnectResponse(&res, res_pack);
+		ZttpFreeRpcConnectResponse(&res); // TargetSslCert は読まないので Free してよい
+	}
+	FreePack(res_pack);
+
+	if (res.ErrorCode != 0)
+	{
+		// ZTTP のレイヤでエラー発生
+		response->ErrorCode = res.ErrorCode;
+		UniFormat(response->ErrorMessage, sizeof(response->ErrorMessage),
+			L"ZTTP: ZTTP Relay Server resulted an error. Error details: %s", res.ErrorMessage);
+
+		ReleaseWs(ws);
+
+		return NULL;
+	}
+
+	// Engangled ソケットの作成
+	SOCK *client_socket = NULL;
+	SOCK *server_socket = NULL;
+
+	if (CreateEntagledSock(&server_socket, &client_socket) == false)
+	{
+		response->ErrorCode = ERR_INTERNAL_ERROR;
+		UniFormat(response->ErrorMessage, sizeof(response->ErrorMessage),
+			L"ZTTP: CreateEntagledSock failed.");
+
+		ReleaseWs(ws);
+
+		return NULL;
+	}
+
+	WSC_ASYNC_RELAY_THREAD_PARAM ctx = CLEAN;
+	ctx.Socket = server_socket;
+	ctx.WebSocket = ws;
+
+	THREAD *thread = NewThread(WscAsyncRelayThread, &ctx);
+	WaitThreadInit(thread);
+	AddWaitThread(thread);
+
+	ReleaseThread(thread);
+
+	return client_socket;
+}
+
 // ZTTP ゲートウェイの作成
 ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings)
 {
@@ -200,7 +317,10 @@ L_TRY_AGAIN:
 				// ターゲットサーバーからデータを受信してバッファに挿入する
 				while (disconnected == false && FifoSize(sess->FifoTargetToClient) < ZTTP_WINDOW_SIZE)
 				{
-					UINT sz = Recv(sess->TargetSock, buf, buf_size, sess->TargetSock->SecureMode);
+					UINT remain_fifo_size = ZTTP_WINDOW_SIZE - FifoSize(sess->FifoTargetToClient);
+					remain_fifo_size = MIN(remain_fifo_size, buf_size);
+
+					UINT sz = Recv(sess->TargetSock, buf, remain_fifo_size, sess->TargetSock->SecureMode);
 
 					if (sz == 0)
 					{
@@ -224,7 +344,10 @@ L_TRY_AGAIN:
 				// クライアントからデータを受信してバッファに挿入する
 				while (disconnected == false && FifoSize(sess->FifoClientToTarget) < ZTTP_WINDOW_SIZE)
 				{
-					UINT sz = WsRecvAsync(sess->ClientWebSocket, buf, buf_size, now);
+					UINT remain_fifo_size = ZTTP_WINDOW_SIZE - FifoSize(sess->FifoClientToTarget);
+					remain_fifo_size = MIN(remain_fifo_size, buf_size);
+
+					UINT sz = WsRecvAsync(sess->ClientWebSocket, buf, remain_fifo_size, now);
 
 					if (sz == 0)
 					{
@@ -502,7 +625,7 @@ bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target)
 
 	WS *w = NewWs(s);
 
-	if (true)
+	if (false) // For benchmark test: disabled
 	{
 		UINT i;
 		for (i = 0;;i++)
