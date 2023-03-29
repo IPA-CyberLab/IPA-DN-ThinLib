@@ -358,20 +358,38 @@ UINT WtcConnectEx(WT *wt, WT_CONNECT *connect, SOCKIO **sockio, UINT ver, UINT b
 
 	sni = connect->HostName;
 
+	char zttp_redirect_url[MAX_SIZE] = CLEAN;
+
 	// Gate に接続
 	Debug("WtcConnectEx: Try 0\n");
-	s = WtSockConnect(connect, &code, false);
+	BUF *zttp_error_lines = NewBuf();
+	s = WtSockConnect(connect, &code, false, zttp_error_lines, zttp_redirect_url, sizeof(zttp_redirect_url));
 	if (s == NULL)
 	{
 		// 失敗
-		if (connect->ProxyType == PROXY_HTTP && code != ERR_PROXY_CONNECT_FAILED &&
+		Debug("WtSockConnect Failed. Error Code = %u, Error str = %S", code, _E(code));
+
+		if (zttp_error_lines != NULL && zttp_error_lines->Size >= 1)
+		{
+			Debug("WtSockConnect ZTTP Error Details: %s", zttp_error_lines->Buf);
+
+			if (IsFilledStr(zttp_redirect_url))
+			{
+				Debug("WtSockConnect: Network security gateway returned the redirect URL: %s", zttp_redirect_url);
+			}
+		}
+
+		FreeBuf(zttp_error_lines);
+		zttp_error_lines = NULL;
+
+		if (connect->EnableZttp == false && connect->EnableZttp == false && connect->ProxyType == PROXY_HTTP && code != ERR_PROXY_CONNECT_FAILED &&
 			IsEmptyStr(connect->HostNameForProxy) == false && StrCmpi(connect->HostNameForProxy, connect->HostName) != 0)
 		{
 L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 			// HTTP プロキシサーバーの場合で単純プロキシサーバー接続不具合以外
 			// の場合は、接続先接続先を HostNameForProxy にして再試行する
 			Debug("WtcConnectEx: Try 1\n");
-			s = WtSockConnect(connect, &code, true);
+			s = WtSockConnect(connect, &code, true, NULL, NULL, 0);
 
 			if (s == NULL)
 			{
@@ -390,6 +408,9 @@ L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 			return code;
 		}
 	}
+
+	FreeBuf(zttp_error_lines);
+	zttp_error_lines = NULL;
 
 	//SetSocketSendRecvBufferSize((int)s, WT_SOCKET_WINDOW_SIZE);
 

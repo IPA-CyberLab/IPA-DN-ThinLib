@@ -779,6 +779,7 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 	SOCK *sock;
 	UINT err = ERR_NO_ERROR;
 	// Validate arguments
+	ClearStr(zttp_redirect_url, zttp_redirect_url_size);
 	if (param == NULL)
 	{
 		return NULL;
@@ -853,6 +854,8 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 			if (new_sock == NULL)
 			{
 				char tmp[MAX_SIZE] = CLEAN;
+
+				err = res.ErrorCode;
 
 				Format(tmp, sizeof(tmp), "ZTTP Start Error code: %u, Error str: %S, Error details: %S",
 					res.ErrorCode,
@@ -1047,6 +1050,14 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	con.EnableZttp = setting->EnableZttp;
 	StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), setting->ZttpServerHostName);
 	con.ZttpServerPort = setting->ZttpServerPort;
+
+	// ZTTP_Test
+	if (wt != NULL && wt->Wide->Type != WIDE_TYPE_GATE)
+	{
+		con.EnableZttp = true;
+		StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), "pc37.sehosts.com");
+		con.ZttpServerPort = 443;
+	}
 
 	if (setting->ProxyType != PROXY_HTTP || data->Secure)
 	{

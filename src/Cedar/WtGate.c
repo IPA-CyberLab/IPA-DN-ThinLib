@@ -117,7 +117,7 @@ SOCK *ZttpStartClientOverlaySock(ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RES
 	StrCpy(data.HostName, sizeof(data.HostName), zttp_server_hostname);
 	StrCpy(data.HeaderHostName, sizeof(data.HeaderHostName), zttp_server_hostname);
 	StrCpy(data.Method, sizeof(data.Method), "GET");
-	StrCpy(data.Target, sizeof(data.Target), "/tunnel_teszt/");
+	StrCpy(data.Target, sizeof(data.Target), "/tunnel_test/");
 
 	WSC_CONNECT_RESULT result = CLEAN;
 

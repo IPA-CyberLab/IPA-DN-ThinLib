@@ -848,7 +848,8 @@ L_CLEANUP:
 	WideFreeIni(widegate_ini);
 	FreeStrList(controller_urls_for_gate);
 
-	WtLog(wt, "WtWpcCall error: %u", GetErrorFromPack(ret));
+	WtLog(wt, "WtWpcCall error code: %u", GetErrorFromPack(ret));
+	WtLog(wt, "WtWpcCall error str: %S", _E(GetErrorFromPack(ret)));
 
 	return ret;
 }
@@ -992,9 +993,31 @@ L_RETRY:
 
 	BUF *error_lines = NewBuf();
 
+	char redirect_url[MAX_SIZE] = CLEAN;
+
+	WtLog(wt, "HttpRequestEx6: Try URL: %s", url);
+
+	if (wt->InternetSetting != NULL)
+	{
+		WtLog(wt, "INTERNET_SETTING: ProxyType = %u", wt->InternetSetting->ProxyType);
+		if (wt->InternetSetting->ProxyType != PROXY_DIRECT)
+		{
+			WtLog(wt, "INTERNET_SETTING: ProxyHostName = %s", wt->InternetSetting->ProxyHostName);
+			WtLog(wt, "INTERNET_SETTING: ProxyPort = %u", wt->InternetSetting->ProxyPort);
+			WtLog(wt, "INTERNET_SETTING: ProxyUsername = %s", wt->InternetSetting->ProxyUsername);
+			WtLog(wt, "INTERNET_SETTING: ProxyUserAgent = %s", wt->InternetSetting->ProxyUserAgent);
+		}
+		WtLog(wt, "INTERNET_SETTING: EnableZttp = %u", wt->InternetSetting->EnableZttp);
+		if (wt->InternetSetting->EnableZttp)
+		{
+			WtLog(wt, "INTERNET_SETTING: ZttpServerHostName = %s", wt->InternetSetting->ZttpServerHostName);
+			WtLog(wt, "INTERNET_SETTING: ZttpServerPort = %u", wt->InternetSetting->ZttpServerPort);
+		}
+	}
+
 	recv = HttpRequestEx6(&data, NULL, timeout, timeout, &error,
 		wt->CheckSslTrust, b->Buf, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL, wt, global_ip_only, false,
-		error_lines, NULL, HTTP_REQUEST_FLAG_NONE, NULL, 0);
+		error_lines, NULL, HTTP_REQUEST_FLAG_NONE, redirect_url, sizeof(redirect_url));
 
 	SeekBufToEnd(error_lines);
 	WriteBufChar(error_lines, 0);
@@ -1008,10 +1031,15 @@ L_RETRY:
 		{
 			WtLog(wt, "HttpRequestEx6 additional error str: %s", error_lines->Buf);
 		}
+
+		if (IsFilledStr(redirect_url))
+		{
+			WtLog(wt, "HttpRequestEx6: Your network's security gateway returned the redirect URL: %s", redirect_url);
+		}
 	}
 	else
 	{
-		WtLog(wt, "HttpRequestEx5 ok. Received %u bytes.", recv->Size);
+		WtLog(wt, "HttpRequestEx6 ok. Received %u bytes.", recv->Size);
 	}
 
 	FreeBuf(b);

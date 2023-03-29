@@ -9052,7 +9052,7 @@ bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
 	AddHttpValue(h, NewHttpValue("User-Agent", WPC_USER_AGENT));
 	AddHttpValue(h, NewHttpValue("Accept", DEFAULT_ACCEPT));
 	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Version", "13"));
-	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Protocol", "guacamole"));
+	//AddHttpValue(h, NewHttpValue("Sec-WebSocket-Protocol", "guacamole"));
 	AddHttpValue(h, NewHttpValue("Origin", origin_url));
 	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Key", request_key));
 	AddHttpValue(h, NewHttpValue("Connection", "Upgrade"));

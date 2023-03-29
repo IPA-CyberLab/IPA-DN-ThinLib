@@ -3165,6 +3165,9 @@ void SwDefineTasks(SW* sw, SW_TASK* t, SW_COMPONENT* c)
 		// シン・テレワーク クライアント
 		SW_TASK_COPY* thinclient;
 
+		CombinePathW(tmp, sizeof(tmp), sw->InstallDir, L"client_log");
+		Add(t->SetSecurityPathsEveryone, CopyUniStr(tmp));
+
 		thinclient = SwNewCopyTask(DI_FILENAME_DESKCLIENT, NULL, sw->InstallSrc, sw->InstallDir, true, false);
 
 		Add(t->CopyTasks, thinclient);

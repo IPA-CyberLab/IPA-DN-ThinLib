@@ -809,22 +809,39 @@ void WtsConnectMain(TSESSION *session)
 
 	sni = connect->HostName;
 
+	char zttp_redirect_url[MAX_SIZE] = CLEAN;
+
 	// Gate に接続
-	s = WtSockConnect(connect, &err, false);
+	BUF *zttp_error_lines = NewBuf();
+	s = WtSockConnect(connect, &err, false, zttp_error_lines, zttp_redirect_url, sizeof(zttp_redirect_url));
 	if (s == NULL)
 	{
 		// 失敗
-		WtSessionLog(session, "WtSockConnect Failed.");
+		WtSessionLog(session, "WtSockConnect Failed. Error Code = %u, Error str = %S", err, _E(err));
 
-		if (connect->ProxyType == PROXY_HTTP && err != ERR_PROXY_CONNECT_FAILED &&
+		if (zttp_error_lines != NULL && zttp_error_lines->Size >= 1)
+		{
+			WtSessionLog(session, "WtSockConnect ZTTP Error Details: %s", zttp_error_lines->Buf);
+
+			if (IsFilledStr(zttp_redirect_url))
+			{
+				WtSessionLog(session, "WtSockConnect: Network security gateway returned the redirect URL: %s", zttp_redirect_url);
+			}
+		}
+
+		FreeBuf(zttp_error_lines);
+		zttp_error_lines = NULL;
+
+		if (connect->EnableZttp == false && connect->ProxyType == PROXY_HTTP && err != ERR_PROXY_CONNECT_FAILED &&
 			IsEmptyStr(connect->HostNameForProxy) == false && StrCmpi(connect->HostNameForProxy, connect->HostName) != 0)
 		{
+
 L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 			// HTTP プロキシサーバーの場合で単純プロキシサーバー接続不具合以外
 			// の場合は、接続先接続先を HostNameForProxy にして再試行する
 			WtSessionLog(session, "WtsConnectMain: Try 1");
 
-			s = WtSockConnect(connect, &err, true);
+			s = WtSockConnect(connect, &err, true, NULL, NULL, 0);
 
 			if (s == NULL)
 			{
@@ -843,6 +860,9 @@ L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 			return;
 		}
 	}
+
+	FreeBuf(zttp_error_lines);
+	zttp_error_lines = NULL;
 
 	WtSessionLog(session, "WtSockConnect Ok.");
 
@@ -877,12 +897,13 @@ L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 }
 
 // ソケット接続
-SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternative_fqdn)
+SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternative_fqdn, BUF *zttp_result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size)
 {
 	CONNECTION c;
 	SOCK *sock;
 	UINT err = ERR_NO_ERROR;
 	// 引数チェック
+	ClearStr(zttp_redirect_url, zttp_redirect_url_size);
 	if (param == NULL)
 	{
 		return NULL;
@@ -893,10 +914,30 @@ SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternat
 	sock = NULL;
 	err = ERR_INTERNAL_ERROR;
 
+	char *direct_or_proxy_connect_hostname = param->HostName;
+	UINT direct_or_proxy_connect_port = param->Port;
+
+	bool use_zttp = false;
+
+	if (param->EnableZttp && IsFilledStr(param->ZttpServerHostName) && param->ZttpServerPort != 0)
+	{
+		use_zttp = true;
+
+		direct_or_proxy_connect_hostname = param->ZttpServerHostName;
+		direct_or_proxy_connect_port = param->ZttpServerPort;
+	}
+	else
+	{
+		if (param->ProxyType == PROXY_HTTP)
+		{
+			direct_or_proxy_connect_hostname = (proxy_use_alternative_fqdn ? param->HostNameForProxy : param->HostName);
+		}
+	}
+
 	switch (param->ProxyType)
 	{
 	case PROXY_DIRECT:
-		sock = TcpIpConnectEx(param->HostName, param->Port, false, false, NULL, true, false, false, NULL);
+		sock = TcpIpConnectEx(direct_or_proxy_connect_hostname, direct_or_proxy_connect_port, false, false, NULL, true, false, false, NULL);
 		if (sock == NULL)
 		{
 			err = ERR_CONNECT_FAILED;
@@ -905,7 +946,7 @@ SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternat
 
 	case PROXY_HTTP:
 		sock = ProxyConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
-			(proxy_use_alternative_fqdn ? param->HostNameForProxy :  param->HostName), param->Port,
+			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
 			param->ProxyUsername, param->ProxyPassword, false, NULL, NULL, 0, param->ProxyUserAgent);
 		if (sock == NULL)
 		{
@@ -915,13 +956,48 @@ SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternat
 
 	case PROXY_SOCKS:
 		sock = SocksConnect(&c, param->ProxyHostName, param->ProxyPort,
-			param->HostName, param->Port,
+			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
 			param->ProxyUsername, false);
 		if (sock == NULL)
 		{
 			err = c.Err;
 		}
 		break;
+	}
+
+	if (sock != NULL)
+	{
+		if (use_zttp)
+		{
+			// ZTTP connect
+			ZTTP_CONNECT_REQUEST req = CLEAN;
+
+			StrCpy(req.TargetFqdn, sizeof(req.TargetFqdn), param->HostName);
+			req.TargetPort = param->Port;
+
+			ZTTP_CONNECT_RESPONSE res = CLEAN;
+
+			SOCK *new_sock = ZttpStartClientOverlaySock(&req, &res, param->ZttpServerHostName, sock, zttp_redirect_url, zttp_redirect_url_size);
+			if (new_sock == NULL)
+			{
+				char tmp[MAX_SIZE] = CLEAN;
+
+				Format(tmp, sizeof(tmp), "ZTTP Start Error code: %u, Error str: %S, Error details: %S",
+					res.ErrorCode,
+					_E(res.ErrorCode),
+					res.ErrorMessage);
+
+				WriteBufLine(zttp_result_buf_if_error, tmp);
+
+				Disconnect(sock);
+				ReleaseSock(sock);
+				sock = NULL;
+			}
+			else
+			{
+				sock = new_sock;
+			}
+		}
 	}
 
 	if (error_code != NULL)
@@ -964,9 +1040,10 @@ TSESSION *WtsNewSession(THREAD *thread, WT *wt, WT_CONNECT *connect, WT_ACCEPT_P
 	t->UsedTunnelList = WtNewUsedTunnelIdList();
 
 	WtLogEx(wt, t->ServerSessionName, "WtsNewSession: Create New Server Session: HostName = %s, HostNameForProxy = %s, Port = %u, "
-		"ProxyType = %u, ProxyHostName = %s, ProxyPort = %u, ProxyUsername = %s, ProxyUserAgent = %s",
+		"ProxyType = %u, ProxyHostName = %s, ProxyPort = %u, ProxyUsername = %s, ProxyUserAgent = %s, EnableZttp = %u, ZttpServerHostName = %s, ZttpServerPort = %u",
 		connect->HostName, connect->HostNameForProxy, connect->Port, connect->ProxyType,
-		connect->ProxyHostName, connect->ProxyPort, connect->ProxyUsername, connect->ProxyUserAgent);
+		connect->ProxyHostName, connect->ProxyPort, connect->ProxyUsername, connect->ProxyUserAgent,
+		connect->EnableZttp, connect->ZttpServerHostName, connect->ZttpServerPort);
 
 	return t;
 };
@@ -1116,5 +1193,14 @@ void WtInitWtConnectFromInternetSetting(WT_CONNECT *c, INTERNET_SETTING	*s)
 	StrCpy(c->ProxyUsername, sizeof(c->ProxyUsername), s->ProxyUsername);
 	StrCpy(c->ProxyPassword, sizeof(c->ProxyPassword), s->ProxyPassword);
 	StrCpy(c->ProxyUserAgent, sizeof(c->ProxyUserAgent), s->ProxyUserAgent);
+
+	c->EnableZttp = s->EnableZttp;
+	StrCpy(c->ZttpServerHostName, sizeof(c->ZttpServerHostName), s->ZttpServerHostName);
+	c->ZttpServerPort = s->ZttpServerPort;
+
+	// ZTTP_Test
+	c->EnableZttp = true;
+	StrCpy(c->ZttpServerHostName, sizeof(c->ZttpServerHostName), "pc37.sehosts.com");
+	c->ZttpServerPort = 443;
 }
 
