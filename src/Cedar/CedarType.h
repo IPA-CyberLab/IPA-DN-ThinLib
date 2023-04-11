@@ -211,6 +211,8 @@ typedef struct UPDATE_CLIENT_SETTING UPDATE_CLIENT_SETTING;
 typedef struct HTTP_MIME_TYPE HTTP_MIME_TYPE;
 typedef struct WS WS;
 typedef struct WSP WSP;
+typedef struct WSC_CONNECT_RESULT WSC_CONNECT_RESULT;
+typedef struct WSC_ASYNC_RELAY_THREAD_PARAM WSC_ASYNC_RELAY_THREAD_PARAM;
 
 
 // ==============================================================

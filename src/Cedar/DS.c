@@ -906,7 +906,7 @@ void DsPolicyClientThread(THREAD *thread, void *param)
 				bool is_server_error = false;
 				BUF *buf = HttpRequestEx6(&data, NULL, 0, 0, &err, false, NULL, NULL, NULL, NULL, 0, &c->Halt,
 					DS_POLICY_CLIENT_MAX_FILESIZE, NULL, NULL, NULL, false, true, http_error_buf,
-					&is_server_error, HTTP_REQUEST_FLAG_NONE);
+					&is_server_error, HTTP_REQUEST_FLAG_NONE, NULL, 0);
 
 				if (buf != NULL)
 				{
@@ -5664,7 +5664,7 @@ void PeriodicHttpsPollingThread(THREAD *thread, void *param)
 
 		BUF *buf = HttpRequestEx6(&data, &setting, 0, 0, &err, false, NULL, NULL, NULL, NULL, 0,
 			&ds->PeriodicHttpsPollingThreadHaltFlag, 0, NULL, NULL, NULL,
-			false, false, NULL, NULL, 0);
+			false, false, NULL, NULL, 0, NULL, 0);
 
 		FreeBuf(buf);
 

@@ -345,6 +345,7 @@ void BufMsgArgs(BUF* b, char* fmt, va_list args);
 void BufDebug(BUF* b);
 void BufPrint(BUF* b);
 void AddBufStr(BUF *b, char *str);
+bool DumpBufAppendToFile(BUF *b, char *filename);
 bool DumpBuf(BUF *b, char *filename);
 bool DumpBufW(BUF *b, wchar_t *filename);
 bool DumpBufWIfNecessary(BUF *b, wchar_t *filename);

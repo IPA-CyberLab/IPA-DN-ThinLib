@@ -222,16 +222,98 @@ struct WG_MACHINE
 	char WolMacList[1024];				// WoL MAC アドレスリスト
 };
 
+// ZTTP 接続要求フラグ
+#define ZTTP_CONNECT_REQUEST_FLAG_NONE			0
+#define	ZTTP_CONNECT_REQUEST_FLAG_STARTSSL		1
+
+
+// ZTTP 接続要求メッセージ
+struct ZTTP_CONNECT_REQUEST
+{
+	UINT64 Flags;						// フラグ
+	char TargetFqdn[MAX_PATH];			// 接続先サーバー FQDN
+	UINT TargetPort;					// 接続先ポート
+};
+
+// ZTTP 接続応答フラグ
+#define ZTTP_CONNECT_RESPONSE_FLAG_NONE			0
+#define	ZTTP_CONNECT_RESPONSE_FLAG_STARTSSL		1
+
+// ZTTP 接続応答メッセージ
+struct ZTTP_CONNECT_RESPONSE
+{
+	UINT ErrorCode;						// エラーコード
+	wchar_t ErrorMessage[768];			// エラーメッセージ
+	UINT64 Flags;						// フラグ
+	char TargetIp[64];					// 接続先 IP アドレス
+	UINT TargetPort;					// 接続先ポート
+	char LocalIp[64];					// 接続元 IP アドレス
+	UINT LocalPort;						// 接続元ポート番号
+	char TargetFqdnReverse[MAX_PATH];	// DNS 逆引き応答結果
+	X *TargetSslCert;					// 接続先 SSL 証明書
+};
+
+// ZTTP 中継ゲートウェイ設定
+struct ZTTP_GW_SETTINGS
+{
+	UINT NumThreads;
+	UINT CommTimeoutInit;
+	UINT CommTimeoutMain;
+	UINT ConnectTimeout;
+};
+
+// ZTTP 中継ゲートウェイ
+struct ZTTP_GW
+{
+	volatile bool Halt;
+	LIST *ThreadList;					// スレッドリスト
+	ZTTP_GW_SETTINGS Settings;
+	COUNTER *CurrentIdCounter;
+};
+
+// ZTTP 中継スレッド
+struct ZTTP_GW_THREAD
+{
+	ZTTP_GW *Gw;						// Gateway
+	THREAD *Thread;						// スレッド
+	SOCK_EVENT *SockEvent;				// SockEvent
+	volatile bool Halt;					// 停止フラグ
+	LIST *SessionList;					// セッションリスト
+};
+
+// ZTTP 中継セッション
+struct ZTTP_GW_SESSION
+{
+	SOCK *TargetSock;					// 接続先サーバーソケット
+	SOCK *ClientSock;					// クライアントソケット
+	WS *ClientWebSocket;								// WebSocket
+
+	FIFO *FifoClientToTarget;			// クライアント -> ターゲット方向のデータ
+	FIFO *FifoTargetToClient;			// ターゲット -> クライアント方向のデータ
+
+	UINT64 LastCommTick_ClientToTarget;		// 最後に通信がなされた日時
+	UINT64 LastCommTick_TargetToClient;		// 最後に通信がなされた日時
+};
+
+#define ZTTP_WINDOW_SIZE			WT_WEBSOCK_WINDOW_SIZE					// ZTTP ウインドウサイズ
+
+
 // HTTP プロキシ
 #define	WG_PROXY_TCP_TIMEOUT_SERVER		(60 * 1000)
 #define	WG_PROXY_MAX_POST_SIZE			(1024 * 1024)
 
-// ThinDate Standalone Mode 定数
+// ThinGate Standalone Mode 定数
 #define WTG_SAM_MAX_RECVSTR_SIZE		(64 * 1024)
 
 #define WTG_HTTP_PROXY_FOR_WEBAPP_MAX_HTTP_LINE_SIZE	(256 * 1024)
 
 #define WTG_HTTP_PROXY_INTERNAL_CHUNK_BUFFER_SIZE		65536
+
+
+// ZTTP パラメータ
+#define ZTTP_COMM_TIMEOUT_INIT			(15 * 1000)
+#define	ZTTP_COMM_TIMEOUT_MAIN			(30 * 1000)
+#define ZTTP_TARGET_CONNECT_TIMEOUT		(6 * 1000)
 
 
 // 関数プロトタイプ
@@ -310,6 +392,30 @@ bool WtgWebSocketAccept(WT* wt, SOCK* s, char* url_target, TSESSION *session, TU
 bool WtgSearchSessionAndTunnelByWebSocketUrl(WT* wt, char* url_target, TSESSION** pp_session, TUNNEL** pp_tunnel);
 
 bool WtgHttpProxyForWebApp(WT* wt, SOCK* s, HTTP_HEADER* first_header);
+
+bool ZttpWebSocketGetHandler(WT *wt, SOCK *s, HTTP_HEADER *h, char *url_target);
+bool ZttpWebSocketAccept(ZTTP_GW *gw, SOCK *s, char *url_target);
+
+SOCK *ZttpConnectToTarget(ZTTP_GW *gw, ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response);
+
+void ZttpInRpcConnectRequest(ZTTP_CONNECT_REQUEST *a, PACK* p);
+void ZttpOutRpcConnectRequest(PACK *p, ZTTP_CONNECT_REQUEST *a);
+
+void ZttpInRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a, PACK *p);
+void ZttpOutRpcConnectResponse(PACK *p, ZTTP_CONNECT_RESPONSE *a);
+void ZttpFreeRpcConnectResponse(ZTTP_CONNECT_RESPONSE *a);
+
+ZTTP_GW *NewZttpGw(ZTTP_GW_SETTINGS *settings);
+ZTTP_GW_THREAD *NewZttpGwThread(ZTTP_GW *gw);
+void StopAndFreeZttpThread(ZTTP_GW_THREAD *gt);
+void FreeZttpGw(ZTTP_GW *gw);
+void ZttpGwThread(THREAD *thread, void *param);
+void ZttpFreeGwSession(ZTTP_GW_SESSION *s);
+
+SOCK *ZttpStartClientOverlaySock(ZTTP_CONNECT_REQUEST *request, ZTTP_CONNECT_RESPONSE *response,
+	char *zttp_server_hostname,
+	SOCK *underlay_socket,
+	char *redirect_url, UINT redirect_url_size);
 
 
 #endif	// WTGATE_H

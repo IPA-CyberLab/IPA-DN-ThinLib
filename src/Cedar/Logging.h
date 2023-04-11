@@ -140,6 +140,7 @@ struct LOG
 	UINT CurrentLogNumber;					// Log file number of the current
 	bool log_number_incremented;
 	bool Flush;
+	bool SyncMode;
 };
 
 
@@ -175,6 +176,7 @@ struct SLOG
 
 // Function prototype
 LOG *NewLog(char *dir, char *prefix, UINT switch_type);
+LOG *NewLogEx(char *dir, char *prefix, UINT switch_type, bool sync_mode);
 void FreeLog(LOG *g);
 void LogThread(THREAD *thread, void *param);
 void WaitLogFlush(LOG *g);

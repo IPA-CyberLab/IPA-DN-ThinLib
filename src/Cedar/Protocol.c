@@ -9021,6 +9021,374 @@ void MvpnAccept(CONNECTION *c, SOCK *s)
 	ReleaseWs(w);
 }
 
+// WebSocket Client Connect
+bool WscConnect(SOCK *s, URL_DATA *data, WSC_CONNECT_RESULT *result)
+{
+	if (s == NULL || data == NULL || result == NULL)
+	{
+		Zero(result, sizeof(WSC_CONNECT_RESULT));
+		if (result != NULL)
+		{
+			result->ErrorCode = ERR_INTERNAL_ERROR;
+		}
+		return false;
+	}
+
+	UINT prev_timeout = GetTimeout(s);
+
+	SetTimeout(s, WSC_TIMEOUT_INIT);
+
+	UCHAR nonce[16] = CLEAN;
+	Rand(nonce, sizeof(nonce));
+
+	char request_key[64] = CLEAN;
+	B64_Encode(request_key, nonce, sizeof(nonce));
+
+	char origin_url[128] = CLEAN;
+	Format(origin_url, sizeof(origin_url), "https://%s/", data->HostName);
+
+	HTTP_HEADER *h = NewHttpHeader(data->Method, data->Target, "HTTP/1.1");
+	AddHttpValue(h, NewHttpValue("Host", data->HeaderHostName));
+	AddHttpValue(h, NewHttpValue("User-Agent", WPC_USER_AGENT));
+	AddHttpValue(h, NewHttpValue("Accept", DEFAULT_ACCEPT));
+	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Version", "13"));
+	//AddHttpValue(h, NewHttpValue("Sec-WebSocket-Protocol", "guacamole"));
+	AddHttpValue(h, NewHttpValue("Origin", origin_url));
+	AddHttpValue(h, NewHttpValue("Sec-WebSocket-Key", request_key));
+	AddHttpValue(h, NewHttpValue("Connection", "Upgrade"));
+	AddHttpValue(h, NewHttpValue("Pragma", "no-cache"));
+	AddHttpValue(h, NewHttpValue("Cache-Control", "no-cache"));
+	AddHttpValue(h, NewHttpValue("Upgrade", "websocket"));
+
+	if (IsEmptyStr(data->AdditionalHeaderName) == false && IsEmptyStr(data->AdditionalHeaderValue) == false)
+	{
+		AddHttpValue(h, NewHttpValue(data->AdditionalHeaderName, data->AdditionalHeaderValue));
+	}
+
+	char *send_str = HttpHeaderToStr(h, 0);
+	FreeHttpHeader(h);
+
+	BUF *send_buf = NewBuf();
+	WriteBuf(send_buf, send_str, StrLen(send_str));
+	Free(send_str);
+
+	// Send
+	if (SendAll(s, send_buf->Buf, send_buf->Size, s->SecureMode) == false)
+	{
+		FreeBuf(send_buf);
+
+		result->ErrorCode = ERR_DISCONNECTED;
+
+		WriteBufLine(result->ErrorLines, "Send HTTP request failed.");
+
+		return false;
+	}
+
+	FreeBuf(send_buf);
+
+	// Receive
+	h = RecvHttpHeader(s, 0, 0);
+	if (h == NULL)
+	{
+		result->ErrorCode = ERR_DISCONNECTED;
+
+		WriteBufLine(result->ErrorLines, "Receive HTTP response failed.");
+
+		return false;
+	}
+
+	UINT http_error_code = 0;
+	if (StrLen(h->Method) == 8)
+	{
+		if (Cmp(h->Method, "HTTP/1.", 7) == 0)
+		{
+			http_error_code = ToInt(h->Target);
+		}
+	}
+
+	char errstr[128] = CLEAN;
+
+	Format(errstr, sizeof(errstr), "HTTP error code: %u (%s)", http_error_code, h->Method);
+
+	HTTP_VALUE *upgrade_value = GetHttpValue(h, "Upgrade");
+	HTTP_VALUE *accept_key_value = GetHttpValue(h, "Sec-WebSocket-Accept");
+	HTTP_VALUE *location_value = GetHttpValue(h, "Location");
+
+	char upgrade_str[128] = CLEAN;
+	char accept_key_str[128] = CLEAN;
+	char location_str[384] = CLEAN;
+
+	if (upgrade_value != NULL)
+	{
+		StrCpy(upgrade_str, sizeof(upgrade_str), upgrade_value->Data);
+	}
+
+	if (accept_key_value != NULL)
+	{
+		StrCpy(accept_key_str, sizeof(accept_key_str), accept_key_value->Data);
+	}
+
+	if (location_value != NULL)
+	{
+		StrCpy(location_str, sizeof(location_str), location_value->Data);
+	}
+
+	FreeHttpHeader(h);
+
+	switch (http_error_code)
+	{
+	case 101:
+		// Continue
+		break;
+
+	default:
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		if (IsFilledStr(location_str))
+		{
+			char tmp[450] = CLEAN;
+			Format(tmp, sizeof(tmp), "Please see the responsed URL: %s", location_str);
+			WriteBufLine(result->ErrorLines, location_str);
+		}
+
+		StrCpy(result->RedirectUrl, sizeof(result->RedirectUrl), location_str);
+
+		return false;
+	}
+
+	if (StrCmpi(upgrade_str, "websocket") != 0)
+	{
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		Format(errstr, sizeof(errstr), "HTTP server responsed invalid upgrade str: '%s'", upgrade_str);
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		return false;
+	}
+
+	char key_calc_str[128] = CLEAN;
+	StrCpy(key_calc_str, sizeof(key_calc_str), request_key);
+	StrCat(key_calc_str, sizeof(key_calc_str), "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+
+	UCHAR key_calc_hash[SHA1_SIZE];
+	HashSha1(key_calc_hash, key_calc_str, StrLen(key_calc_str));
+
+	char key_calc_hash_b64[64] = CLEAN;
+
+	B64_Encode(key_calc_hash_b64, key_calc_hash, sizeof(key_calc_hash));
+
+	if (StrCmp(key_calc_hash_b64, accept_key_str) != 0)
+	{
+		// Protocol error;
+		result->ErrorCode = ERR_PROTOCOL_ERROR;
+
+		Format(errstr, sizeof(errstr), "HTTP server responsed wrong accept key: '%s'", accept_key_str);
+
+		WriteBufLine(result->ErrorLines, errstr);
+
+		return false;
+	}
+
+	SetTimeout(s, prev_timeout);
+
+	return true;
+}
+
+// WebSocket <--> Physical Socket relay thread
+void WscAsyncRelayThread(THREAD *thread, void *param)
+{
+	UINT window_size = 256 * 1024;
+	UINT64 timeout = 30 * 1000;
+
+	if (thread == NULL || param == NULL)
+	{
+		DelWaitThread(thread);
+		return;
+	}
+
+	WSC_ASYNC_RELAY_THREAD_PARAM *ctx = (WSC_ASYNC_RELAY_THREAD_PARAM *)param;
+
+	UINT buf_size = window_size;
+
+	UCHAR *buf = Malloc(buf_size);
+
+	SOCK *s = ctx->Socket;
+	WS *ws = ctx->WebSocket;
+	SOCK_EVENT *event = NewSockEvent();
+
+	FIFO *fifo_s_to_ws = NewFifo();
+	FIFO *fifo_ws_to_s = NewFifo();
+
+	if (s == NULL || ws == NULL)
+	{
+		NoticeThreadInit(thread);
+
+		goto L_CLEANUP;
+	}
+
+	JoinSockToSockEvent(s, event);
+	JoinSockToSockEvent(ws->Sock, event);
+
+	NoticeThreadInit(thread);
+
+	UINT64 lastcomm_s_to_ws = Tick64();
+	UINT64 lastcomm_ws_to_s = lastcomm_s_to_ws;
+
+	while (true)
+	{
+		UINT64 now = Tick64();
+
+		bool state_changed = false;
+		bool disconnected = false;
+
+		// Socket --> WebSocket [to buffer]
+		while (disconnected == false && FifoSize(fifo_s_to_ws) < window_size)
+		{
+			UINT remain_fifo_size = window_size - FifoSize(fifo_s_to_ws);
+			remain_fifo_size = MIN(remain_fifo_size, buf_size);
+
+			UINT sz = Recv(s, buf, remain_fifo_size, s->SecureMode);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			WriteFifo(fifo_s_to_ws, buf, sz);
+			state_changed = true;
+
+			lastcomm_s_to_ws = now;
+		}
+
+		// WebSocket --> Socket [to buffer]
+		while (disconnected == false && FifoSize(fifo_ws_to_s) < window_size)
+		{
+			UINT remain_fifo_size = window_size - FifoSize(fifo_ws_to_s);
+			remain_fifo_size = MIN(window_size, buf_size);
+
+			UINT sz = WsRecvAsync(ws, buf, remain_fifo_size, now);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			WriteFifo(fifo_ws_to_s, buf, sz);
+			state_changed = true;
+
+			lastcomm_ws_to_s = now;
+		}
+
+		// WebSocket --> Socket [from buffer]
+		while (disconnected == false)
+		{
+			UINT remain_size = FifoSize(fifo_ws_to_s);
+			if (remain_size == 0)
+			{
+				break;
+			}
+
+			UINT sz = Send(s, FifoPtr(fifo_ws_to_s), remain_size, s->SecureMode);
+
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			ReadFifo(fifo_ws_to_s, NULL, sz);
+			state_changed = true;
+		}
+
+		// Sock --> WebSocket [from buffer]
+		while (disconnected == false)
+		{
+			UINT remain_size = FifoSize(fifo_s_to_ws);
+			if (remain_size == 0)
+			{
+				break;
+			}
+
+			UINT sz = WsSendAsync(ws, FifoPtr(fifo_s_to_ws), remain_size);
+			if (sz == 0)
+			{
+				disconnected = true;
+				break;
+			}
+			else if (sz == INFINITE)
+			{
+				break;
+			}
+
+			ReadFifo(fifo_s_to_ws, NULL, sz);
+			state_changed = true;
+		}
+
+		if ((lastcomm_s_to_ws + timeout) < now)
+		{
+			disconnected = true;
+		}
+
+		if ((lastcomm_ws_to_s + timeout) < now)
+		{
+			disconnected = true;
+		}
+
+		if (disconnected)
+		{
+			break;
+		}
+
+		if (state_changed)
+		{
+			continue;
+		}
+
+		WaitSockEvent(event, 1234);
+	}
+
+L_CLEANUP:
+
+	Disconnect(s);
+	ReleaseSock(s);
+
+	if (ws != NULL)
+	{
+		Disconnect(ws->Sock);
+		ReleaseSock(ws->Sock);
+
+		ReleaseWs(ws);
+	}
+
+	ReleaseSockEvent(event);
+
+	ReleaseFifo(fifo_s_to_ws);
+	ReleaseFifo(fifo_ws_to_s);
+
+	Free(buf);
+
+	DelWaitThread(thread);
+}
+
 // New WebSocket
 WS *NewWs(SOCK *s)
 {
@@ -9522,22 +9890,51 @@ void WspTrySendFrame(WSP *p, UCHAR opcode, void *data, UINT size)
 	flag_and_opcode = 0x80 | (opcode & 0x0F);
 	WriteBufChar(b, flag_and_opcode);
 
+	UCHAR mask_bit = p->IsClientMode ? 0x80 : 0x00;
+
 	if (size <= 125)
 	{
-		WriteBufChar(b, size);
+		WriteBufChar(b, size | mask_bit);
 	}
 	else if (size <= 65536)
 	{
-		WriteBufChar(b, 126);
+		WriteBufChar(b, 126 | mask_bit);
 		WriteBufShort(b, size);
 	}
 	else
 	{
-		WriteBufChar(b, 127);
+		WriteBufChar(b, 127 | mask_bit);
 		WriteBufInt64(b, size);
 	}
 
-	WriteBuf(b, data, size);
+	if (p->IsClientMode)
+	{
+		// Client mode: mask data
+		UCHAR mask_key[4];
+		Rand(mask_key, sizeof(mask_key));
+
+		WriteBuf(b, mask_key, 4);
+
+		UCHAR *masked_data = Malloc(size);
+
+		if (size >= 1)
+		{
+			UINT i;
+			for (i = 0;i < size;i++)
+			{
+				masked_data[i] = ((UCHAR *)data)[i] ^ mask_key[i % 4];
+			}
+		}
+
+		WriteBuf(b, masked_data, size);
+
+		Free(masked_data);
+	}
+	else
+	{
+		// Server mode: raw data
+		WriteBuf(b, data, size);
+	}
 
 	WriteFifo(p->PhysicalSendFifo, b->Buf, b->Size);
 

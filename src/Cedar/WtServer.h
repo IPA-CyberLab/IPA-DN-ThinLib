@@ -108,6 +108,10 @@ struct WT_CONNECT
 	UCHAR SessionId[WT_SESSION_ID_SIZE];		// 接続先セッション ID
 	UINT64 ServerMask64;						// ServerMask64
 	bool CacheUsed;								// キャッシュが使用された
+
+	bool EnableZttp;
+	char ZttpServerHostName[MAX_HOST_NAME_LEN + 1];
+	UINT ZttpServerPort;
 };
 
 // WTS_CONNECT_THREAD_PARAM
@@ -137,7 +141,7 @@ void WtsConnectThread(THREAD *thread, void *param);
 TSESSION *WtsNewSession(THREAD *thread, WT *wt, WT_CONNECT *connect, WT_ACCEPT_PROC *proc, void *param);
 void WtsConnectMain(TSESSION *session);
 void WtsConnectInner(TSESSION *session, SOCK *s, char *sni, bool *should_retry_proxy_alternative);
-SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternative_fqdn);
+SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternative_fqdn, BUF *zttp_result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size);
 bool WtgClientUploadSignature(SOCK *s);
 void WtsSessionMain(TSESSION *session);
 void WtsStop(TSESSION *s);

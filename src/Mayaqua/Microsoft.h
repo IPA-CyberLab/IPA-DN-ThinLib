@@ -1206,6 +1206,7 @@ bool MsEnableRemoteDesktop();
 bool MsCheckLocalhostRemoteDesktopPort();
 void MsStartEasyNoSleep();
 void MsStopEasyNoSleep();
+void MsTest01();
 
 void MsSetFileToHidden(char *name);
 void MsSetFileToHiddenW(wchar_t *name);

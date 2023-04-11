@@ -771,14 +771,15 @@ INTERNET_SETTING *GetNullInternetSetting()
 // Socket connection
 SOCK *WpcSockConnect(WPC_CONNECT *param, UINT *error_code, UINT timeout)
 {
-	return WpcSockConnectEx(param, error_code, timeout, NULL);
+	return WpcSockConnectEx(param, error_code, timeout, NULL, NULL, NULL, 0);
 }
-SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel)
+SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel, BUF *result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size)
 {
 	CONNECTION c;
 	SOCK *sock;
 	UINT err = ERR_NO_ERROR;
 	// Validate arguments
+	ClearStr(zttp_redirect_url, zttp_redirect_url_size);
 	if (param == NULL)
 	{
 		return NULL;
@@ -789,6 +790,19 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 	sock = NULL;
 	err = ERR_INTERNAL_ERROR;
 
+	char *direct_or_proxy_connect_hostname = param->HostName;
+	UINT direct_or_proxy_connect_port = param->Port;
+
+	bool use_zttp = false;
+
+	if (param->EnableZttp && IsFilledStr(param->ZttpServerHostName) && param->ZttpServerPort != 0)
+	{
+		use_zttp = true;
+
+		direct_or_proxy_connect_hostname = param->ZttpServerHostName;
+		direct_or_proxy_connect_port = param->ZttpServerPort;
+	}
+
 	switch (param->ProxyType)
 	{
 	case PROXY_NO_CONNECT:
@@ -796,7 +810,7 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 		break;
 
 	case PROXY_DIRECT:
-		sock = TcpConnectEx3(param->HostName, param->Port, timeout, cancel, NULL, true, NULL, false, false, NULL);
+		sock = TcpConnectEx3(direct_or_proxy_connect_hostname, direct_or_proxy_connect_port, timeout, cancel, NULL, true, NULL, false, false, NULL);
 		if (sock == NULL)
 		{
 			err = ERR_CONNECT_FAILED;
@@ -805,7 +819,7 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 
 	case PROXY_HTTP:
 		sock = ProxyConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
-			param->HostName, param->Port,
+			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
 			param->ProxyUsername, param->ProxyPassword, false, cancel, NULL, timeout, param->ProxyUserAgent);
 		if (sock == NULL)
 		{
@@ -815,13 +829,50 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 
 	case PROXY_SOCKS:
 		sock = SocksConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
-			param->HostName, param->Port,
+			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
 			param->ProxyUsername, false, cancel, NULL, timeout, NULL);
 		if (sock == NULL)
 		{
 			err = c.Err;
 		}
 		break;
+	}
+
+	if (sock != NULL)
+	{
+		if (use_zttp)
+		{
+			// ZTTP connect
+			ZTTP_CONNECT_REQUEST req = CLEAN;
+
+			StrCpy(req.TargetFqdn, sizeof(req.TargetFqdn), param->HostName);
+			req.TargetPort = param->Port;
+
+			ZTTP_CONNECT_RESPONSE res = CLEAN;
+
+			SOCK *new_sock = ZttpStartClientOverlaySock(&req, &res, param->ZttpServerHostName, sock, zttp_redirect_url, zttp_redirect_url_size);
+			if (new_sock == NULL)
+			{
+				char tmp[MAX_SIZE] = CLEAN;
+
+				err = res.ErrorCode;
+
+				Format(tmp, sizeof(tmp), "ZTTP Start Error code: %u, Error str: %S, Error details: %S",
+					res.ErrorCode,
+					_E(res.ErrorCode),
+					res.ErrorMessage);
+
+				WriteBufLine(result_buf_if_error, tmp);
+
+				Disconnect(sock);
+				ReleaseSock(sock);
+				sock = NULL;
+			}
+			else
+			{
+				sock = new_sock;
+			}
+		}
 	}
 
 	if (error_code != NULL)
@@ -914,7 +965,8 @@ BUF *HttpRequestEx5(URL_DATA *data, INTERNET_SETTING *setting,
 {
 	return HttpRequestEx6(data, setting, timeout_connect, timeout_comm, error_code, check_ssl_trust,
 		post_data, recv_callback, recv_callback_param, sha1_cert_hash, (sha1_cert_hash == NULL ? 0 : 1),
-		cancel, max_recv_size, header_name, header_value, wt, false, false, NULL, NULL, HTTP_REQUEST_FLAG_NONE);
+		cancel, max_recv_size, header_name, header_value, wt, false, false, NULL, NULL, HTTP_REQUEST_FLAG_NONE,
+		NULL, 0);
 
 }
 BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
@@ -922,7 +974,7 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	UINT *error_code, bool check_ssl_trust, char *post_data,
 	WPC_RECV_CALLBACK *recv_callback, void *recv_callback_param, void *sha1_cert_hash, UINT num_hashes,
 	bool *cancel, UINT max_recv_size, char *header_name, char *header_value, WT *wt, bool global_ip_only, bool dest_private_ip_only,
-	BUF *result_buf_if_error, bool *is_server_error, UINT flags) 
+	BUF *result_buf_if_error, bool *is_server_error, UINT flags, char *redirect_url, UINT redirect_url_size)
 {
 	WPC_CONNECT con;
 	SOCK *s;
@@ -995,6 +1047,18 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	StrCpy(con.ProxyPassword, sizeof(con.ProxyPassword), setting->ProxyPassword);
 	StrCpy(con.ProxyUserAgent, sizeof(con.ProxyUserAgent), setting->ProxyUserAgent);
 
+	con.EnableZttp = setting->EnableZttp;
+	StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), setting->ZttpServerHostName);
+	con.ZttpServerPort = setting->ZttpServerPort;
+
+	// ZTTP_Test
+	if (wt != NULL && wt->Wide->Type != WIDE_TYPE_GATE)
+	{
+		con.EnableZttp = true;
+		StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), "pc37.sehosts.com");
+		con.ZttpServerPort = 443;
+	}
+
 	if (setting->ProxyType != PROXY_HTTP || data->Secure)
 	{
 		use_http_proxy = false;
@@ -1009,11 +1073,12 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	if (use_http_proxy == false)
 	{
 		// If the connection is not via HTTP Proxy, or is a SSL connection even via HTTP Proxy
-		s = WpcSockConnectEx(&con, error_code, timeout_connect, cancel);
+		s = WpcSockConnectEx(&con, error_code, timeout_connect, cancel, result_buf_if_error,
+			redirect_url, redirect_url_size);
 	}
 	else
 	{
-		// If the connection is not SSL via HTTP Proxy
+		// If the connection is not SSL via HTTP Proxy (non-SSL HTTP proxy raw only)
 		s = TcpConnectEx3(con.ProxyHostName, con.ProxyPort, timeout_connect, cancel, NULL, true, NULL, false, false, NULL);
 		if (s == NULL)
 		{

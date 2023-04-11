@@ -1214,10 +1214,9 @@ void GenerateDefaultUserProxyAgentStr(char *str, UINT str_size)
 	}
 	else
 	{
-		Format(str, str_size, "Mozilla/5.0 (Windows NT %u.%u%s) like Gecko",
+		Format(str, str_size, "Mozilla/5.0 (Windows NT %u.%u; Win64; x64) like Gecko",
 			ver.dwMajorVersion,
-			ver.dwMinorVersion,
-			(MsIs64BitWindows() && Is32() ? "; WOW64" : ""));
+			ver.dwMinorVersion);
 	}
 #else	// OS_WIN32
 	StrCpy(str, str_size, DEFAULT_PROXY_USER_AGENT);
@@ -13857,16 +13856,15 @@ void SetWantToUseCipher(SOCK *sock, char *name)
 	StrCat(tmp, sizeof(tmp), " ");
 	StrCat(tmp, sizeof(tmp), cipher_list);
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	// OpenSSL 3.x has a bug. https://github.com/openssl/openssl/issues/13363 https://github.com/openssl/openssl/pull/13378
-	// At 2021-09-08 this bug is reported as fixed on Github, but actually still exists on RC4-MD5.
-	// So, with OpenSSL 3.0 we manually disable RC4-MD5 by default on both SSL server and SSL client.
+	if (IsSslLibVersionBuggyForRc4Md5())
+	{
+		// OpenSSL 3.0.0 to 3.0.2 has a bug with RC4-MD5. https://github.com/openssl/openssl/issues/13363 https://github.com/openssl/openssl/pull/13378
 
-	// If the user specify "RC4-MD5", then "RC4-SHA" will be used manually.
+		// If the user specify "RC4-MD5", then "RC4-SHA" will be used manually.
 
-	// Note: We can remove this code after OpenSSL 3.x will be fixed on this bug.
-	ReplaceStrEx(tmp, sizeof(tmp), tmp, "RC4-MD5", "RC4-SHA", true);
-#endif
+		// Note: We can remove this code after OpenSSL 3.x will be fixed on this bug.
+		ReplaceStrEx(tmp, sizeof(tmp), tmp, "RC4-MD5", "RC4-SHA", true);
+	}
 
 	sock->WaitToUseCipher = CopyStr(tmp);
 }
@@ -14186,6 +14184,13 @@ SSL_CTX_SHARED* NewSslCtxSharedInternal(SSL_CTX_SHARED_SETTINGS* settings)
 	SSL_CTX_set_security_level(ssl_ctx, 0);
 #endif
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	// For compatibility with OpenSSL 0.9.8l or older
+	// See https://www.openssl.org/docs/man1.0.2/man3/SSL_get_secure_renegotiation_support.html
+	SSL_CTX_set_options(ssl_ctx, SSL_OP_LEGACY_SERVER_CONNECT);
+	SSL_CTX_set_options(ssl_ctx, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION);
+#endif
+
 	if (settings->Settings2.IsClient == false)
 	{
 		SSL_CTX_set_ssl_version(ssl_ctx, SSLv23_method());
@@ -14277,7 +14282,7 @@ SSL_CTX_SHARED* NewSslCtxSharedInternal(SSL_CTX_SHARED_SETTINGS* settings)
 		ret->Expires = Tick64() + lifetime;
 	}
 
-	Debug("SSL_CTX New: %p\n", ret);
+	//Debug("SSL_CTX New: %p\n", ret);
 
 	return ret;
 }
@@ -14410,7 +14415,7 @@ void CleanupSslCtxShared(SSL_CTX_SHARED* s)
 		return;
 	}
 
-	Debug("SSL_CTX Free: %p\n", s);
+	//Debug("SSL_CTX Free: %p\n", s);
 
 	FreeSSLCtx(s->SslCtx);
 
@@ -14671,14 +14676,11 @@ bool StartSSLWithSettings(SOCK* sock, UINT ssl_timeout, char* sni_hostname, SSL_
 		{
 			char* set_value = OPENSSL_DEFAULT_CIPHER_LIST;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-			// OpenSSL 3.x has a bug. https://github.com/openssl/openssl/issues/13363 https://github.com/openssl/openssl/pull/13378
-			// At 2021-09-08 this bug is reported as fixed on Github, but actually still exists on RC4-MD5.
-			// So, with OpenSSL 3.0 we manually disable RC4-MD5 by default on both SSL server and SSL client.
-
-			// Note: We can remove this code after OpenSSL 3.x will be fixed on this bug.
-			set_value = OPENSSL_DEFAULT_CIPHER_LIST_NO_RC4_MD5;
-#endif
+			if (IsSslLibVersionBuggyForRc4Md5())
+			{
+				// OpenSSL 3.0.0 to 3.0.2 has a bug with RC4-MD5. https://github.com/openssl/openssl/issues/13363 https://github.com/openssl/openssl/pull/13378
+				set_value = OPENSSL_DEFAULT_CIPHER_LIST_NO_RC4_MD5;
+			}
 
 			SSL_set_cipher_list(sock->ssl, set_value);
 		}
@@ -14830,7 +14832,7 @@ bool StartSSLWithSettings(SOCK* sock, UINT ssl_timeout, char* sni_hostname, SSL_
 	}
 	UnlockOpenSSL();
 	StrCpy(sock->TlsVersion, sizeof(sock->TlsVersion), (char *)SSL_get_version(sock->ssl));
-	Debug("SSL connected with %s\n", sock->TlsVersion);
+//	Debug("SSL connected with %s\n", sock->TlsVersion);
 
 	Unlock(sock->ssl_lock);
 
@@ -16339,6 +16341,131 @@ void Disconnect(SOCK *sock)
 	Unlock(sock->disconnect_lock);
 
 	Unlock(disconnect_function_lock);
+}
+
+typedef struct ENT_SOCK_THREAD_CTX
+{
+	SOCK *ListenSock;
+	SOCK *Ret_AcceptSock;
+} ENT_SOCK_THREAD_CTX;
+
+void EntangledSockAcceptThread(THREAD *thread, void *param)
+{
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	ENT_SOCK_THREAD_CTX *ctx = (ENT_SOCK_THREAD_CTX *)param;
+
+	NoticeThreadInit(thread);
+
+	SOCK *new_sock = Accept(ctx->ListenSock);
+
+	if (new_sock != NULL)
+	{
+		ctx->Ret_AcceptSock = new_sock;
+	}
+
+	ReleaseSock(ctx->ListenSock);
+}
+
+// 相互接続が完了した状態のソケットのペアを作成する
+bool CreateEntagledSock(SOCK **server, SOCK **client)
+{
+	if (server == NULL || client == NULL)
+	{
+		if (server != NULL) *server = NULL;
+		if (client != NULL) *client = NULL;
+		return false;
+	}
+
+	*server = NULL;
+	*client = NULL;
+
+	SOCK *listen_sock = ListenLocalTcpPort(false, ENTANGLED_SOCK_LISTEN_PORT_START);
+	if (listen_sock == NULL)
+	{
+		return false;
+	}
+
+	ENT_SOCK_THREAD_CTX ctx = CLEAN;
+
+	ctx.ListenSock = listen_sock;
+	AddRef(listen_sock->ref);
+
+	THREAD *t = NewThread(EntangledSockAcceptThread, &ctx);
+
+	WaitThreadInit(t);
+
+	SOCK *client_sock = NULL;
+
+	UINT i;
+	for (i = 0;i < 3;i++)
+	{
+		client_sock = ConnectEx4("127.0.0.1", listen_sock->LocalPort, 5000, NULL, NULL,
+			NULL, false, false, true, NULL);
+
+		if (client_sock != NULL)
+		{
+			break;
+		}
+	}
+
+	Disconnect(listen_sock);
+
+	WaitThread(t, INFINITE);
+	ReleaseThread(t);
+
+	ReleaseSock(listen_sock);
+
+	if (client_sock != NULL)
+	{
+		if (ctx.Ret_AcceptSock == NULL)
+		{
+			ReleaseSock(client_sock);
+			client_sock = NULL;
+		}
+	}
+
+	if (client_sock != NULL)
+	{
+		*client = client_sock;
+		*server = ctx.Ret_AcceptSock;
+
+		return true;
+	}
+
+	return false;
+}
+
+// 新しいポートを開いて Listen する
+SOCK *ListenLocalTcpPort(bool ipv6, UINT start_port)
+{
+	UINT port;
+
+	for (port = start_port;port < 10000;port++)
+	{
+		SOCK *s;
+
+		if (ipv6 == false)
+		{
+			// IPv4
+			s = ListenEx(port, true);
+		}
+		else
+		{
+			// IPv6
+			s = ListenEx6(port, true);
+		}
+
+		if (s != NULL)
+		{
+			return s;
+		}
+	}
+
+	return NULL;
 }
 
 typedef struct TCP_PORT_CHECK
@@ -19809,6 +19936,13 @@ struct ssl_ctx_st *NewSSLCtx(bool server_mode)
 #if OPENSSL_VERSION_NUMBER >= 0x1010100fL
 	// For compatibility with VPN 3.0 or older
 	SSL_CTX_set_security_level(ctx, 0);
+#endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	// For compatibility with OpenSSL 0.9.8l or older
+	// See https://www.openssl.org/docs/man1.0.2/man3/SSL_get_secure_renegotiation_support.html
+	SSL_CTX_set_options(ctx, SSL_OP_LEGACY_SERVER_CONNECT);
+	SSL_CTX_set_options(ctx, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION);
 #endif
 
 	return ctx;

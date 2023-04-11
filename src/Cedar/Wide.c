@@ -410,6 +410,7 @@ UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sock
 LABEL_RETRY:
 	Debug("Connecting to WideControl...\n");
 	ret = WideClientConnectInner(w, &c, pcid, ver, build, client_options, no_cache);
+
 	if (ret == ERR_NO_ERROR)
 	{
 		Debug("Redirect Host: %s (for proxy: %s):%u\n", c.HostName, c.HostNameForProxy, c.Port);
@@ -451,7 +452,45 @@ WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixe
 		return NULL;
 	}
 
+	char ssl_lib_ver[MAX_PATH] = CLEAN;
+	GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
 	w = ZeroMalloc(sizeof(WIDE));
+
+	w->WideLog = NewLogEx(WIDE_LOG_CLIENT, "client", LOG_SWITCH_DAY, true);
+	w->WideLog->Flush = true;
+
+	WideLog(w, "-------------------- Start Tunnel System (Client) --------------------");
+	WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
+	WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
+	WideLog(w, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
+	WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
+	WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+	WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
+
+	OS_INFO *os = GetOsInfo();
+	if (os != NULL)
+	{
+		WideLog(w, "OsType: %u", os->OsType);
+		WideLog(w, "OsServicePack: %u", os->OsServicePack);
+		WideLog(w, "OsSystemName: %s", os->OsSystemName);
+		WideLog(w, "OsProductName: %s", os->OsProductName);
+		WideLog(w, "OsVendorName: %s", os->OsVendorName);
+		WideLog(w, "OsVersion: %s", os->OsVersion);
+		WideLog(w, "KernelName: %s", os->KernelName);
+		WideLog(w, "KernelVersion: %s", os->KernelVersion);
+	}
+
+	MEMINFO mem = CLEAN;
+	GetMemInfo(&mem);
+
+	WideLog(w, "Memory - TotalMemory: %I64u", mem.TotalMemory);
+	WideLog(w, "Memory - UsedMemory: %I64u", mem.UsedMemory);
+	WideLog(w, "Memory - FreeMemory: %I64u", mem.FreeMemory);
+	WideLog(w, "Memory - TotalPhys: %I64u", mem.TotalPhys);
+	WideLog(w, "Memory - UsedPhys: %I64u", mem.UsedPhys);
+	WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 
 	StrCpy(w->SvcName, sizeof(w->SvcName), svc_name);
 	w->SeLang = se_lang;
@@ -524,6 +563,10 @@ void WideClientStop(WIDE *w)
 
 	ReleaseWt(w->wt);
 	DeleteLock(w->SettingLock);
+
+	WideLog(w, "-------------------- Stop Tunnel System (Client) --------------------");
+
+	FreeLog(w->WideLog);
 
 	Free(w);
 }
@@ -1110,7 +1153,9 @@ UINT WideClientConnectInner(WIDE *w, WT_CONNECT *c, char *pcid, UINT ver, UINT b
 		PackAddInt(r, "Build", build);
 		PackAddInt(r, "ClientOptions", client_options);
 		PackAddData(r, "ClientId", w->ClientId, sizeof(w->ClientId));
-		p = WideCall(w, "ClientConnect", r, false, true, 0, false);
+
+		p = WideCall(w, "ClientConnect", r, false, true, 0, false); // CALL
+
 		FreePack(r);
 
 		ret = GetErrorFromPack(p);
@@ -2080,7 +2125,7 @@ void WtLog(WT* wt, char* format, ...)
 	va_list args;
 	char format2[MAX_SIZE * 2] = CLEAN;
 	// 引数チェック
-	if (format == NULL || wt == NULL || wt->Wide == NULL || wt->Wide->WideLog == NULL)
+	if (format == NULL || wt == NULL || wt->Wide == NULL)
 	{
 		return;
 	}
@@ -2098,7 +2143,7 @@ void WideLog(WIDE* w, char* format, ...)
 	va_list args;
 	char format2[MAX_SIZE * 2] = CLEAN;
 	// 引数チェック
-	if (format == NULL || w == NULL || w->WideLog == NULL)
+	if (format == NULL || w == NULL)
 	{
 		return;
 	}
@@ -2128,7 +2173,7 @@ void WtLogEx(WT* wt, char* prefix, char* format, ...)
 
 	va_start(args, format);
 
-	if (wt == NULL || wt->Wide == NULL || wt->Wide->WideLog == NULL)
+	if (wt == NULL || wt->Wide == NULL)
 	{
 		WideLogMain(NULL, format2, args);
 	}
@@ -2146,7 +2191,7 @@ void WideLogEx(WIDE* w, char* prefix, char* format, ...)
 	va_list args;
 	char format2[MAX_SIZE * 2] = CLEAN;
 	// 引数チェック
-	if (format == NULL || w == NULL || w->WideLog == NULL)
+	if (format == NULL || w == NULL)
 	{
 		return;
 	}
@@ -4070,6 +4115,12 @@ WIDE *WideGateStart()
 		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 	}
 
+	if (true) // TODO  ZTTP_Test
+	{
+		// ZTTP 中継ゲートウェイ機能を開始
+		w->wt->ZttpGw = NewZttpGw(NULL);
+	}
+
 	// 統計送付
 	STATMAN_CONFIG cfg = CLEAN;
 
@@ -4267,6 +4318,9 @@ void WideGateStopEx(WIDE* wide, bool daemon_force_exit)
 	{
 		FreeCertServerClient(wide->Standalone_WebAppCertDownloader);
 	}
+
+	// ZTTP 中継ゲートウェイ機能を停止
+	FreeZttpGw(wide->wt->ZttpGw);
 
 	ReleaseWt(wide->wt);
 

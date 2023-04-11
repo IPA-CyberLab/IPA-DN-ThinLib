@@ -187,6 +187,7 @@ struct SESSION_AND_CLIENT
 
 // ログ
 #define WIDE_LOG_DIRNAME				"@tunnel_log"
+#define	WIDE_LOG_CLIENT					"@client_log"
 
 #define WIDE_GATE_LOG_DIRNAME			"@gate_log"
 

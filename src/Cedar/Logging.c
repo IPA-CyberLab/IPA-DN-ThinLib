@@ -2378,13 +2378,39 @@ void InsertRecord(LOG *g, void *data, RECORD_PARSE_PROC *proc)
 	rec->ParseProc = proc;
 	rec->Data = data;
 
-	LockQueue(g->RecordQueue);
+	if (g->SyncMode == false)
 	{
-		InsertQueue(g->RecordQueue, rec);
-	}
-	UnlockQueue(g->RecordQueue);
+		LockQueue(g->RecordQueue);
+		{
+			InsertQueue(g->RecordQueue, rec);
+		}
+		UnlockQueue(g->RecordQueue);
 
-	Set(g->Event);
+		Set(g->Event);
+	}
+	else
+	{
+		// Realtime write to the file
+		BUF *buf = NewBuf();
+
+		char filename[MAX_PATH] = CLEAN;
+		char current_logfile_datename[MAX_PATH] = CLEAN;
+
+		MakeLogFileName(g, filename, sizeof(filename), g->DirName, g->Prefix, rec->Tick, g->SwitchType, g->CurrentLogNumber, current_logfile_datename);
+
+		WriteRecordToBuffer(buf, rec);
+
+		MakeDirEx(g->DirName);
+
+#ifdef OS_WIN32
+		Win32SetFolderCompress(g->DirName, true);
+#endif // OS_WIN32
+
+		DumpBufAppendToFile(buf, filename);
+
+		FreeBuf(buf);
+		Free(rec);
+	}
 }
 
 // Lock the log
@@ -3009,8 +3035,11 @@ void FreeLog(LOG *g)
 	g->Halt = true;
 	Set(g->Event);
 
-	WaitThread(g->Thread, INFINITE);
-	ReleaseThread(g->Thread);
+	if (g->SyncMode == false)
+	{
+		WaitThread(g->Thread, INFINITE);
+		ReleaseThread(g->Thread);
+	}
 
 	DeleteLock(g->lock);
 	Free(g->DirName);
@@ -3035,6 +3064,10 @@ void FreeLog(LOG *g)
 // Start a new logging
 LOG *NewLog(char *dir, char *prefix, UINT switch_type)
 {
+	return NewLogEx(dir, prefix, switch_type, false);
+}
+LOG *NewLogEx(char *dir, char *prefix, UINT switch_type, bool sync_mode)
+{
 	LOG *g;
 
 	g = ZeroMalloc(sizeof(LOG));
@@ -3045,10 +3078,14 @@ LOG *NewLog(char *dir, char *prefix, UINT switch_type)
 	g->RecordQueue = NewQueue();
 	g->Event = NewEvent();
 	g->FlushEvent = NewEvent();
+	g->SyncMode = sync_mode;
+	
+	if (g->SyncMode == false)
+	{
+		g->Thread = NewThread(LogThread, g);
 
-	g->Thread = NewThread(LogThread, g);
-
-	WaitThreadInit(g->Thread);
+		WaitThreadInit(g->Thread);
+	}
 
 	return g;
 }

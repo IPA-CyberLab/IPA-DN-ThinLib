@@ -3348,6 +3348,33 @@ bool DumpData(void *data, UINT size, char *filename)
 	return true;
 }
 
+bool DumpBufAppendToFile(BUF *b, char *filename)
+{
+	IO *o;
+	// Validate arguments
+	if (b == NULL || filename == NULL)
+	{
+		return false;
+	}
+
+	o = FileOpen(filename, true);
+	if (o == NULL)
+	{
+		o = FileCreate(filename);
+		if (o == NULL)
+		{
+			return false;
+		}
+	}
+
+	FileSeek(o, FILE_END, 0);
+
+	FileWrite(o, b->Buf, b->Size);
+	FileClose(o);
+
+	return true;
+}
+
 // Dump the contents of the buffer to the file
 bool DumpBuf(BUF *b, char *filename)
 {

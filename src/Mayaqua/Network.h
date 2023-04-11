@@ -318,6 +318,10 @@ struct SOCK
 	SHARED_BUFFER *BulkRecvKey;	// Bulk receive key
 	UINT RUDP_OptimizedMss;		// Optimal MSS value
 
+	// TCP over TCP overlay socket
+	bool IsOverlayUpperSock;
+	THREAD *OverlayUpperThread;
+
 #ifdef	OS_UNIX
 	pthread_t CallingThread;	// Thread that is calling the system call
 #endif	// OS_UNIX
@@ -980,11 +984,11 @@ struct HTTP_HEADER
 };
 
 // HTTPS server / client related string constant
-#define	DEFAULT_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:75.0) Gecko/20100101 Firefox/75.0"
-#define DEFAULT_PROXY_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; WOW64) like Gecko"
-#define DEFAULT_PROXY_USER_AGENT_IE	"Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko"
+#define	DEFAULT_USER_AGENT	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) like Gecko"
+#define DEFAULT_PROXY_USER_AGENT	DEFAULT_USER_AGENT
+#define DEFAULT_PROXY_USER_AGENT_IE	DEFAULT_USER_AGENT
 
-#define	DEFAULT_ACCEPT		"image/gif, image/x-xbitmap, image/jpeg, image/pjpeg, application/x-shockwave-flash, application/msword, application/vnd.ms-powerpoint, application/vnd.ms-excel, */*"
+#define	DEFAULT_ACCEPT		"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*"
 #define	DEFAULT_ENCODING	"gzip, deflate"
 #define	HTTP_CONTENT_TYPE	"text/html; charset=iso-8859-1"
 #define	HTTP_CONTENT_TYPE2	"application/octet-stream"
@@ -1811,6 +1815,14 @@ bool SmtpSendMail(char* server_host, UINT server_port, char* from, char* to, cha
 bool SmtpSendMailEx(char* server_host, UINT server_port, char* from, char* to, char* body, BUF *error, char *username, char *password, UINT timeout, UINT ssl_type, UINT auth_type);
 
 void MSecsToTimeval(struct timeval *tv, UINT msecs);
+
+
+SOCK *ListenLocalTcpPort(bool ipv6, UINT start_port);
+
+#define ENTANGLED_SOCK_LISTEN_PORT_START	3601
+
+bool CreateEntagledSock(SOCK **server, SOCK **client);
+
 
 
 #endif	// NETWORK_H
