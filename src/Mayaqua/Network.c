@@ -14184,6 +14184,13 @@ SSL_CTX_SHARED* NewSslCtxSharedInternal(SSL_CTX_SHARED_SETTINGS* settings)
 	SSL_CTX_set_security_level(ssl_ctx, 0);
 #endif
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	// For compatibility with OpenSSL 0.9.8l or older
+	// See https://www.openssl.org/docs/man1.0.2/man3/SSL_get_secure_renegotiation_support.html
+	SSL_CTX_set_options(ssl_ctx, SSL_OP_LEGACY_SERVER_CONNECT);
+	SSL_CTX_set_options(ssl_ctx, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION);
+#endif
+
 	if (settings->Settings2.IsClient == false)
 	{
 		SSL_CTX_set_ssl_version(ssl_ctx, SSLv23_method());
@@ -19929,6 +19936,13 @@ struct ssl_ctx_st *NewSSLCtx(bool server_mode)
 #if OPENSSL_VERSION_NUMBER >= 0x1010100fL
 	// For compatibility with VPN 3.0 or older
 	SSL_CTX_set_security_level(ctx, 0);
+#endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	// For compatibility with OpenSSL 0.9.8l or older
+	// See https://www.openssl.org/docs/man1.0.2/man3/SSL_get_secure_renegotiation_support.html
+	SSL_CTX_set_options(ctx, SSL_OP_LEGACY_SERVER_CONNECT);
+	SSL_CTX_set_options(ctx, SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION);
 #endif
 
 	return ctx;
