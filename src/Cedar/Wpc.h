@@ -181,6 +181,8 @@ struct CERT_SERVER_CLIENT
 
 #define HTTP_REQUEST_FLAG_NONE					0
 #define HTTP_REQUEST_FLAG_IPV4_ONLY				1
+#define	HTTP_REQUEST_FLAG_PROXY_NTLMAUTH_ONLY	2
+
 
 
 // Reception callback
@@ -231,7 +233,7 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	bool *cancel, UINT max_recv_size, char *header_name, char *header_value, WT *wt, bool global_ip_only, bool dest_private_ip_only,
 	BUF *result_buf_if_error, bool *is_server_error, UINT flags, char *redirect_url, UINT redirect_url_size);
 SOCK *WpcSockConnect(WPC_CONNECT *param, UINT *error_code, UINT timeout);
-SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel, BUF *result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size);
+SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel, BUF *result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size, UINT flags);
 SOCK *WpcSockConnect2(char *hostname, UINT port, INTERNET_SETTING *t, UINT *error_code, UINT timeout);
 INTERNET_SETTING *GetNullInternetSetting();
 void WpcAddDataEntry(BUF *b, char *name, void *data, UINT size);

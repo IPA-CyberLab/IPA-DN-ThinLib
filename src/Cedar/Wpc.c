@@ -771,9 +771,9 @@ INTERNET_SETTING *GetNullInternetSetting()
 // Socket connection
 SOCK *WpcSockConnect(WPC_CONNECT *param, UINT *error_code, UINT timeout)
 {
-	return WpcSockConnectEx(param, error_code, timeout, NULL, NULL, NULL, 0);
+	return WpcSockConnectEx(param, error_code, timeout, NULL, NULL, NULL, 0, 0);
 }
-SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel, BUF *result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size)
+SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool *cancel, BUF *result_buf_if_error, char *zttp_redirect_url, UINT zttp_redirect_url_size, UINT flags)
 {
 	CONNECTION c;
 	SOCK *sock;
@@ -820,7 +820,7 @@ SOCK *WpcSockConnectEx(WPC_CONNECT *param, UINT *error_code, UINT timeout, bool 
 	case PROXY_HTTP:
 		sock = ProxyConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
 			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
-			param->ProxyUsername, param->ProxyPassword, false, cancel, NULL, timeout, param->ProxyUserAgent);
+			param->ProxyUsername, param->ProxyPassword, false, cancel, NULL, timeout, param->ProxyUserAgent, flags);
 		if (sock == NULL)
 		{
 			err = c.Err;
@@ -1074,7 +1074,7 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	{
 		// If the connection is not via HTTP Proxy, or is a SSL connection even via HTTP Proxy
 		s = WpcSockConnectEx(&con, error_code, timeout_connect, cancel, result_buf_if_error,
-			redirect_url, redirect_url_size);
+			redirect_url, redirect_url_size, flags);
 	}
 	else
 	{

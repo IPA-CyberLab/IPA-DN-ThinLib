@@ -947,7 +947,7 @@ SOCK *WtSockConnect(WT_CONNECT *param, UINT *error_code, bool proxy_use_alternat
 	case PROXY_HTTP:
 		sock = ProxyConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
 			direct_or_proxy_connect_hostname, direct_or_proxy_connect_port,
-			param->ProxyUsername, param->ProxyPassword, false, NULL, NULL, 0, param->ProxyUserAgent);
+			param->ProxyUsername, param->ProxyPassword, false, NULL, NULL, 0, param->ProxyUserAgent, 0);
 		if (sock == NULL)
 		{
 			err = c.Err;

@@ -8104,7 +8104,7 @@ SOCK *ProxyConnectEx2NtlmAuth(CONNECTION *c, char *proxy_host_name, UINT proxy_p
 		UCHAR *content_recv_buffer;
 		char machine_name[128];
 
-		StrCpy(machine_name, sizeof(machine_name), "machine");
+		StrCpy(machine_name, sizeof(machine_name), "client");
 
 #ifdef	OS_WIN32
 		MsGetComputerName(machine_name, sizeof(machine_name));
@@ -8297,12 +8297,12 @@ SOCK *ProxyConnectEx(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 {
 	return ProxyConnectEx2(c, proxy_host_name, proxy_port,
 		server_host_name, server_port, username, password, additional_connect,
-		cancel_flag, hWnd, 0, NULL);
+		cancel_flag, hWnd, 0, NULL, 0);
 }
 SOCK *ProxyConnectEx2(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 				   char *server_host_name, UINT server_port,
 				   char *username, char *password, bool additional_connect,
-				   bool *cancel_flag, void *hWnd, UINT timeout, char *user_agent)
+				   bool *cancel_flag, void *hWnd, UINT timeout, char *user_agent, UINT flags)
 {
 	SOCK *s = NULL;
 	bool use_auth = false;
@@ -8349,6 +8349,11 @@ SOCK *ProxyConnectEx2(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 		{
 			server_host_name_tmp[i] = 0;
 		}
+	}
+
+	if (flags & HTTP_REQUEST_FLAG_PROXY_NTLMAUTH_ONLY)
+	{
+		goto L_NTLM_AUTH;
 	}
 
 	// Connection
@@ -8471,6 +8476,8 @@ SOCK *ProxyConnectEx2(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 			Disconnect(s);
 			ReleaseSock(s);
 			FreeHttpHeader(h);
+
+L_NTLM_AUTH:
 
 			c->Err = ERR_PROXY_AUTH_FAILED;
 

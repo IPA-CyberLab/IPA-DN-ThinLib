@@ -324,7 +324,7 @@ SOCK *ProxyConnectEx(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 SOCK *ProxyConnectEx2(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 					 char *server_host_name, UINT server_port,
 					 char *username, char *password, bool additional_connect,
-					 bool *cancel_flag, void *hWnd, UINT timeout, char *user_agent);
+					 bool *cancel_flag, void *hWnd, UINT timeout, char *user_agent, UINT flags);
 SOCK *ProxyConnectEx2NtlmAuth(CONNECTION *c, char *proxy_host_name, UINT proxy_port,
 						   char *server_host_name, UINT server_port,
 						   char *username, char *password, bool additional_connect,
