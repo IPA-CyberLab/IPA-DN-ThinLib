@@ -186,6 +186,11 @@ typedef struct DU_WFP_FUNCTIONS
 		IN OPTIONAL PSECURITY_DESCRIPTOR sd
 		);
 
+	DWORD (WINAPI *FwpmGetAppIdFromFileName0)(
+			IN PCWSTR fileName,
+			OUT FWP_BYTE_BLOB **appId
+		);
+
 } DU_WFP_FUNCTIONS;
 
 typedef struct DU_GOV_FW1_DATA
@@ -3337,6 +3342,10 @@ bool DuInitWfpApi()
 		(DWORD(__stdcall *)(HANDLE, const FWPM_PROVIDER0 *, PSECURITY_DESCRIPTOR))
 		GetProcAddress(du_wfp_dll, "FwpmProviderAdd0");
 
+	du_wfp_api->FwpmGetAppIdFromFileName0 =
+		(DWORD(__stdcall *)(PCWSTR, FWP_BYTE_BLOB **))
+		GetProcAddress(du_wfp_dll, "FwpmGetAppIdFromFileName0");
+
 	if (du_wfp_api->FwpmEngineOpen0 == NULL ||
 		du_wfp_api->FwpmEngineClose0 == NULL ||
 		du_wfp_api->FwpmFreeMemory0 == NULL ||
@@ -3347,7 +3356,8 @@ bool DuInitWfpApi()
 		du_wfp_api->IPsecSaContextAddOutbound0 == NULL ||
 		du_wfp_api->FwpmCalloutAdd0 == NULL ||
 		du_wfp_api->FwpmSubLayerAdd0 == NULL ||
-		du_wfp_api->FwpmProviderAdd0 == NULL
+		du_wfp_api->FwpmProviderAdd0 == NULL ||
+		du_wfp_api->FwpmGetAppIdFromFileName0 == NULL
 		)
 	{
 		free(du_wfp_api);
@@ -3437,16 +3447,57 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 		return;
 	}
 
+	// Get this application name
+	wchar_t *this_exe_path = MsGetExeFileNameW();
+
+	FWP_BYTE_BLOB *this_app_id = NULL;
+
+	if (du_wfp_api->FwpmGetAppIdFromFileName0(this_exe_path, &this_app_id))
+	{
+		this_app_id = NULL;
+	}
+
 	FWPM_FILTER0 filter = CLEAN;
 	UINT64 weight = ((UINT64)~((UINT64)0)) - (UINT64)index;
 	wchar_t name[256];
 	UINT ret;
-	FWPM_FILTER_CONDITION0 c[8] = CLEAN;
+	FWPM_FILTER_CONDITION0 c[10] = CLEAN;
 	bool isv4 = !a->IsIPv6;
 
 	UniFormat(name, sizeof(name), L"DuFwpAddAccess_%04u", index);
 
 	UINT c_index = 0;
+
+	UINT flag_exclude_bits = 0;
+
+	// Exclude loopback
+	flag_exclude_bits |= FWP_CONDITION_FLAG_IS_LOOPBACK;
+
+	if (a->Established == false)
+	{
+		// Only new session packets
+		flag_exclude_bits |= FWP_CONDITION_FLAG_IS_REAUTHORIZE;
+	}
+
+	if (flag_exclude_bits != 0)
+	{
+		c[c_index].fieldKey = FWPM_CONDITION_FLAGS;
+		c[c_index].matchType = FWP_MATCH_FLAGS_NONE_SET;
+		c[c_index].conditionValue.type = FWP_UINT32;
+		c[c_index].conditionValue.uint32 = flag_exclude_bits;
+		c_index++;
+	}
+
+
+	// Exclude this app
+	if (this_app_id != NULL)
+	{
+		c[c_index].fieldKey = FWPM_CONDITION_ALE_APP_ID;
+		c[c_index].matchType = FWP_MATCH_NOT_EQUAL;
+		c[c_index].conditionValue.type = FWP_BYTE_BLOB_TYPE;
+		c[c_index].conditionValue.byteBlob = this_app_id;
+		c_index++;
+	}
 
 	// Protocol
 	c[c_index].fieldKey = FWPM_CONDITION_IP_PROTOCOL;
@@ -3454,16 +3505,6 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	c[c_index].conditionValue.type = FWP_UINT8;
 	c[c_index].conditionValue.uint8 = a->Protocol;
 	c_index++;
-
-	// Direction
-	if (a->Established)
-	{
-		c[c_index].fieldKey = FWPM_CONDITION_DIRECTION;
-		c[c_index].matchType = FWP_MATCH_EQUAL;
-		c[c_index].conditionValue.type = FWP_UINT32;
-		c[c_index].conditionValue.uint32 = a->Active ? FWP_DIRECTION_INBOUND : FWP_DIRECTION_OUTBOUND;
-		c_index++;
-	}
 
 	// Remote IP
 	FWP_V4_ADDR_AND_MASK subnetv4 = CLEAN;
@@ -3494,58 +3535,48 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	{
 		c[c_index].conditionValue.v6AddrMask = &subnetv6;
 	}
-
-	// Remote Port
-	FWP_RANGE0 remote_port_range = CLEAN;
-	remote_port_range.valueLow.uint16 = a->DestPortStart;
-	remote_port_range.valueHigh.uint16 = a->DestPortEnd;
-
-	c[c_index].fieldKey = FWPM_CONDITION_IP_REMOTE_PORT;
-	c[c_index].matchType = FWP_MATCH_RANGE;
-	c[c_index].conditionValue.type = FWP_UINT16;
-	c[c_index].conditionValue.rangeValue = &remote_port_range;
 	c_index++;
 
-	// Local Port
-	FWP_RANGE0 local_port_range = CLEAN;
-	local_port_range.valueLow.uint16 = a->SrcPortStart;
-	local_port_range.valueHigh.uint16 = a->SrcPortEnd;
+	if (a->Protocol == IP_PROTO_TCP || a->Protocol == IP_PROTO_UDP)
+	{
+		// Remote Port
+		FWP_RANGE0 remote_port_range = CLEAN;
+		remote_port_range.valueLow.type = FWP_UINT16;
+		remote_port_range.valueLow.uint16 = a->DestPortStart;
+		remote_port_range.valueHigh.type = FWP_UINT16;
+		remote_port_range.valueHigh.uint16 = a->DestPortEnd;
 
-	c[c_index].fieldKey = FWPM_CONDITION_IP_LOCAL_PORT;
-	c[c_index].matchType = FWP_MATCH_RANGE;
-	c[c_index].conditionValue.type = FWP_UINT16;
-	c[c_index].conditionValue.rangeValue = &local_port_range;
-	c_index++;
+		c[c_index].fieldKey = FWPM_CONDITION_IP_REMOTE_PORT;
+		c[c_index].matchType = FWP_MATCH_RANGE;
+		c[c_index].conditionValue.type = FWP_RANGE_TYPE;
+		c[c_index].conditionValue.rangeValue = &remote_port_range;
+		c_index++;
+
+		// Local Port
+		FWP_RANGE0 local_port_range = CLEAN;
+		local_port_range.valueLow.type = FWP_UINT16;
+		local_port_range.valueLow.uint16 = a->SrcPortStart;
+		local_port_range.valueHigh.type = FWP_UINT16;
+		local_port_range.valueHigh.uint16 = a->SrcPortEnd;
+
+		c[c_index].fieldKey = FWPM_CONDITION_IP_LOCAL_PORT;
+		c[c_index].matchType = FWP_MATCH_RANGE;
+		c[c_index].conditionValue.type = FWP_RANGE_TYPE;
+		c[c_index].conditionValue.rangeValue = &local_port_range;
+		c_index++;
+	}
 
 	Zero(&filter, sizeof(filter));
 	filter.flags = 0;
 	if (a->Active)
 	{
 		// Direction: In
-		if (a->Established == false)
-		{
-			// New
-			filter.layerKey = isv4 ? FWPM_LAYER_ALE_AUTH_CONNECT_V4 : FWPM_LAYER_ALE_AUTH_CONNECT_V6;
-		}
-		else
-		{
-			// Established
-			filter.layerKey = isv4 ? FWPM_LAYER_ALE_FLOW_ESTABLISHED_V4 : FWPM_LAYER_ALE_FLOW_ESTABLISHED_V6;
-		}
+		filter.layerKey = isv4 ? FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4 : FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6;
 	}
 	else
 	{
 		// Direction: Out
-		if (a->Established == false)
-		{
-			// New
-			filter.layerKey = isv4 ? FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4: FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6;
-		}
-		else
-		{
-			// Established
-			filter.layerKey = isv4 ? FWPM_LAYER_ALE_FLOW_ESTABLISHED_V4 : FWPM_LAYER_ALE_FLOW_ESTABLISHED_V6;
-		}
+		filter.layerKey = isv4 ? FWPM_LAYER_ALE_AUTH_CONNECT_V4 : FWPM_LAYER_ALE_AUTH_CONNECT_V6;
 	}
 	if (sublayer != NULL)
 	{
@@ -3566,7 +3597,12 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	ret = du_wfp_api->FwpmFilterAdd0(hEngine, &filter, NULL, NULL);
 	if (ret)
 	{
-		Debug("DuWfpAddPortAcl: FwpmFilterAdd0 Failed: 0x%X\n", ret);
+		Debug("DuFwpAddAccess: FwpmFilterAdd0 Failed: 0x%X\n", ret);
+	}
+
+	if (this_app_id != NULL)
+	{
+		du_wfp_api->FwpmFreeMemory0(&this_app_id);
 	}
 }
 
@@ -3805,6 +3841,34 @@ void DuWfpTest2()
 
 		FreeBuf(text);
 	}
+
+	SleepThread(200);
+
+	//SOCK *s = Connect("x1.x2.aaaaa1.servers.ddns.sehosts.com", 80);
+	//Print("sock = %u\n", (UINT)s);
+	//ReleaseSock(s);
+
+	//SOCK *s = Listen(8181);
+
+	//if (s == NULL)
+	//{
+	//	WHERE;
+	//}
+	//else
+	//{
+	//	while (true)
+	//	{
+	//		SOCK *news = Accept(s);
+	//		WHERE;
+
+	//		while (true)
+	//		{
+	//			CHAR x = 'a';
+	//			Send(news, &x, 1, false);
+	//			SleepThread(100);
+	//		}
+	//	}
+	//}
 	
 	Print("Quit>");
 	GetLine(NULL, 0);
@@ -4032,6 +4096,19 @@ void FwParseIpAndMask(IP *ip, IP *mask, char *str)
 	ZeroIP4(ip);
 	ZeroIP4(mask);
 
+	if (StartWith(str, "any6") || StartWith(str, "all6"))
+	{
+		ZeroIP6(ip);
+		ZeroIP6(mask);
+		return;
+	}
+	else if (StartWith(str, "any") || StartWith(str, "all") || StrCmpi(str, "*") == 0)
+	{
+		ZeroIP4(ip);
+		ZeroIP4(mask);
+		return;
+	}
+
 	if (IsFilledStr(str))
 	{
 		if (InStr(str, "/") == false && StrToIP(ip, str))
@@ -4082,19 +4159,24 @@ void FwParsePortRange(UINT *start, UINT *end, char *str)
 	{
 		TOKEN_LIST *t = ParseToken(str, "-:");
 
-		if (t->NumTokens >= 2)
+		if (t != NULL)
 		{
-			p1 = ToInt(t->Token[0]);
-			p2 = ToInt(t->Token[1]);
-		}
-		else if (t->NumTokens == 1)
-		{
-			p1 = p2 = ToInt(t->Token[0]);
-		}
-		else
-		{
-			p1 = 1;
-			p2 = 65535;
+			if (t->NumTokens >= 2 && IsNum(t->Token[0]) && IsNum(t->Token[1]))
+			{
+				p1 = ToInt(t->Token[0]);
+				p2 = ToInt(t->Token[1]);
+			}
+			else if (t->NumTokens == 1 && IsNum(t->Token[0]))
+			{
+				p1 = p2 = ToInt(t->Token[0]);
+			}
+			else
+			{
+				p1 = 1;
+				p2 = 65535;
+			}
+
+			FreeToken(t);
 		}
 	}
 
@@ -4151,19 +4233,25 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 			if (IsFilledStr(first))
 			{
 				UINT proto = StrToProtocol(first);
-				if (proto == IP_PROTO_TCP)
+				if (proto == 0 && StrCmpi(first, "ICMP"))
 				{
-					if (t->NumTokens >= 7)
+					proto = IP_PROTO_ICMPV4;
+				}
+
+				if (proto == IP_PROTO_TCP || proto == IP_PROTO_UDP || IP_PROTO_ICMPV4 || IP_PROTO_ICMPV6)
+				{
+					if (t->NumTokens >= 5)
 					{
 						char *dir = t->Token[1];
-						char *state = t->Token[2];
+						char *type = t->Token[2];
 						char *action = t->Token[3];
 						char *remoteip = t->Token[4];
-						char *remoteport = t->Token[5];
-						char *localport = t->Token[6];
+						
+						char *remoteport = t->NumTokens >= 6 ? t->Token[5] : "*";
+						char *localport = t->NumTokens >= 7 ? t->Token[6] : "*";
 
 						bool is_in = StartWith(dir, "i");
-						bool is_est = StartWith(state, "e");
+						bool is_new = StartWith(type, "n");
 						bool is_permit = StartWith(action, "p") || StartWith(action, "a") || ToBool(action);
 
 						IP ip = CLEAN;
@@ -4177,9 +4265,8 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 						FwParsePortRange(&remoteport_start, &remoteport_end, remoteport);
 						FwParsePortRange(&localport_start, &localport_end, localport);
 
-						a->Protocol = proto;
 						a->CheckTcpState = true;
-						a->Established = is_est;
+						a->Established = !is_new;
 						a->Active = is_in;
 						a->Discard = !is_permit;
 
@@ -4194,6 +4281,13 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 							Copy(&a->DestIpAddress6, ip.ipv6_addr, 16);
 							Copy(&a->DestSubnetMask6, mask.ipv6_addr, 16);
 						}
+
+						if (proto == IP_PROTO_ICMPV4 || proto == IP_PROTO_ICMPV6)
+						{
+							proto = a->IsIPv6 ? IP_PROTO_ICMPV6 : IP_PROTO_ICMPV4;
+						}
+
+						a->Protocol = proto;
 
 						a->SrcPortStart = localport_start;
 						a->SrcPortEnd = localport_end;
