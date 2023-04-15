@@ -8483,7 +8483,7 @@ wchar_t *MsGetSessionUserName(UINT session_id)
 		wchar_t *ret;
 		wchar_t *name;
 		UINT size = 0;
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, session_id,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session_id,
 			WTSUserName, (wchar_t *)&name, &size) == false)
 		{
 			return NULL;
@@ -8556,7 +8556,7 @@ bool MsIsTerminalSessionActive(UINT session_id)
 		UINT size = sizeof(status);
 		bool active = true;
 
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, session_id,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session_id,
 			WTSConnectState, (wchar_t *)&status, &size) == false)
 		{
 			return true;
@@ -8589,7 +8589,7 @@ UINT MsGetCurrentTerminalSessionId()
 		UINT ret;
 		UINT *session_id = NULL;
 		UINT size = sizeof(session_id);
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
 			WTSSessionId, (wchar_t *)&session_id, &size) == false)
 		{
 			return 0;
@@ -8648,7 +8648,7 @@ bool MsIsUserSwitchingInstalled()
 
 	if (ms->nt->WTSDisconnectSession == NULL ||
 		ms->nt->WTSFreeMemory == NULL ||
-		ms->nt->WTSQuerySessionInformation == NULL)
+		ms->nt->WTSQuerySessionInformationW == NULL)
 	{
 		return false;
 	}
@@ -8976,7 +8976,7 @@ bool MsIsTerminalServiceInstalled()
 
 	if (ms->nt->WTSDisconnectSession == NULL ||
 		ms->nt->WTSFreeMemory == NULL ||
-		ms->nt->WTSQuerySessionInformation == NULL)
+		ms->nt->WTSQuerySessionInformationW == NULL)
 	{
 		return false;
 	}
@@ -13996,6 +13996,37 @@ bool MsDetermineIsLockedByWtsApi()
 	return wts_is_locked_flag;
 }
 
+
+// WTSQuerySessionInformationW 用の構造体のパディングについて、Win32 SDK にバグがある。
+// 32bit 環境でデータが崩れる。
+// そこで、Padding を手動で設定した構造体を用意した。
+typedef struct _WTSINFOEX_LEVEL1_W_FIX1 {
+	ULONG SessionId;
+	WTS_CONNECTSTATE_CLASS SessionState;
+	LONG SessionFlags;
+	WCHAR WinStationName[WINSTATIONNAME_LENGTH + 1];
+	WCHAR UserName[USERNAME_LENGTH + 1];
+	WCHAR DomainName[DOMAIN_LENGTH + 1];
+	DWORD _32bitPadding;
+	LARGE_INTEGER LogonTime;
+	LARGE_INTEGER ConnectTime;
+	LARGE_INTEGER DisconnectTime;
+	LARGE_INTEGER LastInputTime;
+	LARGE_INTEGER CurrentTime;
+	DWORD IncomingBytes;
+	DWORD OutgoingBytes;
+	DWORD IncomingFrames;
+	DWORD OutgoingFrames;
+	DWORD IncomingCompressedBytes;
+	DWORD OutgoingCompressedBytes;
+} WTSINFOEX_LEVEL1_W_FIX1, *PWTSINFOEX_LEVEL1_W_FIX1;
+
+typedef struct _WTSINFOEXW_FIX1 {
+	DWORD Level;
+	DWORD _32bitPadding;
+	WTSINFOEX_LEVEL1_W_FIX1 Data;
+} WTSINFOEXW_FIX1, *PWTSINFOEXW_FIX1;
+
 // 1 つ以上のロックされていない WTS セッションが存在するかどうか
 bool MsWtsOneOrMoreUnlockedSessionExists()
 {
@@ -14005,7 +14036,7 @@ bool MsWtsOneOrMoreUnlockedSessionExists()
 	UINT num_unlocked_sessions = 0;
 
 	if (MsIsNt() == false || ms->nt->WTSEnumerateSessionsA == NULL ||
-		ms->nt->WTSQuerySessionInformationA == NULL || ms->nt->WTSFreeMemory == NULL)
+		ms->nt->WTSQuerySessionInformationW == NULL || ms->nt->WTSFreeMemory == NULL)
 	{
 		return true;
 	}
@@ -14028,15 +14059,16 @@ bool MsWtsOneOrMoreUnlockedSessionExists()
 
 			if (a->State == 0)
 			{
-				WTSINFOEXA *ex = CLEAN;
+				WTSINFOEXW_FIX1 *ex = CLEAN;
 				DWORD retsize = 0;
 
 				if (a->State == WTSActive)
 				{
-					if (ms->nt->WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXA))
+					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
 					{
-						WTSINFOEX_LEVEL1_A *ex1 = (WTSINFOEX_LEVEL1_A *)&ex->Data;
+						Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
+						WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
 
 						bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
 
@@ -14085,13 +14117,13 @@ void MsWtsTest1()
 
 			if (a->State == 0)
 			{
-				WTSINFOEXA* ex = CLEAN;
+				WTSINFOEXW_FIX1* ex = CLEAN;
 				DWORD retsize = 0;
 
-				if (ms->nt->WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXA))
+				if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
 				{
-					WTSINFOEX_LEVEL1_A *ex1 = (WTSINFOEX_LEVEL1_A *)&ex->Data;
+					WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
 
 					bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
 
@@ -14732,7 +14764,7 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hWtsApi32 != NULL)
 	{
 		// Terminal Services related API
-		nt->WTSQuerySessionInformation =
+		nt->WTSQuerySessionInformationW =
 			(UINT (__stdcall *)(HANDLE,DWORD,WTS_INFO_CLASS,wchar_t *,DWORD *))
 			GetProcAddress(nt->hWtsApi32, "WTSQuerySessionInformationW");
 		nt->WTSFreeMemory =

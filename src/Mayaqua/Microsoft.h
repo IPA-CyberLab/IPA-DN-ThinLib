@@ -512,7 +512,7 @@ typedef struct NT_API
 	BOOL (WINAPI *UpdateDriverForPlugAndPlayDevicesW)(HWND hWnd, wchar_t *hardware_id, wchar_t *inf_path, UINT flag, BOOL *need_reboot);
 	UINT (WINAPI *CM_Get_DevNode_Status_Ex)(UINT *, UINT *, DWORD, UINT, HANDLE);
 	UINT (WINAPI *CM_Get_Device_ID_ExA)(DWORD, char *, UINT, UINT, HANDLE);
-	UINT (WINAPI *WTSQuerySessionInformation)(HANDLE, DWORD, WTS_INFO_CLASS, wchar_t *, DWORD *);
+	UINT (WINAPI *WTSQuerySessionInformationW)(HANDLE, DWORD, WTS_INFO_CLASS, wchar_t *, DWORD *);
 	void (WINAPI *WTSFreeMemory)(void *);
 	BOOL (WINAPI *WTSDisconnectSession)(HANDLE, DWORD, BOOL);
 	BOOL (WINAPI *WTSEnumerateSessions)(HANDLE, DWORD, DWORD, PWTS_SESSION_INFO *, DWORD *);
