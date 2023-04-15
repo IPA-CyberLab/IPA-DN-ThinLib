@@ -241,8 +241,13 @@ UINT DuInspectionDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void
 
 bool DuInitWfpApi();
 void DuWfpTest();
+void DuWfpTest2();
 void DuWfpAddIpAcl(HANDLE hEngine, bool is_in, IP *ip, IP *mask, UINT index, bool permit);
 void DuWfpAddPortAcl(HANDLE hEngine, bool is_in, bool ipv6, UCHAR protocol, UINT port, UINT index, bool permit);
+
+void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a);
+bool DuWfpCreateSublayer(HANDLE hEngine, GUID *created_guid, GUID *provider_guid, char *name, USHORT weight);
+bool DuWfpCreateProvider(HANDLE hEngine, GUID *created_guid, char *name);
 
 void *DuStartApplyWhiteListRules();
 void DuStopApplyWhiteListRules(void *handle);
@@ -258,6 +263,10 @@ void DuGovFw2Main();
 
 UINT DuGovFw1DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
 bool DuGovFw1Main(bool mandate);
+
+bool FwParseRuleStr(ACCESS *a, char *str);
+void FwParseIpAndMask(IP *ip, IP *mask, char *str);
+void FwParsePortRange(UINT *start, UINT *end, char *str);
 
 
 

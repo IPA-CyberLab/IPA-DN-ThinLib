@@ -13997,6 +13997,19 @@ bool MsDetermineIsLockedByWtsApi()
 }
 
 
+// New GUID
+void MsNewGuid(void *guid)
+{
+	if (guid == NULL)
+	{
+		return;
+	}
+
+	Zero(guid, sizeof(GUID));
+
+	CoCreateGuid(guid);
+}
+
 // WTSQuerySessionInformationW 用の構造体のパディングについて、Win32 SDK にバグがある。
 // 32bit 環境でデータが崩れる。
 // そこで、Padding を手動で設定した構造体を用意した。
@@ -14067,7 +14080,7 @@ bool MsWtsOneOrMoreUnlockedSessionExists()
 					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
 						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
 					{
-						Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
+						//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
 						WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
 
 						bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);

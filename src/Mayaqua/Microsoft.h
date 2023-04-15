@@ -931,6 +931,8 @@ char *MsCreateTempFileNameByExt(char *ext);
 IO *MsCreateTempFile(char *name);
 IO *MsCreateTempFileByExt(char *ext);
 
+void MsNewGuid(void *guid);
+
 bool MsInstallVLan(char *tag_name, char *connection_tag_name, char *instance_name, MS_DRIVER_VER *ver);
 bool MsInstallVLanWithoutLock(char *tag_name, char *connection_tag_name, char *instance_name, MS_DRIVER_VER *ver);
 bool MsInstallVLanInternal(wchar_t *infpath, wchar_t *hwid_w, char *hwid);
