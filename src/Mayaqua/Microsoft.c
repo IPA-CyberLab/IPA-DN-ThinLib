@@ -13996,6 +13996,31 @@ bool MsDetermineIsLockedByWtsApi()
 	return wts_is_locked_flag;
 }
 
+void MsWtsTest1()
+{
+	WTS_SESSION_INFOA *info = CLEAN;
+	UINT count = 0;
+
+	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false)
+	{
+		Print("WTSEnumerateSessionsA error.\n");
+	}
+	else
+	{
+		UINT i;
+		for (i = 0;i < count;i++)
+		{
+			WTS_SESSION_INFOA *a = &info[i];
+
+			Print("Session %u: %s: %u\n", i, a->pWinStationName, a->State);
+		}
+
+		Print("\n");
+
+		ms->nt->WTSFreeMemory(info);
+	}
+}
+
 // IsLocked Window Proc
 LRESULT CALLBACK MsIsLockedWindowHandlerWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {

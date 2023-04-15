@@ -890,6 +890,8 @@ void MsStartIsLockedThread();
 void MsStopIsLockedThread();
 bool MsDetermineIsLockedByWtsApi();
 
+void MsWtsTest1();
+
 bool MsIsRdpAllowLoginScreen();
 void MsSetRdpAllowLoginScreen(bool b);
 
