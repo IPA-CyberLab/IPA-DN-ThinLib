@@ -892,6 +892,8 @@ bool MsDetermineIsLockedByWtsApi();
 
 void MsWtsTest1();
 
+bool MsWtsOneOrMoreUnlockedSessionExists();
+
 bool MsIsRdpAllowLoginScreen();
 void MsSetRdpAllowLoginScreen(bool b);
 

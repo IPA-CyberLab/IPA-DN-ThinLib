@@ -13996,14 +13996,28 @@ bool MsDetermineIsLockedByWtsApi()
 	return wts_is_locked_flag;
 }
 
-void MsWtsTest1()
+// 1 つ以上のロックされていない WTS セッションが存在するかどうか
+bool MsWtsOneOrMoreUnlockedSessionExists()
 {
 	WTS_SESSION_INFOA *info = CLEAN;
 	UINT count = 0;
 
-	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false)
+	UINT num_unlocked_sessions = 0;
+
+	if (MsIsNt() == false || ms->nt->WTSEnumerateSessionsA == NULL ||
+		ms->nt->WTSQuerySessionInformationA == NULL || ms->nt->WTSFreeMemory == NULL)
 	{
-		Print("WTSEnumerateSessionsA error.\n");
+		return true;
+	}
+
+	if (MsIsWindows7() == false)
+	{
+		return true;
+	}
+
+	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
+	{
+		return true;
 	}
 	else
 	{
@@ -14012,7 +14026,93 @@ void MsWtsTest1()
 		{
 			WTS_SESSION_INFOA *a = &info[i];
 
-			Print("Session %u: %s: %u\n", i, a->pWinStationName, a->State);
+			if (a->State == 0)
+			{
+				WTSINFOEXA *ex = CLEAN;
+				DWORD retsize = 0;
+
+				if (a->State == WTSActive)
+				{
+					if (ms->nt->WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXA))
+					{
+						WTSINFOEX_LEVEL1_A *ex1 = (WTSINFOEX_LEVEL1_A *)&ex->Data;
+
+						bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
+
+						// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
+						// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
+
+						if (MsIsWindows8() == false)
+						{
+							is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+						}
+
+						if (is_locked == false)
+						{
+							num_unlocked_sessions++;
+						}
+
+						ms->nt->WTSFreeMemory(ex);
+					}
+				}
+			}
+		}
+
+		ms->nt->WTSFreeMemory(info);
+	}
+
+	return (num_unlocked_sessions >= 1);
+}
+
+void MsWtsTest1()
+{
+	WTS_SESSION_INFOA *info = CLEAN;
+	UINT count = 0;
+
+	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
+	{
+		Print("WTSEnumerateSessionsA error.\n");
+	}
+	else
+	{
+		Print("---\n");
+
+		UINT i;
+		for (i = 0;i < count;i++)
+		{
+			WTS_SESSION_INFOA *a = &info[i];
+
+			if (a->State == 0)
+			{
+				WTSINFOEXA* ex = CLEAN;
+				DWORD retsize = 0;
+
+				if (ms->nt->WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXA))
+				{
+					WTSINFOEX_LEVEL1_A *ex1 = (WTSINFOEX_LEVEL1_A *)&ex->Data;
+
+					bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
+
+					// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
+					// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
+
+					if (MsIsWindows8() == false)
+					{
+						is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+					}
+
+					Print("Session %u: [%u]: '%s': %u -> %u\n", i, a->SessionId, a->pWinStationName, a->State,
+						is_locked);
+
+					ms->nt->WTSFreeMemory(ex);
+				}
+				else
+				{
+					Print("Session %u: [%u]: %s: %u: WTSQuerySessionInformationA error\n", i, a->SessionId, a->pWinStationName, a->State);
+				}
+			}
 		}
 
 		Print("\n");
