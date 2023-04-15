@@ -3430,7 +3430,7 @@ bool DuWfpCreateSublayer(HANDLE hEngine, GUID *created_guid, GUID *provider_guid
 	return true;
 }
 
-void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a)
+void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, ACCESS *a)
 {
 	if (a == NULL)
 	{
@@ -3444,7 +3444,7 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a)
 	FWPM_FILTER_CONDITION0 c[8] = CLEAN;
 	bool isv4 = !a->IsIPv6;
 
-	UniFormat(name, sizeof(name), L"DuFwpAddAccess_%4u", index);
+	UniFormat(name, sizeof(name), L"DuFwpAddAccess_%04u", index);
 
 	UINT c_index = 0;
 
@@ -3502,7 +3502,7 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a)
 
 	c[c_index].fieldKey = FWPM_CONDITION_IP_REMOTE_PORT;
 	c[c_index].matchType = FWP_MATCH_RANGE;
-	c[c_index].conditionValue.type = FWP_RANGE_TYPE;
+	c[c_index].conditionValue.type = FWP_UINT16;
 	c[c_index].conditionValue.rangeValue = &remote_port_range;
 	c_index++;
 
@@ -3513,7 +3513,7 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a)
 
 	c[c_index].fieldKey = FWPM_CONDITION_IP_LOCAL_PORT;
 	c[c_index].matchType = FWP_MATCH_RANGE;
-	c[c_index].conditionValue.type = FWP_RANGE_TYPE;
+	c[c_index].conditionValue.type = FWP_UINT16;
 	c[c_index].conditionValue.rangeValue = &local_port_range;
 	c_index++;
 
@@ -3550,6 +3550,10 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *sublayer, UINT index, ACCESS *a)
 	if (sublayer != NULL)
 	{
 		filter.subLayerKey = *sublayer;
+	}
+	if (provider != NULL)
+	{
+		filter.providerKey = provider;
 	}
 	filter.weight.type = FWP_UINT64;
 	filter.weight.uint64 = &weight;
@@ -3789,6 +3793,22 @@ void DuWfpTest2()
 		return;
 	}
 
+	BUF *text = ReadDump("@fwtest.txt");
+
+	if (text == NULL)
+	{
+		Print("Text read error\n");
+	}
+	else
+	{
+		FwApplyAllRulesFromLinesBuf(hEngine, &provider, &sublayer, text);
+
+		FreeBuf(text);
+	}
+	
+	Print("Quit>");
+	GetLine(NULL, 0);
+	
 	du_wfp_api->FwpmEngineClose0(hEngine);
 }
 
@@ -4144,7 +4164,7 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 
 						bool is_in = StartWith(dir, "i");
 						bool is_est = StartWith(state, "e");
-						bool is_permit = StartWith(state, "p") || StartWith(state, "a") || ToBool(state);
+						bool is_permit = StartWith(action, "p") || StartWith(action, "a") || ToBool(action);
 
 						IP ip = CLEAN;
 						IP mask = CLEAN;
@@ -4193,6 +4213,36 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 	Free(line);
 
 	return ret;
+}
+
+void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf)
+{
+	UINT index = 0;
+
+	if (provider == NULL || sublayer == NULL || buf == NULL)
+	{
+		return;
+	}
+
+	SeekBufToBegin(buf);
+
+	while (true)
+	{
+		char *line = CfgReadNextLine(buf);
+		if (line == NULL)
+		{
+			break;
+		}
+
+		ACCESS a = CLEAN;
+
+		if (FwParseRuleStr(&a, line))
+		{
+			DuFwpAddAccess(hEngine, provider, sublayer, ++index, &a);
+		}
+
+		Free(line);
+	}
 }
 
 #endif	// _WIN32
