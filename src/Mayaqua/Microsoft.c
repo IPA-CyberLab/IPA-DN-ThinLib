@@ -268,6 +268,30 @@ typedef struct _WTSINFOEXW_FIX1 {
 	WTSINFOEX_LEVEL1_W_FIX1 Data;
 } WTSINFOEXW_FIX1, *PWTSINFOEXW_FIX1;
 
+typedef enum NT_WINSTATIONINFOCLASS {
+	WinStationRemoteAddress = 29,
+} NT_WINSTATIONINFOCLASS;
+
+// https://stackoverflow.com/questions/63493633/getting-public-ip-address-of-a-remotes-desktop-client
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
+typedef struct {
+	unsigned short sin_family;
+	union {
+		struct {
+			USHORT sin_port;
+			ULONG in_addr;
+			UCHAR sin_zero[8];
+		} ipv4;
+		struct {
+			USHORT sin6_port;
+			ULONG sin6_flowinfo;
+			USHORT sin6_addr[8];
+			ULONG sin6_scope_id;
+		} ipv6;
+	};
+} NT_WINSTATIONREMOTEADDRESS,
+*NT_PWINSTATIONREMOTEADDRESS;
+
 // The function which should be called once as soon as possible after the process is started
 void MsInitProcessCallOnce(bool restricted_mode)
 {
@@ -376,7 +400,7 @@ char *MsGetWtsSessionStateStr(UINT state)
 	{
 	case WTSActive: return "Active";
 	case WTSConnected: return "Connected";
-	case WTSConnectQuery: return "ConnectQuery";
+	case WTSConnectQuery: return "Connected";
 	case WTSShadow: return "Shadow";
 	case WTSDisconnected: return "Disconnected";
 	case WTSIdle: return "Idle";
@@ -388,7 +412,7 @@ char *MsGetWtsSessionStateStr(UINT state)
 	}
 }
 
-LIST *MsGetThinFwList(LIST *sid_cache)
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 {
 	if (sid_cache == NULL)
 	{
@@ -440,58 +464,119 @@ LIST *MsGetThinFwList(LIST *sid_cache)
 					data.SessionId = ex1->SessionId;
 					UniStrCpy(data.WinStationName, sizeof(data.WinStationName), ex1->WinStationName);
 
-					char *state_str = MsGetWtsSessionStateStr(ex1->SessionState);
-
-					StrCpy(data.SessionState, sizeof(data.SessionState), state_str);
-
-					UniStrCpy(data.Username, sizeof(data.Username), ex1->UserName);
-					UniStrCpy(data.Domain, sizeof(data.Domain), ex1->DomainName);
-
-					WTSCLIENTW *client_info = CLEAN;
-					DWORD retsize = 0;
-
-					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-						WTSClientInfo, (void *)&client_info, &retsize) && retsize >= sizeof(WTSCLIENTW))
+					if (UniStrCmpi(data.WinStationName, L"Services") == 0 ||
+						UniStrCmpi(data.WinStationName, L"Console") == 0 ||
+						UniStrCmpi(data.WinStationName, L"") == 0 ||
+						ex1->SessionState == WTSShadow ||
+						ex1->SessionState == WTSDisconnected ||
+						ex1->SessionState == WTSIdle ||
+						ex1->SessionState == WTSListen ||
+						ex1->SessionState == WTSReset ||
+						ex1->SessionState == WTSDown ||
+						ex1->SessionState == WTSInit)
 					{
-						UniStrCpy(data.ClientName, sizeof(data.ClientName), client_info->ClientName);
-						UniStrCpy(data.ClientUsername, sizeof(data.ClientUsername), client_info->UserName);
-						UniStrCpy(data.ClientDomain, sizeof(data.ClientDomain), client_info->Domain);
+					}
+					else
+					{
+						char *state_str = MsGetWtsSessionStateStr(ex1->SessionState);
 
-						if (client_info->ClientAddressFamily == AF_INET)
+						StrCpy(data.SessionState, sizeof(data.SessionState), state_str);
+
+						UniStrCpy(data.Username, sizeof(data.Username), ex1->UserName);
+						UniStrCpy(data.Domain, sizeof(data.Domain), ex1->DomainName);
+
+						WTSCLIENTW *client_info = CLEAN;
+						DWORD retsize = 0;
+
+						bool ok = true;
+
+						// https://learn.microsoft.com/en-us/previous-versions/aa383827(v=vs.85)
+						// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
+						if (ms->nt->WinStationQueryInformationW != NULL)
 						{
-							UCHAR ipv4_addr[4] = CLEAN;
-							UINT i;
-							for (i = 0;i < 4;i++)
+							NT_WINSTATIONREMOTEADDRESS ntaddr = CLEAN;
+
+							UINT retsize = 0;
+
+							if (ms->nt->WinStationQueryInformationW(NULL,
+								ex1->SessionId,
+								WinStationRemoteAddress,
+								&ntaddr,
+								sizeof(ntaddr),
+								&retsize) && retsize == sizeof(ntaddr))
 							{
-								ipv4_addr[i] = (UCHAR)client_info->ClientAddress[i];
+								if (ntaddr.sin_family == AF_INET)
+								{
+									UCHAR ipv4_addr[4] = CLEAN;
+									Copy(ipv4_addr, &ntaddr.ipv4.in_addr, 4);
+									InAddrToIP(&data.ClientIp, (struct in_addr *)ipv4_addr);
+								}
+								else if (ntaddr.sin_family == AF_INET6)
+								{
+									IPV6_ADDR addr = CLEAN;
+									Copy(&addr, ntaddr.ipv6.sin6_addr, 16);
+									IPv6AddrToIP(&data.ClientIp, &addr);
+									// data.ClientIp.ipv6_scope_id = ntaddr.ipv6.sin6_scope_id; // alwayz zero!!
+								}
 							}
-							InAddrToIP(&data.ClientAddress, (struct in_addr *)ipv4_addr);
 						}
-						else if (client_info->ClientAddressFamily == AF_INET6)
+
+						if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+							WTSClientInfo, (void *)&client_info, &retsize) && retsize >= sizeof(WTSCLIENTW))
 						{
-							IPV6_ADDR addr = CLEAN;
-							Copy(&addr, client_info->ClientAddress, 16);
-							IPv6AddrToIP(&data.ClientAddress, &addr);
+							UniStrCpy(data.ClientLocalMachineName, sizeof(data.ClientLocalMachineName), client_info->ClientName);
+
+							if (client_info->ClientAddressFamily == AF_INET)
+							{
+								UCHAR ipv4_addr[4] = CLEAN;
+								UINT i;
+								for (i = 0;i < 4;i++)
+								{
+									ipv4_addr[i] = (UCHAR)client_info->ClientAddress[i];
+								}
+								InAddrToIP(&data.ClientLocalIp, (struct in_addr *)ipv4_addr);
+							}
+							else if (client_info->ClientAddressFamily == AF_INET6)
+							{
+								IPV6_ADDR addr = CLEAN;
+								UINT i;
+								for (i = 0;i < 8;i++)
+								{
+									USHORT us = client_info->ClientAddress[i];
+									us = Endian16(us);
+									Copy(&addr.Value[i * 2], &us, 2);
+								}
+								IPv6AddrToIP(&data.ClientLocalIp, &addr);
+							}
+
+							data.ClientLocalBuild = client_info->ClientBuildNumber;
+
+							ms->nt->WTSFreeMemory(client_info);
 						}
 
-						data.ClientBuild = client_info->ClientBuildNumber;
+						ms->nt->WTSFreeMemory(ex);
 
-						ms->nt->WTSFreeMemory(client_info);
+						UniFormat(key, sizeof(key), L"RDP:%u:%s:%S:%s:%s:%s:[%r]:%u:[%r]",
+							data.SessionId, data.WinStationName, data.SessionState,
+							data.Username, data.Domain, data.ClientLocalMachineName,
+							&data.ClientLocalIp, data.ClientLocalBuild,
+							&data.ClientIp);
+
+						if (flags & MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP)
+						{
+							if (IsLocalHostIP(&data.ClientIp))
+							{
+								ok = false;
+							}
+						}
+
+						if (ok)
+						{
+							UniPrint(L"%s\n", key);
+
+							Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
+						}
 					}
-
-					ms->nt->WTSFreeMemory(ex);
-
-					if (IsZeroIP(&data.ClientAddress) == false)
-					{
-						Print("%r\n", &data.ClientAddress);
-					}
-
-					UniFormat(key, sizeof(key), L"RDP:%u:%s:%S:%s:%s:%s:%s:%s:%r:%u",
-						data.SessionId, data.WinStationName, data.SessionState,
-						data.Username, data.Domain, data.ClientName, data.ClientUsername,
-						data.ClientDomain, &data.ClientAddress, data.ClientBuild);
-
-					Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
 				}
 			}
 
@@ -14951,6 +15036,8 @@ NT_API *MsLoadNtApiFunctions()
 
 	nt->hWS2_32 = LoadLibrary("Ws2_32.dll");
 
+	nt->hWinSta = LoadLibrary("winsta.dll");
+
 	// Read the function
 	nt->GetComputerNameExW =
 		(BOOL(__stdcall *)(COMPUTER_NAME_FORMAT, LPWSTR, LPDWORD))
@@ -15099,6 +15186,10 @@ NT_API *MsLoadNtApiFunctions()
 	nt->GetAddrInfoExCancel =
 		(int(__stdcall *)(LPHANDLE))
 		GetProcAddress(nt->hWS2_32, "GetAddrInfoExCancel");
+
+	nt->WinStationQueryInformationW =
+		(BOOLEAN(__stdcall *)(HANDLE, ULONG, UINT, PVOID, ULONG, PULONG))
+		GetProcAddress(nt->hWinSta, "WinStationQueryInformationW");
 
 	// Determine WoW64
 	if (Is32())
@@ -15416,6 +15507,11 @@ void MsFreeNtApiFunctions(NT_API *nt)
 	if (nt->hWtsApi32 != NULL)
 	{
 		FreeLibrary(nt->hWtsApi32);
+	}
+
+	if (nt->hWinSta != NULL)
+	{
+		FreeLibrary(nt->hWinSta);
 	}
 
 	if (nt->hPsApi != NULL)

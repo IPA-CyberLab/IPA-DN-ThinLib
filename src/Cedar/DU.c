@@ -4678,7 +4678,7 @@ void TfMain(TF_SERVICE *svc)
 
 				if (is_locked)
 				{
-					LIST *now_list = MsGetThinFwList(sid_cache);
+					LIST *now_list = MsGetThinFwList(sid_cache, MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP);
 
 					if (current_list == NULL)
 					{

@@ -503,6 +503,7 @@ typedef struct NT_API
 	HINSTANCE hUserenv;
 	HINSTANCE hNtdll;
 	HINSTANCE hWS2_32;
+	HINSTANCE hWinSta;
 	BOOL (WINAPI *OpenProcessToken)(HANDLE, DWORD, PHANDLE);
 	BOOL (WINAPI *LookupPrivilegeValue)(char *, char *, PLUID);
 	BOOL (WINAPI *AdjustTokenPrivileges)(HANDLE, BOOL, PTOKEN_PRIVILEGES, DWORD, PTOKEN_PRIVILEGES, PDWORD);
@@ -603,6 +604,8 @@ typedef struct NT_API
 	int(WSAAPI *GetAddrInfoExW)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE);
 	void(WSAAPI *FreeAddrInfoExW)(NT_PADDRINFOEXW);
 	int(WSAAPI *GetAddrInfoExCancel)(LPHANDLE);
+	BOOLEAN(WINAPI *WinStationQueryInformationW)(
+		HANDLE, ULONG, UINT, PVOID, ULONG, PULONG);
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -819,11 +822,10 @@ typedef struct MS_THINFW_ENTRY_RDP
 	char SessionState[16];
 	wchar_t Username[128];
 	wchar_t Domain[64];
-	wchar_t ClientName[64];
-	wchar_t ClientUsername[128];
-	wchar_t ClientDomain[64];
-	IP ClientAddress;
-	UINT ClientBuild;
+	wchar_t ClientLocalMachineName[64];
+	IP ClientIp;
+	IP ClientLocalIp;
+	UINT ClientLocalBuild;
 } MS_THINFW_ENTRY_RDP;
 
 
@@ -1437,7 +1439,10 @@ LIST *MsNewSidToUsernameCache();
 MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
 void MsFreeSidToUsernameCache(LIST *cache_list);
 
-LIST *MsGetThinFwList(LIST *sid_cache);
+#define	MS_GET_THINFW_LIST_FLAGS_NONE				0
+#define	MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP	1
+
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);
 
 // Inner functions
