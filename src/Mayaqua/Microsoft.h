@@ -549,7 +549,10 @@ typedef struct NT_API
 	BOOL (WINAPI *GetTokenInformation)(HANDLE, TOKEN_INFORMATION_CLASS, void *, DWORD, PDWORD);
 	BOOL (WINAPI *CreateProcessAsUserA)(HANDLE, LPCSTR, LPSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCSTR, LPSTARTUPINFOA, LPPROCESS_INFORMATION);
 	BOOL (WINAPI *CreateProcessAsUserW)(HANDLE, LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
+	BOOL (WINAPI *IsValidSid)(PSID);
+	DWORD (WINAPI *GetLengthSid)(PSID);
 	BOOL (WINAPI *LookupAccountSidA)(LPCSTR,PSID,LPSTR,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE);
+	BOOL (WINAPI *LookupAccountSidW)(LPCWSTR, PSID, LPWSTR, LPDWORD, LPWSTR, LPDWORD, PSID_NAME_USE);
 	BOOL (WINAPI *LookupAccountNameA)(LPCSTR,LPCSTR,PSID,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE);
 	BOOL (WINAPI *GetUserNameExA)(UINT, LPSTR, PULONG);
 	BOOL (WINAPI *GetUserNameExW)(UINT, LPWSTR, PULONG);
@@ -596,6 +599,7 @@ typedef struct NT_API
 	BOOL(APIENTRY* CheckTokenMembership)(HANDLE, PSID, PBOOL);
 	BOOL(WINAPI* AllocateAndInitializeSid)(PSID_IDENTIFIER_AUTHORITY, BYTE, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, PSID*);
 	PVOID(WINAPI* FreeSid)(PSID);
+	BOOL(WINAPI *EqualSid)(PSID, PSID);
 	int(WSAAPI *GetAddrInfoExW)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE);
 	void(WSAAPI *FreeAddrInfoExW)(NT_PADDRINFOEXW);
 	int(WSAAPI *GetAddrInfoExCancel)(LPHANDLE);
@@ -646,6 +650,9 @@ typedef struct MS_PROCESS
 	wchar_t CommandLineW[MAX_SIZE];	// Command line
 	UINT ProcessId;					// Process ID
 	bool Is64BitProcess;			// Is 64bit Process
+	UINT SidSize;					// User SID Size
+	UCHAR SidData[64];				// User SID Data
+	UINT SessionId;				    // TS session ID
 } MS_PROCESS;
 
 #define	MAX_MS_ADAPTER_IP_ADDRESS	64
@@ -773,7 +780,15 @@ typedef struct MS_PROCESS_WATCHER
 // プロセス取得フラグ
 #define MS_GET_PROCESS_LIST_FLAG_NONE				0
 #define MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE	1
+#define	MS_GET_PROCESS_LIST_FLAG_GET_SID			2
 
+typedef struct MS_SID_INFO
+{
+	UINT SidSize;
+	UCHAR SidData[64];
+	wchar_t Username[MAX_SIZE];
+	wchar_t DomainName[MAX_SIZE];
+} MS_SID_INFO;
 
 
 // Function prototype
@@ -1381,6 +1396,10 @@ void MsFreeAddrInfoExW(NT_PADDRINFOEXW pAddrInfoEx);
 bool MsIsGetAddrInfoExWSupported();
 
 bool MsIsFastStartupEnabled();
+
+LIST *MsNewSidToUsernameCache();
+MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
+void MsFreeSidToUsernameCache(LIST *cache_list);
 
 
 // Inner functions

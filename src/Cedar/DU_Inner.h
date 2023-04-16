@@ -246,6 +246,8 @@ void DuWfpAddIpAcl(HANDLE hEngine, bool is_in, IP *ip, IP *mask, UINT index, boo
 void DuWfpAddPortAcl(HANDLE hEngine, bool is_in, bool ipv6, UCHAR protocol, UINT port, UINT index, bool permit);
 
 void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, ACCESS *a);
+void DuFwpAddTrustedExe(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, wchar_t *exe, UINT allowed_directions, bool disable_wow);
+
 bool DuWfpCreateSublayer(HANDLE hEngine, GUID *created_guid, GUID *provider_guid, char *name, USHORT weight);
 bool DuWfpCreateProvider(HANDLE hEngine, GUID *created_guid, char *name);
 
@@ -263,6 +265,14 @@ void DuGovFw2Main();
 
 UINT DuGovFw1DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
 bool DuGovFw1Main(bool mandate);
+
+
+#define	FW_PARSED_ACCESS_UNIQUE_ID_EXEPATH		10000001
+
+#define	FW_PARSED_ACCESS_JITTER_ALLOW_SERVER	1
+#define	FW_PARSED_ACCESS_JITTER_ALLOW_CLIENT	2
+
+
 
 bool FwParseRuleStr(ACCESS *a, char *str);
 void FwParseIpAndMask(IP *ip, IP *mask, char *str);

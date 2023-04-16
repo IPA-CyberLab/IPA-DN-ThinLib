@@ -307,6 +307,90 @@ void MsTestFunc1(HWND hWnd)
 	}
 }
 
+LIST *MsNewSidToUsernameCache()
+{
+	LIST *ret = NewList(NULL);
+
+	return ret;
+}
+
+void MsFreeSidToUsernameCache(LIST *cache_list)
+{
+	if (cache_list == NULL)
+	{
+		return;
+	}
+
+	// Search cache
+	UINT i;
+	for (i = 0;i < LIST_NUM(cache_list);i++)
+	{
+		MS_SID_INFO *e = LIST_DATA(cache_list, i);
+
+		Free(e);
+	}
+
+	ReleaseList(cache_list);
+}
+
+MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size)
+{
+	if (MsIsNt() == false)
+	{
+		return NULL;
+	}
+
+	MS_SID_INFO *e;
+
+	if (cache_list == NULL || sid_data == NULL || sid_size == 0 || sid_size >= sizeof(e->SidData))
+	{
+		return NULL;
+	}
+
+	// Search cache
+	UINT i;
+	for (i = 0;i < LIST_NUM(cache_list);i++)
+	{
+		MS_SID_INFO *e = LIST_DATA(cache_list, i);
+
+		if (ms->nt->EqualSid(e->SidData, sid_data))
+		{
+			// match
+			return e;
+		}
+	}
+
+	if (LIST_NUM(cache_list) >= 256)
+	{
+		// Cache is full
+		return NULL;
+	}
+
+	// Try lookup
+	wchar_t username[MAX_SIZE] = CLEAN;
+	wchar_t domain[MAX_SIZE] = CLEAN;
+	UINT username_size = 200;
+	UINT domain_size = 200;
+	SID_NAME_USE sidName = CLEAN;
+
+	if (ms->nt->LookupAccountSidW(NULL, sid_data, username, &username_size, domain, &domain_size, &sidName) == false)
+	{
+		// erorr
+		return NULL;
+	}
+
+	e = ZeroMalloc(sizeof(MS_SID_INFO));
+	e->SidSize = sid_size;
+	Copy(e->SidData, sid_data, sid_size);
+
+	UniStrCpy(e->Username, sizeof(e->Username), username);
+	UniStrCpy(e->DomainName, sizeof(e->DomainName), domain);
+
+	Add(cache_list, e);
+
+	return e;
+}
+
 typedef struct _MS_GETADDRINFOEXW_CTX
 {
 	OVERLAPPED QueryOverlapped;
@@ -6547,6 +6631,51 @@ LIST *MsGetProcessListNt(UINT flags)
 				if (flags & MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE)
 				{
 					cmdline = MsGetProcessCommandLineW(h);
+				}
+
+				if (flags & MS_GET_PROCESS_LIST_FLAG_GET_SID)
+				{
+					HANDLE token = NULL;
+					if (ms->nt->OpenProcessToken(h, TOKEN_QUERY, &token))
+					{
+						DWORD token_size = 0;
+
+						ms->nt->GetTokenInformation(token, TokenUser, NULL, 0, &token_size);
+						
+						if (token_size >= 1)
+						{
+							DWORD token_size_new = 0;
+							TOKEN_USER *user_data = ZeroMalloc(token_size);
+
+							if (ms->nt->GetTokenInformation(token, TokenUser, user_data, token_size, &token_size_new) && token_size == token_size_new)
+							{
+								void *sid = user_data->User.Sid;
+								if (ms->nt->IsValidSid(sid))
+								{
+									UINT sid_size = ms->nt->GetLengthSid(sid);
+
+									if (sid_size >= 1 && sid_size <= sizeof(p->SidData))
+									{
+										p->SidSize = sid_size;
+										Copy(p->SidData, sid, sid_size);
+									}
+								}
+							}
+
+							Free(user_data);
+						}
+
+						token_size = sizeof(UINT);
+						DWORD token_size_new = 0;
+						UINT session_id = 0;
+
+						if (ms->nt->GetTokenInformation(token, MaxTokenInfoClass, &session_id, token_size, &token_size_new) && token_size == token_size_new)
+						{
+							p->SessionId = session_id;
+						}
+
+						CloseHandle(token);
+					}
 				}
 
 				if (UniIsEmptyStr(cmdline) == false)
@@ -14673,9 +14802,21 @@ NT_API *MsLoadNtApiFunctions()
 		(BOOL (__stdcall *)(HANDLE,LPCWSTR,LPWSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_ATTRIBUTES,BOOL,DWORD,void *,LPCWSTR,LPSTARTUPINFOW,LPPROCESS_INFORMATION))
 		GetProcAddress(nt->hAdvapi32, "CreateProcessAsUserW");
 
+	nt->IsValidSid =
+		(BOOL(__stdcall *)(PSID))
+		GetProcAddress(nt->hAdvapi32, "IsValidSid");
+
+	nt->GetLengthSid =
+		(DWORD(__stdcall *)(PSID))
+		GetProcAddress(nt->hAdvapi32, "GetLengthSid");
+
 	nt->LookupAccountSidA =
 		(BOOL (__stdcall *)(LPCSTR,PSID,LPSTR,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE))
 		GetProcAddress(nt->hAdvapi32, "LookupAccountSidA");
+
+	nt->LookupAccountSidW =
+		(BOOL(__stdcall *)(LPCWSTR, PSID, LPWSTR, LPDWORD, LPWSTR, LPDWORD, PSID_NAME_USE))
+		GetProcAddress(nt->hAdvapi32, "LookupAccountSidW");
 
 	nt->LookupAccountNameA =
 		(BOOL (__stdcall *)(LPCSTR,LPCSTR,PSID,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE))
@@ -14716,6 +14857,10 @@ NT_API *MsLoadNtApiFunctions()
 	nt->FreeSid =
 		(PVOID(__stdcall*)(PSID))
 		GetProcAddress(nt->hAdvapi32, "FreeSid");
+
+	nt->EqualSid =
+		(BOOL(__stdcall *)(PSID, PSID))
+		GetProcAddress(nt->hAdvapi32, "EqualSid");
 
 	nt->GetAddrInfoExW =
 		(int(__stdcall *)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE))

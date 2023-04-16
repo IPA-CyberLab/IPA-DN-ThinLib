@@ -3440,21 +3440,158 @@ bool DuWfpCreateSublayer(HANDLE hEngine, GUID *created_guid, GUID *provider_guid
 	return true;
 }
 
+void DuFwpAddTrustedExe(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, wchar_t *exe, UINT allowed_directions, bool disable_wow)
+{
+	if (exe == NULL)
+	{
+		return;
+	}
+
+	FWP_BYTE_BLOB *this_app_id = NULL;
+
+	void *wow = NULL;
+	
+	if (disable_wow)
+	{
+		MsDisableWow64FileSystemRedirection();
+	}
+
+	if (du_wfp_api->FwpmGetAppIdFromFileName0(exe, &this_app_id))
+	{
+		this_app_id = NULL;
+	}
+
+	MsRestoreWow64FileSystemRedirection(wow);
+
+	if (this_app_id != NULL)
+	{
+		wchar_t name[MAX_SIZE] = CLEAN;
+
+		UINT i, j, k;
+		for (i = 0;i < 3;i++) // transport protocol (TCP, UDP, ICMP)
+		{
+			for (j = 0;j < 2;j++) // network protocol (IPv4, IPv6)
+			{
+				for (k = 0;k < 2;k++) // direction (IN, OUT)
+				{
+					UINT c_index = 0;
+					FWPM_FILTER_CONDITION0 c[10] = CLEAN;
+
+					UniFormat(name, sizeof(name), L"_ThinFW ACL %04u: trusted_exe (%u-%u-%u): %s", index, i, j, k, exe);
+
+					UINT flag_exclude_bits = 0;
+
+					// Exclude loopback
+					flag_exclude_bits |= FWP_CONDITION_FLAG_IS_LOOPBACK;
+
+					// Exclude this app
+					if (this_app_id != NULL)
+					{
+						c[c_index].fieldKey = FWPM_CONDITION_ALE_APP_ID;
+						c[c_index].matchType = FWP_MATCH_EQUAL;
+						c[c_index].conditionValue.type = FWP_BYTE_BLOB_TYPE;
+						c[c_index].conditionValue.byteBlob = this_app_id;
+						c_index++;
+					}
+
+					// Protocol
+					c[c_index].fieldKey = FWPM_CONDITION_IP_PROTOCOL;
+					c[c_index].matchType = FWP_MATCH_EQUAL;
+					c[c_index].conditionValue.type = FWP_UINT8;
+
+					UINT proto = 0;
+					switch (i)
+					{
+					case 0:
+						proto = IP_PROTO_TCP;
+						break;
+					case 1:
+						proto = IP_PROTO_UDP;
+						break;
+					case 2:
+						proto = j == 0 ? IP_PROTO_ICMPV4 : IP_PROTO_ICMPV6;
+						break;
+					}
+
+					c[c_index].conditionValue.uint8 = proto;
+					c_index++;
+
+					FWPM_FILTER0 filter = CLEAN;
+					UINT64 weight = ((UINT64)~((UINT64)0)) - (UINT64)index;
+
+					Zero(&filter, sizeof(filter));
+					filter.flags = 0;
+
+					if (k == 0)
+					{
+						// Direction: In
+						filter.layerKey = j == 0 ? FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4 : FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6;
+					}
+					else
+					{
+						// Direction: Out
+						filter.layerKey = j == 0 ? FWPM_LAYER_ALE_AUTH_CONNECT_V4 : FWPM_LAYER_ALE_AUTH_CONNECT_V6;
+					}
+
+					if (sublayer != NULL)
+					{
+						filter.subLayerKey = *sublayer;
+					}
+					if (provider != NULL)
+					{
+						filter.providerKey = provider;
+					}
+					filter.weight.type = FWP_UINT64;
+					filter.weight.uint64 = &weight;
+					filter.action.type = FWP_ACTION_PERMIT;
+					filter.displayData.name = name;
+
+					filter.filterCondition = c;
+					filter.numFilterConditions = c_index;
+
+					bool ok = false;
+
+					if (k == 0)
+					{
+						// IN
+						if (allowed_directions & FW_PARSED_ACCESS_JITTER_ALLOW_SERVER)
+						{
+							ok = true;
+						}
+					}
+					else if (k == 1)
+					{
+						// OUT
+						if (allowed_directions & FW_PARSED_ACCESS_JITTER_ALLOW_CLIENT)
+						{
+							ok = true;
+						}
+					}
+
+					if (ok)
+					{
+						UINT ret = du_wfp_api->FwpmFilterAdd0(hEngine, &filter, NULL, NULL);
+						if (ret)
+						{
+							Debug("DuFwpAddTrustedExe: FwpmFilterAdd0 Failed: 0x%X\n", ret);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (this_app_id != NULL)
+	{
+		du_wfp_api->FwpmFreeMemory0(&this_app_id);
+	}
+}
+
 void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, ACCESS *a)
 {
 	if (a == NULL)
 	{
 		return;
-	}
-
-	// Get this application name
-	wchar_t *this_exe_path = MsGetExeFileNameW();
-
-	FWP_BYTE_BLOB *this_app_id = NULL;
-
-	if (du_wfp_api->FwpmGetAppIdFromFileName0(this_exe_path, &this_app_id))
-	{
-		this_app_id = NULL;
 	}
 
 	FWPM_FILTER0 filter = CLEAN;
@@ -3464,7 +3601,7 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	FWPM_FILTER_CONDITION0 c[10] = CLEAN;
 	bool isv4 = !a->IsIPv6;
 
-	UniFormat(name, sizeof(name), L"_SLF %04u", index);
+	UniFormat(name, sizeof(name), L"_ThinFW ACL %04u", index);
 
 	if (UniIsFilledStr(a->Note))
 	{
@@ -3491,17 +3628,6 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 		c[c_index].matchType = FWP_MATCH_FLAGS_NONE_SET;
 		c[c_index].conditionValue.type = FWP_UINT32;
 		c[c_index].conditionValue.uint32 = flag_exclude_bits;
-		c_index++;
-	}
-
-
-	// Exclude this app
-	if (this_app_id != NULL)
-	{
-		c[c_index].fieldKey = FWPM_CONDITION_ALE_APP_ID;
-		c[c_index].matchType = FWP_MATCH_NOT_EQUAL;
-		c[c_index].conditionValue.type = FWP_BYTE_BLOB_TYPE;
-		c[c_index].conditionValue.byteBlob = this_app_id;
 		c_index++;
 	}
 
@@ -3604,11 +3730,6 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	if (ret)
 	{
 		Debug("DuFwpAddAccess: FwpmFilterAdd0 Failed: 0x%X\n", ret);
-	}
-
-	if (this_app_id != NULL)
-	{
-		du_wfp_api->FwpmFreeMemory0(&this_app_id);
 	}
 }
 
@@ -3850,9 +3971,9 @@ void DuWfpTest2()
 
 	SleepThread(200);
 
-	//SOCK *s = Connect("x1.x2.aaaaa1.servers.ddns.sehosts.com", 80);
-	//Print("sock = %u\n", (UINT)s);
-	//ReleaseSock(s);
+	SOCK *s = Connect("x1.x2.aaaaa1.servers.ddns.sehosts.com", 80);
+	Print("sock = %u\n", (UINT)s);
+	ReleaseSock(s);
 
 	//SOCK *s = Listen(8181);
 
@@ -4238,82 +4359,152 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 
 			if (IsFilledStr(first))
 			{
-				UINT proto = StrToProtocol(first);
-				if (proto == 0 && StrCmpi(first, "ICMP"))
-				{
-					proto = IP_PROTO_ICMPV4;
-				}
+				char *trust_server_tag = "trusted_server";
+				char *trust_client_tag = "trusted_client";
 
-				if (proto == IP_PROTO_TCP || proto == IP_PROTO_UDP || IP_PROTO_ICMPV4 || IP_PROTO_ICMPV6)
+				if (StartWith(line, trust_server_tag))
 				{
-					if (t->NumTokens >= 5)
+					char tmp[MAX_SIZE] = CLEAN;
+					StrCpy(tmp, sizeof(tmp), line + StrLen(trust_server_tag));
+					Trim(tmp);
+
+					wchar_t *fullpath = CopyUtfToUni(tmp);
+
+					UINT atmark = UniSearchStrEx(fullpath, L"@", 0, true);
+
+					if (atmark != INFINITE)
 					{
-						char *dir = t->Token[1];
-						char *type = t->Token[2];
-						char *action = t->Token[3];
-						char *remoteip = t->Token[4];
-						
-						char *remoteport = t->NumTokens >= 6 ? t->Token[5] : "*";
-						char *localport = t->NumTokens >= 7 ? t->Token[6] : "*";
+						fullpath[atmark] = 0;
+					}
 
-						bool is_in = StartWith(dir, "i");
-						bool is_new = StartWith(type, "n");
-						bool is_permit = StartWith(action, "p") || StartWith(action, "a") || ToBool(action);
+					UniTrim(fullpath);
 
-						IP ip = CLEAN;
-						IP mask = CLEAN;
-						
-						FwParseIpAndMask(&ip, &mask, remoteip);
+					UniTrimDoubleQuotation(fullpath);
 
-						UINT remoteport_start = 0, remoteport_end = 0;
-						UINT localport_start = 0, localport_end = 0;
+					UniTrim(fullpath);
 
-						FwParsePortRange(&remoteport_start, &remoteport_end, remoteport);
-						FwParsePortRange(&localport_start, &localport_end, localport);
+					a->Discard = false;
+					UniStrCpy(a->Note, sizeof(a->Note), fullpath);
 
-						a->CheckTcpState = true;
-						a->Established = !is_new;
-						a->Active = is_in;
-						a->Discard = !is_permit;
+					a->UniqueId = FW_PARSED_ACCESS_UNIQUE_ID_EXEPATH;
 
-						if (IsIP4(&ip))
+					a->Jitter = FW_PARSED_ACCESS_JITTER_ALLOW_SERVER;
+
+					Free(fullpath);
+
+					ret = true;
+				}
+				else if (StartWith(line, trust_client_tag))
+				{
+					char tmp[MAX_SIZE] = CLEAN;
+					StrCpy(tmp, sizeof(tmp), line + StrLen(trust_client_tag));
+					Trim(tmp);
+
+					wchar_t *fullpath = CopyUtfToUni(tmp);
+
+					UINT atmark = UniSearchStrEx(fullpath, L"@", 0, true);
+
+					if (atmark != INFINITE)
+					{
+						fullpath[atmark] = 0;
+					}
+
+					UniTrim(fullpath);
+
+					UniTrimDoubleQuotation(fullpath);
+
+					UniTrim(fullpath);
+
+					a->Discard = false;
+					UniStrCpy(a->Note, sizeof(a->Note), fullpath);
+
+					a->UniqueId = FW_PARSED_ACCESS_UNIQUE_ID_EXEPATH;
+
+					a->Jitter = FW_PARSED_ACCESS_JITTER_ALLOW_CLIENT;
+
+					Free(fullpath);
+
+					ret = true;
+				}
+				else
+				{
+					UINT proto = StrToProtocol(first);
+					if (proto == 0 && StrCmpi(first, "ICMP"))
+					{
+						proto = IP_PROTO_ICMPV4;
+					}
+
+					if (proto == IP_PROTO_TCP || proto == IP_PROTO_UDP || IP_PROTO_ICMPV4 || IP_PROTO_ICMPV6)
+					{
+						if (t->NumTokens >= 5)
 						{
-							a->DestIpAddress = IPToUINT(&ip);
-							a->DestSubnetMask = IPToUINT(&mask);
+							char *dir = t->Token[1];
+							char *type = t->Token[2];
+							char *action = t->Token[3];
+							char *remoteip = t->Token[4];
+
+							char *remoteport = t->NumTokens >= 6 ? t->Token[5] : "*";
+							char *localport = t->NumTokens >= 7 ? t->Token[6] : "*";
+
+							bool is_in = StartWith(dir, "i");
+							bool is_new = StartWith(type, "n");
+							bool is_permit = StartWith(action, "p") || StartWith(action, "a") || ToBool(action);
+
+							IP ip = CLEAN;
+							IP mask = CLEAN;
+
+							FwParseIpAndMask(&ip, &mask, remoteip);
+
+							UINT remoteport_start = 0, remoteport_end = 0;
+							UINT localport_start = 0, localport_end = 0;
+
+							FwParsePortRange(&remoteport_start, &remoteport_end, remoteport);
+							FwParsePortRange(&localport_start, &localport_end, localport);
+
+							a->CheckTcpState = true;
+							a->Established = !is_new;
+							a->Active = is_in;
+							a->Discard = !is_permit;
+
+							if (IsIP4(&ip))
+							{
+								a->DestIpAddress = IPToUINT(&ip);
+								a->DestSubnetMask = IPToUINT(&mask);
+							}
+							else
+							{
+								a->IsIPv6 = true;
+								Copy(&a->DestIpAddress6, ip.ipv6_addr, 16);
+								Copy(&a->DestSubnetMask6, mask.ipv6_addr, 16);
+							}
+
+							if (proto == IP_PROTO_ICMPV4 || proto == IP_PROTO_ICMPV6)
+							{
+								proto = a->IsIPv6 ? IP_PROTO_ICMPV6 : IP_PROTO_ICMPV4;
+							}
+
+							a->Protocol = proto;
+
+							a->SrcPortStart = localport_start;
+							a->SrcPortEnd = localport_end;
+
+							a->DestPortStart = remoteport_start;
+							a->DestPortEnd = remoteport_end;
+
+							UINT i;
+							char tmpstr[MAX_SIZE] = CLEAN;
+							for (i = 0;i < t->NumTokens;i++)
+							{
+								StrCat(tmpstr, sizeof(tmpstr), t->Token[i]);
+								StrCat(tmpstr, sizeof(tmpstr), " ");
+							}
+							Trim(tmpstr);
+							StrLower(tmpstr);
+
+							StrToUni(a->Note, sizeof(a->Note), tmpstr);
+
+							ret = true;
 						}
-						else
-						{
-							a->IsIPv6 = true;
-							Copy(&a->DestIpAddress6, ip.ipv6_addr, 16);
-							Copy(&a->DestSubnetMask6, mask.ipv6_addr, 16);
-						}
-
-						if (proto == IP_PROTO_ICMPV4 || proto == IP_PROTO_ICMPV6)
-						{
-							proto = a->IsIPv6 ? IP_PROTO_ICMPV6 : IP_PROTO_ICMPV4;
-						}
-
-						a->Protocol = proto;
-
-						a->SrcPortStart = localport_start;
-						a->SrcPortEnd = localport_end;
-
-						a->DestPortStart = remoteport_start;
-						a->DestPortEnd = remoteport_end;
-
-						UINT i;
-						char tmpstr[MAX_SIZE] = CLEAN;
-						for (i = 0;i < t->NumTokens;i++)
-						{
-							StrCat(tmpstr, sizeof(tmpstr), t->Token[i]);
-							StrCat(tmpstr, sizeof(tmpstr), " ");
-						}
-						Trim(tmpstr);
-						StrLower(tmpstr);
-
-						StrToUni(a->Note, sizeof(a->Note), tmpstr);
-
-						ret = true;
 					}
 				}
 			}
@@ -4336,6 +4527,11 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 		return;
 	}
 
+	// Add this exe as trusted
+	wchar_t *this_exe_path = MsGetExeFileNameW();
+
+	DuFwpAddTrustedExe(hEngine, provider, sublayer, ++index, this_exe_path, FW_PARSED_ACCESS_JITTER_ALLOW_SERVER | FW_PARSED_ACCESS_JITTER_ALLOW_CLIENT, false);
+
 	SeekBufToBegin(buf);
 
 	while (true)
@@ -4346,11 +4542,26 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 			break;
 		}
 
+		if (StrCmpi(line, "exit") == 0 || StrCmpi(line, "eof") == 0)
+		{
+			Free(line);
+			break;
+		}
+
 		ACCESS a = CLEAN;
 
 		if (FwParseRuleStr(&a, line))
 		{
-			DuFwpAddAccess(hEngine, provider, sublayer, ++index, &a);
+			if (a.UniqueId == FW_PARSED_ACCESS_UNIQUE_ID_EXEPATH)
+			{
+				// fw_trusted_exe
+				DuFwpAddTrustedExe(hEngine, provider, sublayer, ++index, a.Note, a.Jitter, true);
+			}
+			else
+			{
+				// Normal ACL
+				DuFwpAddAccess(hEngine, provider, sublayer, ++index, &a);
+			}
 		}
 
 		Free(line);
