@@ -3459,12 +3459,18 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 
 	FWPM_FILTER0 filter = CLEAN;
 	UINT64 weight = ((UINT64)~((UINT64)0)) - (UINT64)index;
-	wchar_t name[256];
+	wchar_t name[MAX_SIZE] = CLEAN;
 	UINT ret;
 	FWPM_FILTER_CONDITION0 c[10] = CLEAN;
 	bool isv4 = !a->IsIPv6;
 
-	UniFormat(name, sizeof(name), L"DuFwpAddAccess_%04u", index);
+	UniFormat(name, sizeof(name), L"_SLF %04u", index);
+
+	if (UniIsFilledStr(a->Note))
+	{
+		UniStrCat(name, sizeof(name), L": ");
+		UniStrCat(name, sizeof(name), a->Note);
+	}
 
 	UINT c_index = 0;
 
@@ -4294,6 +4300,18 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 
 						a->DestPortStart = remoteport_start;
 						a->DestPortEnd = remoteport_end;
+
+						UINT i;
+						char tmpstr[MAX_SIZE] = CLEAN;
+						for (i = 0;i < t->NumTokens;i++)
+						{
+							StrCat(tmpstr, sizeof(tmpstr), t->Token[i]);
+							StrCat(tmpstr, sizeof(tmpstr), " ");
+						}
+						Trim(tmpstr);
+						StrLower(tmpstr);
+
+						StrToUni(a->Note, sizeof(a->Note), tmpstr);
 
 						ret = true;
 					}
