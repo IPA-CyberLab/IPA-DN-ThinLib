@@ -164,8 +164,6 @@ typedef struct DU_ABOUT
 
 
 
-
-
 // 関数プロトタイプ宣言
 void DuMain(DU *du);
 UINT DuMainDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
@@ -279,6 +277,9 @@ void FwParseIpAndMask(IP *ip, IP *mask, char *str);
 void FwParsePortRange(UINT *start, UINT *end, char *str);
 
 void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf);
+
+
+void TfMain(TF_SERVICE *svc);
 
 
 

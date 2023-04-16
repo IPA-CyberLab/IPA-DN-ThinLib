@@ -325,6 +325,7 @@ void EndianUnicode(wchar_t *str);
 
 BUF *NewBuf();
 BUF *NewBufFromMemory(void *buf, UINT size);
+int CmpBuf(BUF *b1, BUF *b2);
 void ClearBuf(BUF *b);
 void ClearBufEx(BUF* b, bool init_buffer);
 void WriteBuf(BUF *b, void *buf, UINT size);

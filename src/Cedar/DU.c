@@ -3972,7 +3972,7 @@ void DuWfpTest2()
 	SleepThread(200);
 
 	SOCK *s = Connect("x1.x2.aaaaa1.servers.ddns.sehosts.com", 80);
-	Print("sock = %u\n", (UINT)s);
+	Print("sock = %u\n", (UINT)(UINT64)s);
 	ReleaseSock(s);
 
 	//SOCK *s = Listen(8181);
@@ -4566,6 +4566,228 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 
 		Free(line);
 	}
+}
+
+void TfMain(TF_SERVICE *svc)
+{
+	if (svc == NULL)
+	{
+		return;
+	}
+
+	UINT64 last_cfg_read = 0;
+	UINT64 last_poll = 0;
+
+	BUF *cfg_file_content = NewBuf();
+
+	LIST *sid_cache = MsNewSidToUsernameCache();
+
+	LIST *ini = ReadIni(cfg_file_content);
+
+	INTERRUPT_MANAGER *im = NewInterruptManager();
+
+	bool cfg_Enable = false;
+	UINT cfg_SettingReloadIntervalMsec = 10000;
+	UINT cfg_WatchPollingIntervalMsec = 250;
+	bool cfg_EnableWatchRdp = false;
+	bool cfg_EnableWatchProcess = false;
+	bool cfg_EnableWatchTcp = false;
+	UINT cfg_ReportMailIntervalMsec = 5000;
+	bool cfg_OnlyWhenLocked = false;
+
+	LIST *current_list = NULL;
+
+	while (svc->HaltFlag == false)
+	{
+		UINT64 now = Tick64();
+
+		if (last_cfg_read == 0 || now >= (last_cfg_read + (UINT64)cfg_SettingReloadIntervalMsec))
+		{
+			// Config file reload
+			BUF *new_content = ReadDumpW(svc->SettingFileName);
+			if (new_content != NULL)
+			{
+				// Compare
+				if (CmpBuf(new_content, cfg_file_content) != 0)
+				{
+					// Reload settings
+					LIST *new_ini = ReadIni(new_content);
+
+					WHERE;
+					FreeIni(ini);
+
+					ini = new_ini;
+
+					FreeBuf(cfg_file_content);
+					cfg_file_content = new_content;
+
+					// Interpret ini
+					cfg_Enable = IniBoolValue(ini, "Enable");
+					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
+					if (cfg_SettingReloadIntervalMsec == 0)
+					{
+						cfg_SettingReloadIntervalMsec = 10000;
+					}
+					cfg_WatchPollingIntervalMsec = IniIntValue(ini, "WatchPollingIntervalMsec");
+					if (cfg_WatchPollingIntervalMsec == 0)
+					{
+						cfg_WatchPollingIntervalMsec = 250;
+					}
+					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
+					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
+					cfg_OnlyWhenLocked = IniBoolValue(ini, "OnlyWhenLocked");
+					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
+					cfg_ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
+					if (cfg_ReportMailIntervalMsec == 0)
+					{
+						cfg_ReportMailIntervalMsec = 5000;
+					}
+				}
+				else
+				{
+					FreeBuf(new_content);
+				}
+			}
+
+			last_cfg_read = now;
+			AddInterrupt(im, now + (UINT64)cfg_SettingReloadIntervalMsec);
+		}
+
+		if (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec))
+		{
+			last_poll = now;
+			AddInterrupt(im, now + (UINT64)cfg_WatchPollingIntervalMsec);
+
+			if (cfg_Enable)
+			{
+				// Determine whether run the watch procedures
+				bool is_locked = false;
+
+				if (cfg_OnlyWhenLocked)
+				{
+					if (svc->Mode == TF_SVC_MODE_SYSTEMMODE)
+					{
+						// Use the terminal service API
+						is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
+					}
+				}
+				else
+				{
+					is_locked = true;
+				}
+
+				if (is_locked)
+				{
+					LIST *now_list = MsGetThinFwList(sid_cache);
+
+					if (current_list == NULL)
+					{
+						// Initialize
+						current_list = NewDiffList();
+
+						LIST *diff = UpdateDiffList(current_list, now_list);
+
+						// Do not use the result of diff
+						FreeDiffList(diff);
+					}
+					else
+					{
+						// Update
+						LIST *diff = UpdateDiffList(current_list, now_list);
+
+						Print("%u\n", LIST_NUM(diff));
+
+						FreeDiffList(diff);
+					}
+
+					FreeDiffList(now_list);
+				}
+				else
+				{
+					if (current_list != NULL)
+					{
+						// Free
+						FreeDiffList(current_list);
+						current_list = NULL;
+					}
+				}
+			}
+		}
+
+		UINT wait_interval = GetNextIntervalForInterrupt(im);
+
+		if (wait_interval == 0)
+		{
+			wait_interval = 50;
+		}
+
+		Wait(svc->HaltEvent, wait_interval);
+	}
+
+	if (current_list != NULL)
+	{
+		// Free
+		FreeDiffList(current_list);
+		current_list = NULL;
+	}
+
+	FreeInterruptManager(im);
+
+	FreeBuf(cfg_file_content);
+
+	FreeIni(ini);
+
+	MsFreeSidToUsernameCache(sid_cache);
+}
+
+void TfThreadProc(THREAD *thread, void *param)
+{
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	TF_SERVICE *svc = param;
+
+	TfMain(svc);
+}
+
+void TfStopService(TF_SERVICE *svc)
+{
+	if (svc == NULL)
+	{
+		return;
+	}
+
+	svc->HaltFlag = true;
+	Set(svc->HaltEvent);
+
+	WaitThread(svc->Thread, INFINITE);
+	ReleaseThread(svc->Thread);
+
+	ReleaseEvent(svc->HaltEvent);
+
+	Free(svc);
+}
+
+TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename)
+{
+	if (setting_filename == NULL)
+	{
+		return NULL;
+	}
+
+	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
+
+	svc->Mode = mode;
+
+	UniStrCpy(svc->SettingFileName, sizeof(svc->SettingFileName), setting_filename);
+
+	svc->HaltEvent = NewEvent();
+
+	svc->Thread = NewThread(TfThreadProc, svc);
+
+	return svc;
 }
 
 #endif	// _WIN32

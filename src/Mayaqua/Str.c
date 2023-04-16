@@ -1158,6 +1158,18 @@ bool InStrEx(char *str, char *keyword, bool case_sensitive)
 	return true;
 }
 
+bool IniBoolValue(LIST *o, char *key)
+{
+	if (o == NULL || key == NULL)
+	{
+		return false;
+	}
+
+	char *s = IniStrValue(o, key);
+
+	return ToBool(s);
+}
+
 // Get a value from the INI
 UINT IniIntValue(LIST *o, char *key)
 {

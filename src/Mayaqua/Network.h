@@ -1358,6 +1358,7 @@ bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configu
 bool GetHostNameInner(char *hostname, UINT size, IP *ip);
 bool GetHostNameInner6(char *hostname, UINT size, IP *ip);
 bool GetHostName(char *hostname, UINT size, IP *ip);
+bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name);
 void GetHostNameThread(THREAD *t, void *p);
 void GetMachineName(char *name, UINT size);
 void GetMachineNameEx(char *name, UINT size, bool no_load_hosts);

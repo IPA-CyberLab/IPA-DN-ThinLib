@@ -77,6 +77,22 @@
 #ifndef	DU_H
 #define DU_H
 
+#define	TF_SVC_MODE_SYSTEMMODE		0
+#define	TF_SVC_MODE_USERNAME		1
+
+struct TF_SERVICE
+{
+	UINT Mode;
+	wchar_t SettingFileName[MAX_PATH];
+	EVENT *HaltEvent;
+	bool HaltFlag;
+	THREAD *Thread;
+};
+
 void DUExec();
+
+TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename);
+void TfStopService(TF_SERVICE *svc);
+void TfThreadProc(THREAD *thread, void *param);
 
 #endif	// DU_H

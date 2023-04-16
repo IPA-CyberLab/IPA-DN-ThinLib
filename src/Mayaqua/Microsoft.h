@@ -790,6 +790,42 @@ typedef struct MS_SID_INFO
 	wchar_t DomainName[MAX_SIZE];
 } MS_SID_INFO;
 
+#define	MS_THINFW_ENTRY_TYPE_PROCESS		0
+#define	MS_THINFW_ENTRY_TYPE_TCP			1
+#define	MS_THINFW_ENTRY_TYPE_RDP			2
+
+typedef struct MS_THINFW_ENTRY_PROCESS
+{
+	wchar_t ExeFilenameW[MAX_PATH];	// EXE file name (Unicode)
+	wchar_t CommandLineW[MAX_SIZE];	// Command line
+	UINT ProcessId;					// Process ID
+	UINT SessionId;				    // TS session ID
+	bool Is64BitProcess;			// Is 64bit Process
+	wchar_t Username[MAX_PATH];
+	wchar_t Domain[MAX_PATH];
+} MS_THINFW_ENTRY_PROCESS;
+
+typedef struct MS_THINFW_ENTRY_TCP
+{
+	TCPTABLE Tcp;
+	bool HasProcessInfo;
+	MS_THINFW_ENTRY_PROCESS Process;
+} MS_THINFW_ENTRY_TCP;
+
+typedef struct MS_THINFW_ENTRY_RDP
+{
+	UINT SessionId;
+	wchar_t WinStationName[64];
+	char SessionState[16];
+	wchar_t Username[128];
+	wchar_t Domain[64];
+	wchar_t ClientName[64];
+	wchar_t ClientUsername[128];
+	wchar_t ClientDomain[64];
+	IP ClientAddress;
+	UINT ClientBuild;
+} MS_THINFW_ENTRY_RDP;
+
 
 // Function prototype
 void MsInit();
@@ -1401,6 +1437,8 @@ LIST *MsNewSidToUsernameCache();
 MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
 void MsFreeSidToUsernameCache(LIST *cache_list);
 
+LIST *MsGetThinFwList(LIST *sid_cache);
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);
 
 // Inner functions
 #ifdef	MICROSOFT_C
@@ -1439,6 +1477,7 @@ bool CALLBACK MsEnumResourcesInternalProc(HMODULE hModule, const char *type, cha
 void CALLBACK MsScmDispatcher(DWORD argc, LPTSTR *argv);
 LRESULT CALLBACK MsSuspendHandlerWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void MsSuspendHandlerThreadProc(THREAD *thread, void *param);
+
 
 #endif	// MICROSOFT_C
 

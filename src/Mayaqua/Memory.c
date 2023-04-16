@@ -3526,6 +3526,36 @@ BUF *NewBuf()
 	return b;
 }
 
+// Compare BUF
+int CmpBuf(BUF *b1, BUF *b2)
+{
+	if (b1 == NULL && b2 != NULL)
+	{
+		return 1;
+	}
+	if (b1 != NULL && b2 == NULL)
+	{
+		return -1;
+	}
+	if (b1 == NULL || b2 == NULL)
+	{
+		return 0;
+	}
+
+	if (b1->Size < b2->Size)
+	{
+		return 1;
+	}
+	else if (b1->Size > b2->Size)
+	{
+		return -1;
+	}
+	else
+	{
+		return Cmp(b1->Buf, b2->Buf, b1->Size);
+	}
+}
+
 // Clearing the buffer
 void ClearBuf(BUF* b)
 {
@@ -5183,15 +5213,25 @@ void ShuffleWithSeed(UINT* array, UINT size, void* seed, UINT seed_size)
 
 int CompareDiffList(void *p1, void *p2)
 {
-	if (p1 == NULL || p2 == NULL)
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+	else if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	else if (p1 == NULL || p2 == NULL)
 	{
 		return 0;
 	}
 
-	DIFF_ENTRY *e1 = (DIFF_ENTRY *)p1;
-	DIFF_ENTRY *e2 = (DIFF_ENTRY *)p2;
+	DIFF_ENTRY *e1 = *((DIFF_ENTRY **)p1);
+	DIFF_ENTRY *e2 = *((DIFF_ENTRY **)p2);
 
-	return UniStrCmp(e1->Key, e2->Key);
+	int r = UniStrCmp(e1->Key, e2->Key);
+
+	return r;
 }
 
 LIST *NewDiffList()
@@ -5292,6 +5332,8 @@ DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param,
 
 	e->Param = param;
 	e->Tick = tick;
+
+	UniStrCpy(e->Key, sizeof(e->Key), key);
 
 	return e;
 }
