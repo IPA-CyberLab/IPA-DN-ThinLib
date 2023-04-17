@@ -232,6 +232,19 @@ struct LOCKOUT
 	LIST* EntryList;
 };
 
+#define	DIFF_ENTRY_DATASIZE		4096
+
+// Diff
+struct DIFF_ENTRY
+{
+	wchar_t Key[MAX_SIZE];
+	UINT64 Tick;
+	bool IsAdded, IsRemoved;
+	UCHAR Data[DIFF_ENTRY_DATASIZE];
+	UINT DataSize;
+	UINT64 Param;
+};
+
 // Function prototype
 HASH_LIST *NewHashList(GET_HASH *get_hash_proc, COMPARE *compare_proc, UINT bits, bool make_list);
 void ReleaseHashList(HASH_LIST *h);
@@ -312,6 +325,7 @@ void EndianUnicode(wchar_t *str);
 
 BUF *NewBuf();
 BUF *NewBufFromMemory(void *buf, UINT size);
+int CmpBuf(BUF *b1, BUF *b2);
 void ClearBuf(BUF *b);
 void ClearBufEx(BUF* b, bool init_buffer);
 void WriteBuf(BUF *b, void *buf, UINT size);
@@ -521,6 +535,14 @@ UINT* GenerateShuffleList(UINT num);
 UINT* GenerateShuffleListWithSeed(UINT num, void* seed, UINT seed_size);
 void Shuffle(UINT* array, UINT size);
 void ShuffleWithSeed(UINT* array, UINT size, void* seed, UINT seed_size);
+
+int CompareDiffList(void *p1, void *p2);
+LIST *NewDiffList();
+void FreeDiffList(LIST *list);
+LIST *UpdateDiffList(LIST *base_list, LIST *new_items);
+DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
+
+
 
 #endif	// MEMORY_H
 

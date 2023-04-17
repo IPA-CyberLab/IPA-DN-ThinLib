@@ -1798,7 +1798,7 @@ SOCK *WtSockConnectHttpProxy(WT_CONNECT *param, char *target, UINT *error_code)
 	case PROXY_HTTP:
 		sock = ProxyConnectEx2(&c, param->ProxyHostName, param->ProxyPort,
 			param->HostName, param->Port,
-			param->ProxyUsername, param->ProxyPassword, false, NULL, NULL, 0, param->ProxyUserAgent);
+			param->ProxyUsername, param->ProxyPassword, false, NULL, NULL, 0, param->ProxyUserAgent, 0);
 		if (sock == NULL)
 		{
 			err = c.Err;

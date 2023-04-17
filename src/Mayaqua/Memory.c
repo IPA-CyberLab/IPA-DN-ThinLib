@@ -3526,6 +3526,36 @@ BUF *NewBuf()
 	return b;
 }
 
+// Compare BUF
+int CmpBuf(BUF *b1, BUF *b2)
+{
+	if (b1 == NULL && b2 != NULL)
+	{
+		return 1;
+	}
+	if (b1 != NULL && b2 == NULL)
+	{
+		return -1;
+	}
+	if (b1 == NULL || b2 == NULL)
+	{
+		return 0;
+	}
+
+	if (b1->Size < b2->Size)
+	{
+		return 1;
+	}
+	else if (b1->Size > b2->Size)
+	{
+		return -1;
+	}
+	else
+	{
+		return Cmp(b1->Buf, b2->Buf, b1->Size);
+	}
+}
+
 // Clearing the buffer
 void ClearBuf(BUF* b)
 {
@@ -5180,5 +5210,133 @@ void ShuffleWithSeed(UINT* array, UINT size, void* seed, UINT seed_size)
 	}
 	FreeSeedRand(rand);
 }
+
+int CompareDiffList(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+	else if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	else if (p1 == NULL || p2 == NULL)
+	{
+		return 0;
+	}
+
+	DIFF_ENTRY *e1 = *((DIFF_ENTRY **)p1);
+	DIFF_ENTRY *e2 = *((DIFF_ENTRY **)p2);
+
+	int r = UniStrCmp(e1->Key, e2->Key);
+
+	return r;
+}
+
+LIST *NewDiffList()
+{
+	return NewList(CompareDiffList);
+}
+
+void FreeDiffList(LIST *list)
+{
+	if (list == NULL)
+	{
+		return;
+	}
+
+	UINT i;
+
+	for (i = 0;i < LIST_NUM(list);i++)
+	{
+		DIFF_ENTRY *e = LIST_DATA(list, i);
+
+		Free(e);
+	}
+
+	ReleaseList(list);
+}
+
+LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
+{
+	if (base_list == NULL || new_items == NULL)
+	{
+		return NewDiffList();
+	}
+
+	LIST *ret = NewDiffList();
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(new_items);i++)
+	{
+		DIFF_ENTRY *e = LIST_DATA(new_items, i);
+
+		DIFF_ENTRY *exist = Search(base_list, e);
+
+		if (exist == NULL)
+		{
+			DIFF_ENTRY *e_clone = Clone(e, sizeof(DIFF_ENTRY));
+
+			Insert(base_list, e_clone);
+
+			DIFF_ENTRY *e_clone2 = Clone(e, sizeof(DIFF_ENTRY));
+			e_clone2->IsAdded = true;
+
+			Insert(ret, e_clone2);
+		}
+	}
+
+	LIST *delete_list = NewDiffList();
+
+	for (i = 0;i < LIST_NUM(base_list);i++)
+	{
+		DIFF_ENTRY *e = LIST_DATA(base_list, i);
+
+		DIFF_ENTRY *exist = Search(new_items, e);
+
+		if (exist == NULL)
+		{
+			Add(delete_list, e);
+
+			DIFF_ENTRY *e_clone2 = Clone(e, sizeof(DIFF_ENTRY));
+			e_clone2->IsRemoved = true;
+
+			Insert(ret, e_clone2);
+		}
+	}
+
+	for (i = 0;i < LIST_NUM(delete_list);i++)
+	{
+		DIFF_ENTRY *e = LIST_DATA(delete_list, i);
+
+		Delete(base_list, e);
+
+		Free(e);
+	}
+
+	ReleaseList(delete_list);
+
+	return ret;
+}
+
+DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick)
+{
+	if (key == NULL) key = L"";
+	if (tick == 0) tick = Tick64();
+
+	DIFF_ENTRY *e = ZeroMalloc(sizeof(DIFF_ENTRY));
+
+	Copy(e->Data, data, MIN(data_size, DIFF_ENTRY_DATASIZE));
+	e->DataSize = data_size;
+
+	e->Param = param;
+	e->Tick = tick;
+
+	UniStrCpy(e->Key, sizeof(e->Key), key);
+
+	return e;
+}
+
 
 

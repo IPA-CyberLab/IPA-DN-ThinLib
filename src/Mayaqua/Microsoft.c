@@ -82,19 +82,19 @@
 #define	MICROSOFT_C
 
 typedef enum    _PNP_VETO_TYPE {
-    PNP_VetoTypeUnknown,            // Name is unspecified
-    PNP_VetoLegacyDevice,           // Name is an Instance Path
-    PNP_VetoPendingClose,           // Name is an Instance Path
-    PNP_VetoWindowsApp,             // Name is a Module
-    PNP_VetoWindowsService,         // Name is a Service
-    PNP_VetoOutstandingOpen,        // Name is an Instance Path
-    PNP_VetoDevice,                 // Name is an Instance Path
-    PNP_VetoDriver,                 // Name is a Driver Service Name
-    PNP_VetoIllegalDeviceRequest,   // Name is an Instance Path
-    PNP_VetoInsufficientPower,      // Name is unspecified
-    PNP_VetoNonDisableable,         // Name is an Instance Path
-    PNP_VetoLegacyDriver,           // Name is a Service
-    PNP_VetoInsufficientRights      // Name is unspecified
+	PNP_VetoTypeUnknown,            // Name is unspecified
+	PNP_VetoLegacyDevice,           // Name is an Instance Path
+	PNP_VetoPendingClose,           // Name is an Instance Path
+	PNP_VetoWindowsApp,             // Name is a Module
+	PNP_VetoWindowsService,         // Name is a Service
+	PNP_VetoOutstandingOpen,        // Name is an Instance Path
+	PNP_VetoDevice,                 // Name is an Instance Path
+	PNP_VetoDriver,                 // Name is a Driver Service Name
+	PNP_VetoIllegalDeviceRequest,   // Name is an Instance Path
+	PNP_VetoInsufficientPower,      // Name is unspecified
+	PNP_VetoNonDisableable,         // Name is an Instance Path
+	PNP_VetoLegacyDriver,           // Name is a Service
+	PNP_VetoInsufficientRights      // Name is unspecified
 }   PNP_VETO_TYPE, *PPNP_VETO_TYPE;
 
 #define	_WIN32_IE			0x0600
@@ -161,9 +161,9 @@ static MS_ADAPTER_LIST *last_adapter_list = NULL;
 static SERVICE_STATUS_HANDLE ssh = NULL;
 static SERVICE_STATUS status = { 0 };
 static HANDLE service_stop_event = NULL;
-static BOOL (WINAPI *_StartServiceCtrlDispatcher)(CONST LPSERVICE_TABLE_ENTRY) = NULL;
-static SERVICE_STATUS_HANDLE (WINAPI *_RegisterServiceCtrlHandler)(LPCTSTR, LPHANDLER_FUNCTION) = NULL;
-static BOOL (WINAPI *_SetServiceStatus)(SERVICE_STATUS_HANDLE, LPSERVICE_STATUS) = NULL;
+static BOOL(WINAPI *_StartServiceCtrlDispatcher)(CONST LPSERVICE_TABLE_ENTRY) = NULL;
+static SERVICE_STATUS_HANDLE(WINAPI *_RegisterServiceCtrlHandler)(LPCTSTR, LPHANDLER_FUNCTION) = NULL;
+static BOOL(WINAPI *_SetServiceStatus)(SERVICE_STATUS_HANDLE, LPSERVICE_STATUS) = NULL;
 static char g_service_name[MAX_SIZE];
 static SERVICE_FUNCTION *g_start, *g_stop;
 static bool exiting = false;
@@ -189,10 +189,10 @@ static volatile UINT64 vlan_suspend_mode_begin_tick = 0;
 
 // msi.dll
 static HINSTANCE hMsi = NULL;
-static UINT (WINAPI *_MsiGetProductInfoW)(LPCWSTR, LPCWSTR, LPWSTR, LPDWORD) = NULL;
-static UINT (WINAPI *_MsiConfigureProductW)(LPCWSTR, int, INSTALLSTATE) = NULL;
-static INSTALLUILEVEL (WINAPI *_MsiSetInternalUI)(INSTALLUILEVEL, HWND *) = NULL;
-static INSTALLSTATE (WINAPI *_MsiLocateComponentW)(LPCWSTR, LPWSTR, LPDWORD) = NULL;
+static UINT(WINAPI *_MsiGetProductInfoW)(LPCWSTR, LPCWSTR, LPWSTR, LPDWORD) = NULL;
+static UINT(WINAPI *_MsiConfigureProductW)(LPCWSTR, int, INSTALLSTATE) = NULL;
+static INSTALLUILEVEL(WINAPI *_MsiSetInternalUI)(INSTALLUILEVEL, HWND *) = NULL;
+static INSTALLSTATE(WINAPI *_MsiLocateComponentW)(LPCWSTR, LPWSTR, LPDWORD) = NULL;
 
 #define SE_GROUP_INTEGRITY                 (0x00000020L)
 
@@ -238,6 +238,60 @@ typedef struct MS_MSCHAPV2_PARAMS
 	UCHAR ResponseBuffer[MAX_SIZE];
 } MS_MSCHAPV2_PARAMS;
 
+// WTSQuerySessionInformationW 用の構造体のパディングについて、Win32 SDK にバグがある。
+// 32bit 環境でデータが崩れる。
+// そこで、Padding を手動で設定した構造体を用意した。
+typedef struct _WTSINFOEX_LEVEL1_W_FIX1 {
+	ULONG SessionId;
+	WTS_CONNECTSTATE_CLASS SessionState;
+	LONG SessionFlags;
+	WCHAR WinStationName[WINSTATIONNAME_LENGTH + 1];
+	WCHAR UserName[USERNAME_LENGTH + 1];
+	WCHAR DomainName[DOMAIN_LENGTH + 1];
+	DWORD _32bitPadding;
+	LARGE_INTEGER LogonTime;
+	LARGE_INTEGER ConnectTime;
+	LARGE_INTEGER DisconnectTime;
+	LARGE_INTEGER LastInputTime;
+	LARGE_INTEGER CurrentTime;
+	DWORD IncomingBytes;
+	DWORD OutgoingBytes;
+	DWORD IncomingFrames;
+	DWORD OutgoingFrames;
+	DWORD IncomingCompressedBytes;
+	DWORD OutgoingCompressedBytes;
+} WTSINFOEX_LEVEL1_W_FIX1, *PWTSINFOEX_LEVEL1_W_FIX1;
+
+typedef struct _WTSINFOEXW_FIX1 {
+	DWORD Level;
+	DWORD _32bitPadding;
+	WTSINFOEX_LEVEL1_W_FIX1 Data;
+} WTSINFOEXW_FIX1, *PWTSINFOEXW_FIX1;
+
+typedef enum NT_WINSTATIONINFOCLASS {
+	WinStationRemoteAddress = 29,
+} NT_WINSTATIONINFOCLASS;
+
+// https://stackoverflow.com/questions/63493633/getting-public-ip-address-of-a-remotes-desktop-client
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
+typedef struct {
+	unsigned short sin_family;
+	union {
+		struct {
+			USHORT sin_port;
+			ULONG in_addr;
+			UCHAR sin_zero[8];
+		} ipv4;
+		struct {
+			USHORT sin6_port;
+			ULONG sin6_flowinfo;
+			USHORT sin6_addr[8];
+			ULONG sin6_scope_id;
+		} ipv6;
+	};
+} NT_WINSTATIONREMOTEADDRESS,
+*NT_PWINSTATIONREMOTEADDRESS;
+
 // The function which should be called once as soon as possible after the process is started
 void MsInitProcessCallOnce(bool restricted_mode)
 {
@@ -261,13 +315,13 @@ void MsInitProcessCallOnce(bool restricted_mode)
 	hKernel32 = LoadLibraryA(kernel32_path);
 	if (hKernel32 != NULL)
 	{
-		BOOL (WINAPI *_SetDllDirectoryA)(LPCTSTR);
-		BOOL (WINAPI *_SetDllDirectoryW)(LPCWSTR);
+		BOOL(WINAPI * _SetDllDirectoryA)(LPCTSTR);
+		BOOL(WINAPI * _SetDllDirectoryW)(LPCWSTR);
 
-		_SetDllDirectoryA = (BOOL (WINAPI *)(LPCTSTR))
+		_SetDllDirectoryA = (BOOL(WINAPI *)(LPCTSTR))
 			GetProcAddress(hKernel32, "SetDllDirectoryA");
 
-		_SetDllDirectoryW = (BOOL (WINAPI *)(LPCWSTR))
+		_SetDllDirectoryW = (BOOL(WINAPI *)(LPCWSTR))
 			GetProcAddress(hKernel32, "SetDllDirectoryW");
 
 		if (_SetDllDirectoryA != NULL)
@@ -282,8 +336,8 @@ void MsInitProcessCallOnce(bool restricted_mode)
 
 		if (restricted_mode)
 		{
-			BOOL (WINAPI *_SetDefaultDllDirectories)(DWORD) =
-				(BOOL (WINAPI *)(DWORD))
+			BOOL(WINAPI * _SetDefaultDllDirectories)(DWORD) =
+				(BOOL(WINAPI *)(DWORD))
 				GetProcAddress(hKernel32, "SetDefaultDllDirectories");
 
 			if (_SetDefaultDllDirectories != NULL)
@@ -305,6 +359,380 @@ void MsTestFunc1(HWND hWnd)
 		DWORD err = GetLastError();
 		Print("err = %u\n", err);
 	}
+}
+
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc)
+{
+	if (data == NULL || proc == NULL || sid_cache == NULL)
+	{
+		return;
+	}
+
+	Zero(data, sizeof(MS_THINFW_ENTRY_PROCESS));
+
+	wchar_t username[MAX_PATH] = CLEAN;
+	wchar_t domain[MAX_PATH] = CLEAN;
+
+	MS_SID_INFO *sid_info = MsGetUsernameFromSid(sid_cache, proc->SidData, proc->SidSize);
+	if (sid_info == NULL)
+	{
+		UniStrCpy(username, sizeof(username), L"(unknown_user)");
+		UniStrCpy(domain, sizeof(domain), L".");
+	}
+	else
+	{
+		UniStrCpy(username, sizeof(username), sid_info->Username);
+		UniStrCpy(domain, sizeof(domain), sid_info->DomainName);
+	}
+
+	UniStrCpy(data->ExeFilenameW, sizeof(data->ExeFilenameW), proc->ExeFilenameW);
+	UniStrCpy(data->CommandLineW, sizeof(data->CommandLineW), proc->CommandLineW);
+	data->ProcessId = proc->ProcessId;
+	data->SessionId = proc->SessionId;
+	data->Is64BitProcess = proc->Is64BitProcess;
+	UniStrCpy(data->Username, sizeof(data->Username), username);
+	UniStrCpy(data->Domain, sizeof(data->Domain), domain);
+}
+
+char *MsGetWtsSessionStateStr(UINT state)
+{
+	switch (state)
+	{
+	case WTSActive: return "Active";
+	case WTSConnected: return "Connected";
+	case WTSConnectQuery: return "Connected";
+	case WTSShadow: return "Shadow";
+	case WTSDisconnected: return "Disconnected";
+	case WTSIdle: return "Idle";
+	case WTSListen: return "Listen";
+	case WTSReset: return "Reset";
+	case WTSDown: return "Down";
+	case WTSInit: return "Init";
+	default: return "Unknown";
+	}
+}
+
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
+{
+	if (sid_cache == NULL)
+	{
+		return NULL;
+	}
+
+	wchar_t key[MAX_SIZE];
+
+	LIST *ret = NewDiffList();
+
+	UINT64 tick = Tick64();
+
+	LIST *process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE);
+
+	LIST *tcp_list = GetTcpTableList();
+
+	// Terminal Sessions List
+	if (true)
+	{
+		WTS_SESSION_INFOA *info = CLEAN;
+		UINT count = 0;
+
+		UINT num_unlocked_sessions = 0;
+
+		if (MsIsNt() == false || ms->nt->WTSEnumerateSessionsA == NULL ||
+			ms->nt->WTSQuerySessionInformationW == NULL || ms->nt->WTSFreeMemory == NULL ||
+			MsIsWindows7() == false ||
+			ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
+		{
+		}
+		else
+		{
+			UINT i;
+			for (i = 0;i < count;i++)
+			{
+				WTS_SESSION_INFOA *a = &info[i];
+
+				WTSINFOEXW_FIX1 *ex = CLEAN;
+				DWORD retsize = 0;
+
+				if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+				{
+					//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
+					WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+
+					MS_THINFW_ENTRY_RDP data = CLEAN;
+
+					data.SessionId = ex1->SessionId;
+					UniStrCpy(data.WinStationName, sizeof(data.WinStationName), ex1->WinStationName);
+
+					if (UniStrCmpi(data.WinStationName, L"Services") == 0 ||
+						UniStrCmpi(data.WinStationName, L"Console") == 0 ||
+						UniStrCmpi(data.WinStationName, L"") == 0 ||
+						ex1->SessionState == WTSShadow ||
+						ex1->SessionState == WTSDisconnected ||
+						ex1->SessionState == WTSIdle ||
+						ex1->SessionState == WTSListen ||
+						ex1->SessionState == WTSReset ||
+						ex1->SessionState == WTSDown ||
+						ex1->SessionState == WTSInit)
+					{
+					}
+					else
+					{
+						char *state_str = MsGetWtsSessionStateStr(ex1->SessionState);
+
+						StrCpy(data.SessionState, sizeof(data.SessionState), state_str);
+
+						UniStrCpy(data.Username, sizeof(data.Username), ex1->UserName);
+						UniStrCpy(data.Domain, sizeof(data.Domain), ex1->DomainName);
+
+						WTSCLIENTW *client_info = CLEAN;
+						DWORD retsize = 0;
+
+						bool ok = true;
+
+						// https://learn.microsoft.com/en-us/previous-versions/aa383827(v=vs.85)
+						// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
+						if (ms->nt->WinStationQueryInformationW != NULL)
+						{
+							NT_WINSTATIONREMOTEADDRESS ntaddr = CLEAN;
+
+							UINT retsize = 0;
+
+							if (ms->nt->WinStationQueryInformationW(NULL,
+								ex1->SessionId,
+								WinStationRemoteAddress,
+								&ntaddr,
+								sizeof(ntaddr),
+								&retsize) && retsize == sizeof(ntaddr))
+							{
+								if (ntaddr.sin_family == AF_INET)
+								{
+									UCHAR ipv4_addr[4] = CLEAN;
+									Copy(ipv4_addr, &ntaddr.ipv4.in_addr, 4);
+									InAddrToIP(&data.ClientIp, (struct in_addr *)ipv4_addr);
+								}
+								else if (ntaddr.sin_family == AF_INET6)
+								{
+									IPV6_ADDR addr = CLEAN;
+									Copy(&addr, ntaddr.ipv6.sin6_addr, 16);
+									IPv6AddrToIP(&data.ClientIp, &addr);
+									// data.ClientIp.ipv6_scope_id = ntaddr.ipv6.sin6_scope_id; // alwayz zero!!
+								}
+							}
+						}
+
+						if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+							WTSClientInfo, (void *)&client_info, &retsize) && retsize >= sizeof(WTSCLIENTW))
+						{
+							UniStrCpy(data.ClientLocalMachineName, sizeof(data.ClientLocalMachineName), client_info->ClientName);
+
+							if (client_info->ClientAddressFamily == AF_INET)
+							{
+								UCHAR ipv4_addr[4] = CLEAN;
+								UINT i;
+								for (i = 0;i < 4;i++)
+								{
+									ipv4_addr[i] = (UCHAR)client_info->ClientAddress[i];
+								}
+								InAddrToIP(&data.ClientLocalIp, (struct in_addr *)ipv4_addr);
+							}
+							else if (client_info->ClientAddressFamily == AF_INET6)
+							{
+								IPV6_ADDR addr = CLEAN;
+								UINT i;
+								for (i = 0;i < 8;i++)
+								{
+									USHORT us = client_info->ClientAddress[i];
+									us = Endian16(us);
+									Copy(&addr.Value[i * 2], &us, 2);
+								}
+								IPv6AddrToIP(&data.ClientLocalIp, &addr);
+							}
+
+							data.ClientLocalBuild = client_info->ClientBuildNumber;
+
+							ms->nt->WTSFreeMemory(client_info);
+						}
+
+						ms->nt->WTSFreeMemory(ex);
+
+						UniFormat(key, sizeof(key), L"RDP:%u:%s:%S:%s:%s:%s:[%r]:%u:[%r]",
+							data.SessionId, data.WinStationName, data.SessionState,
+							data.Username, data.Domain, data.ClientLocalMachineName,
+							&data.ClientLocalIp, data.ClientLocalBuild,
+							&data.ClientIp);
+
+						if (flags & MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP)
+						{
+							if (IsLocalHostIP(&data.ClientIp))
+							{
+								ok = false;
+							}
+						}
+
+						if (ok)
+						{
+							UniPrint(L"%s\n", key);
+
+							Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
+						}
+					}
+				}
+			}
+
+			ms->nt->WTSFreeMemory(info);
+		}
+	}
+
+	// Process list
+	if (process_list != NULL)
+	{
+		UINT i;
+
+		for (i = 0;i < LIST_NUM(process_list);i++)
+		{
+			MS_PROCESS *proc = LIST_DATA(process_list, i);
+
+			MS_THINFW_ENTRY_PROCESS data = CLEAN;
+
+			MsProcessToThinFwEntryProcess(sid_cache, &data, proc);
+
+			UniFormat(key, sizeof(key), L"PROC:%u:%s", data.ProcessId, data.ExeFilenameW);
+
+			//Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_PROCESS, process_tick));
+		}
+	}
+
+	// TCP list
+	if (tcp_list != NULL)
+	{
+		UINT i;
+
+		for (i = 0;i < LIST_NUM(tcp_list);i++)
+		{
+			TCPTABLE *t = LIST_DATA(tcp_list, i);
+
+			if (t->Status == TCP_STATE_SYN_SENT || t->Status == TCP_STATE_SYN_RCVD ||
+				t->Status == TCP_STATE_ESTAB || t->Status == TCP_STATE_FIN_WAIT1 ||
+				t->Status == TCP_STATE_FIN_WAIT2 || t->Status == TCP_STATE_CLOSE_WAIT ||
+				t->Status == TCP_STATE_CLOSING || t->Status == TCP_STATE_LAST_ACK ||
+				t->Status == TCP_STATE_TIME_WAIT)
+			{
+				MS_THINFW_ENTRY_TCP data = CLEAN;
+
+				Copy(&data.Tcp, t, sizeof(TCPTABLE));
+
+				if (t->ProcessId != 0)
+				{
+					MS_PROCESS *proc = MsSearchProcessById(process_list, t->ProcessId);
+
+					if (proc != NULL)
+					{
+						MsProcessToThinFwEntryProcess(sid_cache, &data.Process, proc);
+
+						data.HasProcessInfo = true;
+					}
+				}
+
+				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u:%u:%u",
+					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort,
+					t->Status, t->ProcessId);
+
+				//Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
+			}
+		}
+	}
+
+	FreeTcpTableList(tcp_list);
+
+	MsFreeProcessList(process_list);
+
+	return ret;
+}
+
+LIST *MsNewSidToUsernameCache()
+{
+	LIST *ret = NewList(NULL);
+
+	return ret;
+}
+
+void MsFreeSidToUsernameCache(LIST *cache_list)
+{
+	if (cache_list == NULL)
+	{
+		return;
+	}
+
+	// Search cache
+	UINT i;
+	for (i = 0;i < LIST_NUM(cache_list);i++)
+	{
+		MS_SID_INFO *e = LIST_DATA(cache_list, i);
+
+		Free(e);
+	}
+
+	ReleaseList(cache_list);
+}
+
+MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size)
+{
+	if (MsIsNt() == false)
+	{
+		return NULL;
+	}
+
+	MS_SID_INFO *e;
+
+	if (cache_list == NULL || sid_data == NULL || sid_size == 0 || sid_size >= sizeof(e->SidData))
+	{
+		return NULL;
+	}
+
+	// Search cache
+	UINT i;
+	for (i = 0;i < LIST_NUM(cache_list);i++)
+	{
+		MS_SID_INFO *e = LIST_DATA(cache_list, i);
+
+		if (ms->nt->EqualSid(e->SidData, sid_data))
+		{
+			// match
+			return e;
+		}
+	}
+
+	if (LIST_NUM(cache_list) >= 256)
+	{
+		// Cache is full
+		return NULL;
+	}
+
+	// Try lookup
+	wchar_t username[MAX_SIZE] = CLEAN;
+	wchar_t domain[MAX_SIZE] = CLEAN;
+	UINT username_size = 200;
+	UINT domain_size = 200;
+	SID_NAME_USE sidName = CLEAN;
+
+	if (ms->nt->LookupAccountSidW(NULL, sid_data, username, &username_size, domain, &domain_size, &sidName) == false)
+	{
+		// erorr
+		UniStrCpy(username, sizeof(username), L"(unknown_user)");
+		UniStrCpy(domain, sizeof(domain), L".");
+	}
+
+	e = ZeroMalloc(sizeof(MS_SID_INFO));
+	e->SidSize = sid_size;
+	Copy(e->SidData, sid_data, sid_size);
+
+	UniStrCpy(e->Username, sizeof(e->Username), username);
+	UniStrCpy(e->DomainName, sizeof(e->DomainName), domain);
+
+	Add(cache_list, e);
+
+	return e;
 }
 
 typedef struct _MS_GETADDRINFOEXW_CTX
@@ -415,7 +843,7 @@ bool MsIsFastStartupEnabled()
 }
 
 // プロセスウォッチャーを常時動作させるかどうかの設定
-void MsSetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER* w, bool flag)
+void MsSetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER *w, bool flag)
 {
 	if (w == NULL)
 	{
@@ -424,7 +852,7 @@ void MsSetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER* w, bool flag)
 
 	w->Always = flag;
 }
-bool MsGetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER* w)
+bool MsGetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER *w)
 {
 	if (w == NULL)
 	{
@@ -435,7 +863,7 @@ bool MsGetProcessWatcherAlwaysFlag(MS_PROCESS_WATCHER* w)
 }
 
 // プロセスウォッチャーを無効化するかどうかの設定
-void MsSetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER* w, bool flag)
+void MsSetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER *w, bool flag)
 {
 	if (w == NULL)
 	{
@@ -444,7 +872,7 @@ void MsSetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER* w, bool flag)
 
 	w->Disabled = flag;
 }
-bool MsGetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER* w)
+bool MsGetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER *w)
 {
 	if (w == NULL)
 	{
@@ -455,7 +883,7 @@ bool MsGetProcessWatcherDisabledFlag(MS_PROCESS_WATCHER* w)
 }
 
 // プロセスウォッチャーの有効化
-void MsActivateProcessWatcher(MS_PROCESS_WATCHER* w)
+void MsActivateProcessWatcher(MS_PROCESS_WATCHER *w)
 {
 	if (w == NULL)
 	{
@@ -466,7 +894,7 @@ void MsActivateProcessWatcher(MS_PROCESS_WATCHER* w)
 }
 
 // プロセスウォッチャーの無効化
-void MsDeactivateProcessWatcher(MS_PROCESS_WATCHER* w)
+void MsDeactivateProcessWatcher(MS_PROCESS_WATCHER *w)
 {
 	if (w == NULL)
 	{
@@ -477,16 +905,16 @@ void MsDeactivateProcessWatcher(MS_PROCESS_WATCHER* w)
 }
 
 // プロセスウォッチャースレッド
-void MsProcessWatcherThreadProc(THREAD* thread, void* param)
+void MsProcessWatcherThreadProc(THREAD *thread, void *param)
 {
-	MS_PROCESS_WATCHER* w;
-	LIST* current = NULL;
+	MS_PROCESS_WATCHER *w;
+	LIST *current = NULL;
 	if (thread == NULL || param == NULL)
 	{
 		return;
 	}
 
-	w = (MS_PROCESS_WATCHER*)param;
+	w = (MS_PROCESS_WATCHER *)param;
 
 	while (true)
 	{
@@ -500,11 +928,11 @@ void MsProcessWatcherThreadProc(THREAD* thread, void* param)
 		{
 			is_started = true;
 		}
-		
+
 		if (is_started)
 		{
 			UINT i;
-			MS_PROCESS_DIFF* diff = NULL;
+			MS_PROCESS_DIFF *diff = NULL;
 
 			if (current == NULL)
 			{
@@ -520,7 +948,7 @@ void MsProcessWatcherThreadProc(THREAD* thread, void* param)
 			{
 				for (i = 0;i < LIST_NUM(diff->CreatedProcessList);i++)
 				{
-					MS_PROCESS* p = LIST_DATA(diff->CreatedProcessList, i);
+					MS_PROCESS *p = LIST_DATA(diff->CreatedProcessList, i);
 					if (w->Callback != NULL)
 					{
 						w->Callback(true, p, w->Param);
@@ -529,7 +957,7 @@ void MsProcessWatcherThreadProc(THREAD* thread, void* param)
 
 				for (i = 0;i < LIST_NUM(diff->DeletedProcessList);i++)
 				{
-					MS_PROCESS* p = LIST_DATA(diff->DeletedProcessList, i);
+					MS_PROCESS *p = LIST_DATA(diff->DeletedProcessList, i);
 					if (w->Callback != NULL)
 					{
 						w->Callback(false, p, w->Param);
@@ -557,7 +985,7 @@ void MsProcessWatcherThreadProc(THREAD* thread, void* param)
 }
 
 // プロセスウォッチャーの終了
-void MsFreeProcessWatcher(MS_PROCESS_WATCHER* w)
+void MsFreeProcessWatcher(MS_PROCESS_WATCHER *w)
 {
 	if (w == NULL)
 	{
@@ -578,9 +1006,9 @@ void MsFreeProcessWatcher(MS_PROCESS_WATCHER* w)
 }
 
 // プロセスウォッチャーの開始
-MS_PROCESS_WATCHER* MsNewProcessWatcher(MS_PROCESS_WATCHER_CALLBACK* callback, void* param)
+MS_PROCESS_WATCHER *MsNewProcessWatcher(MS_PROCESS_WATCHER_CALLBACK *callback, void *param)
 {
-	MS_PROCESS_WATCHER* w = ZeroMalloc(sizeof(MS_PROCESS_WATCHER));
+	MS_PROCESS_WATCHER *w = ZeroMalloc(sizeof(MS_PROCESS_WATCHER));
 
 	w->Event = NewEvent();
 	w->Callback = callback;
@@ -593,15 +1021,15 @@ MS_PROCESS_WATCHER* MsNewProcessWatcher(MS_PROCESS_WATCHER_CALLBACK* callback, v
 }
 
 // プロセスリスト比較
-int MsCmpProcessList(void* p1, void* p2)
+int MsCmpProcessList(void *p1, void *p2)
 {
-	MS_PROCESS* t1, * t2;
+	MS_PROCESS *t1, *t2;
 	if (p1 == NULL || p2 == NULL)
 	{
 		return 0;
 	}
-	t1 = *((MS_PROCESS**)p1);
-	t2 = *((MS_PROCESS**)p2);
+	t1 = *((MS_PROCESS **)p1);
+	t2 = *((MS_PROCESS **)p2);
 	if (t1 == NULL || t2 == NULL)
 	{
 		return 0;
@@ -611,20 +1039,20 @@ int MsCmpProcessList(void* p1, void* p2)
 }
 
 // プロセスリスト作成
-LIST* MsNewCurrentProcessList()
+LIST *MsNewCurrentProcessList()
 {
-	LIST* o = NewListFast(MsCmpProcessList);
+	LIST *o = NewListFast(MsCmpProcessList);
 
 	return o;
 }
 
 // プロセスの Diff を取得
-MS_PROCESS_DIFF* MsGetProcessDiff(LIST* o)
+MS_PROCESS_DIFF *MsGetProcessDiff(LIST *o)
 {
-	MS_PROCESS_DIFF* d;
-	LIST* current_list;
+	MS_PROCESS_DIFF *d;
+	LIST *current_list;
 	UINT i;
-	LIST* del = NULL;
+	LIST *del = NULL;
 	// 引数チェック
 	if (o == NULL)
 	{
@@ -640,7 +1068,7 @@ MS_PROCESS_DIFF* MsGetProcessDiff(LIST* o)
 
 	for (i = 0;i < LIST_NUM(current_list);i++)
 	{
-		MS_PROCESS* p = LIST_DATA(current_list, i);
+		MS_PROCESS *p = LIST_DATA(current_list, i);
 
 		if (Search(o, p) == false)
 		{
@@ -653,13 +1081,13 @@ MS_PROCESS_DIFF* MsGetProcessDiff(LIST* o)
 
 	for (i = 0;i < LIST_NUM(o);i++)
 	{
-		MS_PROCESS* pdata = (MS_PROCESS*)LIST_DATA(o, i);
+		MS_PROCESS *pdata = (MS_PROCESS *)LIST_DATA(o, i);
 		UINT j;
 		bool exists = false;
 
 		for (j = 0;j < LIST_NUM(current_list);j++)
 		{
-			MS_PROCESS* p = LIST_DATA(current_list, j);
+			MS_PROCESS *p = LIST_DATA(current_list, j);
 
 			if (p->ProcessId == pdata->ProcessId)
 			{
@@ -686,7 +1114,7 @@ MS_PROCESS_DIFF* MsGetProcessDiff(LIST* o)
 		UINT i;
 		for (i = 0;i < LIST_NUM(del);i++)
 		{
-			MS_PROCESS* p = LIST_DATA(del, i);
+			MS_PROCESS *p = LIST_DATA(del, i);
 
 			Free(p);
 
@@ -702,7 +1130,7 @@ MS_PROCESS_DIFF* MsGetProcessDiff(LIST* o)
 }
 
 // プロセスの Diff を解放
-void MsFreeProcessDiff(MS_PROCESS_DIFF* d)
+void MsFreeProcessDiff(MS_PROCESS_DIFF *d)
 {
 	// 引数チェック
 	if (d == NULL)
@@ -717,9 +1145,9 @@ void MsFreeProcessDiff(MS_PROCESS_DIFF* d)
 }
 
 
-wchar_t* MsGetPcoesssCommandLineByIdW(UINT process_id)
+wchar_t *MsGetPcoesssCommandLineByIdW(UINT process_id)
 {
-	wchar_t* ret = NULL;
+	wchar_t *ret = NULL;
 	HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
 		false, process_id);
 	if (h == NULL)
@@ -728,15 +1156,15 @@ wchar_t* MsGetPcoesssCommandLineByIdW(UINT process_id)
 	}
 
 	ret = MsGetProcessCommandLineW(h);
-	
+
 	CloseHandle(h);
 
 	return ret;
 }
 
-wchar_t* MsGetProcessCommandLineW(void* process_handle)
+wchar_t *MsGetProcessCommandLineW(void *process_handle)
 {
-	wchar_t* ret = NULL;
+	wchar_t *ret = NULL;
 	UINT ret_size = 0;
 
 	if (MsIsNt() == false)
@@ -767,14 +1195,14 @@ wchar_t* MsGetProcessCommandLineW(void* process_handle)
 			peb_addr = proc_info.PebBaseAddress;
 			if (peb_addr != 0)
 			{
-				NT_PEB_64* peb_copy = ZeroMalloc(sizeof(NT_PEB_64));
+				NT_PEB_64 *peb_copy = ZeroMalloc(sizeof(NT_PEB_64));
 
 				if (MsReadProcessVirtualMemory64BitNative(process_handle, peb_addr, peb_copy, sizeof(NT_PEB_64), NULL))
 				{
 					UINT64 params_addr = peb_copy->ProcessParameters;
 					if (params_addr != 0)
 					{
-						NT_RTL_USER_PROCESS_PARAMETERS_64* params_copy = ZeroMalloc(sizeof(NT_RTL_USER_PROCESS_PARAMETERS_64));
+						NT_RTL_USER_PROCESS_PARAMETERS_64 *params_copy = ZeroMalloc(sizeof(NT_RTL_USER_PROCESS_PARAMETERS_64));
 
 						if (MsReadProcessVirtualMemory64BitNative(process_handle, params_addr, params_copy, sizeof(NT_RTL_USER_PROCESS_PARAMETERS_64), NULL))
 						{
@@ -782,7 +1210,7 @@ wchar_t* MsGetProcessCommandLineW(void* process_handle)
 							if (buffer_addr != 0)
 							{
 								USHORT size = params_copy->CommandLine.Length;
-								wchar_t* buffer_copy = ZeroMalloc(size + sizeof(wchar_t) * 2);
+								wchar_t *buffer_copy = ZeroMalloc(size + sizeof(wchar_t) * 2);
 
 								if (MsReadProcessVirtualMemory64BitNative(process_handle, buffer_addr, buffer_copy, size, NULL))
 								{
@@ -817,14 +1245,14 @@ wchar_t* MsGetProcessCommandLineW(void* process_handle)
 			peb_addr = proc_info.PebBaseAddress;
 			if (peb_addr != 0)
 			{
-				NT_PEB_32* peb_copy = ZeroMalloc(sizeof(NT_PEB_32));
+				NT_PEB_32 *peb_copy = ZeroMalloc(sizeof(NT_PEB_32));
 
 				if (MsReadProcessVirtualMemory32BitNative(process_handle, peb_addr, peb_copy, sizeof(NT_PEB_32), NULL))
 				{
 					UINT32 params_addr = peb_copy->ProcessParameters;
 					if (params_addr != 0)
 					{
-						NT_RTL_USER_PROCESS_PARAMETERS_32* params_copy = ZeroMalloc(sizeof(NT_RTL_USER_PROCESS_PARAMETERS_32));
+						NT_RTL_USER_PROCESS_PARAMETERS_32 *params_copy = ZeroMalloc(sizeof(NT_RTL_USER_PROCESS_PARAMETERS_32));
 
 						if (MsReadProcessVirtualMemory32BitNative(process_handle, params_addr, params_copy, sizeof(NT_RTL_USER_PROCESS_PARAMETERS_32), NULL))
 						{
@@ -832,7 +1260,7 @@ wchar_t* MsGetProcessCommandLineW(void* process_handle)
 							if (buffer_addr != 0)
 							{
 								USHORT size = params_copy->CommandLine.Length;
-								wchar_t* buffer_copy = ZeroMalloc(size + sizeof(wchar_t) * 2);
+								wchar_t *buffer_copy = ZeroMalloc(size + sizeof(wchar_t) * 2);
 
 								if (MsReadProcessVirtualMemory32BitNative(process_handle, buffer_addr, buffer_copy, size, NULL))
 								{
@@ -858,7 +1286,7 @@ wchar_t* MsGetProcessCommandLineW(void* process_handle)
 }
 
 // Read 32bit native memory of other process
-bool MsReadProcessVirtualMemory32BitNative(void* handle, UINT address, void* buffer, UINT in_size, UINT* out_size)
+bool MsReadProcessVirtualMemory32BitNative(void *handle, UINT address, void *buffer, UINT in_size, UINT *out_size)
 {
 	SIZE_T out_tmp_2 = 0;
 	if (out_size != NULL)
@@ -884,7 +1312,7 @@ bool MsReadProcessVirtualMemory32BitNative(void* handle, UINT address, void* buf
 }
 
 // Read 64bit native memory of other process
-bool MsReadProcessVirtualMemory64BitNative(void* handle, UINT64 address, void* buffer, UINT in_size, UINT* out_size)
+bool MsReadProcessVirtualMemory64BitNative(void *handle, UINT64 address, void *buffer, UINT in_size, UINT *out_size)
 {
 	SIZE_T out_tmp_2 = 0;
 	if (out_size != NULL)
@@ -954,7 +1382,7 @@ bool MsApplyGroupPolicy(bool machine)
 	return false;
 }
 
-LIST* MsGetMacAddressList(bool add_broadcast_address_list)
+LIST *MsGetMacAddressList(bool add_broadcast_address_list)
 {
 	MS_ADAPTER_LIST *o;
 	UINT i;
@@ -981,14 +1409,14 @@ LIST* MsGetMacAddressList(bool add_broadcast_address_list)
 		{
 			for (i = 0;i < o->Num;i++)
 			{
-				MS_ADAPTER* a = o->Adapters[i];
+				MS_ADAPTER *a = o->Adapters[i];
 
 				UINT j;
 
 				for (j = 0;j < a->NumIpAddress;j++)
 				{
-					IP* ip = &a->IpAddresses[j];
-					IP* mask = &a->SubnetMasks[j];
+					IP *ip = &a->IpAddresses[j];
+					IP *mask = &a->SubnetMasks[j];
 
 					if (IsZeroIP(ip) == false && IsZeroIP(mask) == false &&
 						IsIP4(ip) && IsIP4(mask) && IsSubnetMask4(mask))
@@ -1028,7 +1456,7 @@ UINT64 MsGetKernelTimestamp()
 	void *wow;
 	UINT64 ret = 0;
 	HANDLE h;
-	FILETIME ft = {0};
+	FILETIME ft = { 0 };
 
 	wow = MsDisableWow64FileSystemRedirection();
 
@@ -1040,9 +1468,9 @@ UINT64 MsGetKernelTimestamp()
 		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (h != INVALID_HANDLE_VALUE)
 	{
-		if (GetFileTime(h,  NULL, NULL, &ft))
+		if (GetFileTime(h, NULL, NULL, &ft))
 		{
-			SYSTEMTIME sft = {0};
+			SYSTEMTIME sft = { 0 };
 
 			if (FileTimeToSystemTime(&ft, &sft))
 			{
@@ -1062,8 +1490,8 @@ bool MsCheckWindowsUpdate()
 {
 	wchar_t *batch_src_filename = L"|CheckWindowsUpdate.vbs";
 	wchar_t *tmp_filename = L"CheckWindowsUpdate.vbs";
-	wchar_t batch_tmp_filename[MAX_PATH] = {0};
-	wchar_t cscript_exe[MAX_PATH] = {0};
+	wchar_t batch_tmp_filename[MAX_PATH] = { 0 };
+	wchar_t cscript_exe[MAX_PATH] = { 0 };
 	wchar_t tmp[MAX_SIZE];
 	bool ret = false;
 	void *process = NULL;
@@ -1129,8 +1557,8 @@ bool MsCheckAntiVirus()
 {
 	wchar_t *batch_src_filename = L"|CheckAntiVirus.vbs";
 	wchar_t *tmp_filename = L"CheckAntiVirus.vbs";
-	wchar_t batch_tmp_filename[MAX_PATH] = {0};
-	wchar_t cscript_exe[MAX_PATH] = {0};
+	wchar_t batch_tmp_filename[MAX_PATH] = { 0 };
+	wchar_t cscript_exe[MAX_PATH] = { 0 };
 	wchar_t tmp[MAX_SIZE];
 	bool ret = false;
 	void *process = NULL;
@@ -2266,7 +2694,7 @@ void MsDeleteClipboardAndHistory()
 
 		if (exists)
 		{
-			void* proc_handle = NULL;
+			void *proc_handle = NULL;
 
 			if (MsExecuteEx3W(tmp_exe_filename, L"", &proc_handle, false, true))
 			{
@@ -2994,7 +3422,7 @@ bool MsIsFileLockedW(wchar_t *name)
 }
 
 // Get the process exit code
-UINT MsGetProcessExitCode(void* process_handle)
+UINT MsGetProcessExitCode(void *process_handle)
 {
 	if (process_handle == NULL)
 	{
@@ -3425,7 +3853,7 @@ bool MsExtractCabFromMsiW(wchar_t *msi, wchar_t *cab)
 	BUF *b;
 	bool ret = false;
 	UINT i;
-	char sign[] = {'M', 'S', 'C', 'F', 0, 0, 0, 0,};
+	char sign[] = { 'M', 'S', 'C', 'F', 0, 0, 0, 0, };
 	void *pointer = NULL;
 	UINT current_pos = 0;
 	UINT sign_size;
@@ -3912,7 +4340,7 @@ void MsSetFileToHiddenW(wchar_t *name)
 void MsNoSleepThread(THREAD *thread, void *param)
 {
 	MS_NOSLEEP *e;
-	EXECUTION_STATE (WINAPI *_SetThreadExecutionState)(EXECUTION_STATE);
+	EXECUTION_STATE(WINAPI * _SetThreadExecutionState)(EXECUTION_STATE);
 	HINSTANCE hKernel32;
 	// Validate arguments
 	if (thread == NULL || param == NULL)
@@ -3923,7 +4351,7 @@ void MsNoSleepThread(THREAD *thread, void *param)
 	hKernel32 = LoadLibrary("kernel32.dll");
 
 	_SetThreadExecutionState =
-		(EXECUTION_STATE (__stdcall *)(EXECUTION_STATE))
+		(EXECUTION_STATE(__stdcall *)(EXECUTION_STATE))
 		GetProcAddress(hKernel32, "SetThreadExecutionState");
 
 	e = (MS_NOSLEEP *)param;
@@ -3966,7 +4394,7 @@ void MsStartEasyNoSleep()
 	if (hKernel32 != NULL)
 	{
 		EXECUTION_STATE(WINAPI * _SetThreadExecutionState)(EXECUTION_STATE) =
-			(EXECUTION_STATE(__stdcall*)(EXECUTION_STATE))
+			(EXECUTION_STATE(__stdcall *)(EXECUTION_STATE))
 			GetProcAddress(hKernel32, "SetThreadExecutionState");
 
 		if (_SetThreadExecutionState != NULL)
@@ -3991,7 +4419,7 @@ void MsStopEasyNoSleep()
 	if (hKernel32 != NULL)
 	{
 		EXECUTION_STATE(WINAPI * _SetThreadExecutionState)(EXECUTION_STATE) =
-			(EXECUTION_STATE(__stdcall*)(EXECUTION_STATE))
+			(EXECUTION_STATE(__stdcall *)(EXECUTION_STATE))
 			GetProcAddress(hKernel32, "SetThreadExecutionState");
 
 		if (_SetThreadExecutionState != NULL)
@@ -4048,7 +4476,7 @@ void MsNoSleepThreadVista(THREAD *thread, void *param)
 	UINT64 last_set_flag = 0;
 	UINT last_c_x = INFINITE, last_c_y = INFINITE;
 	UINT64 last_mouse_move_time = 0;
-	EXECUTION_STATE (WINAPI *_SetThreadExecutionState)(EXECUTION_STATE);
+	EXECUTION_STATE(WINAPI * _SetThreadExecutionState)(EXECUTION_STATE);
 	HINSTANCE hKernel32;
 	// Validate arguments
 	if (thread == NULL || param == NULL)
@@ -4059,7 +4487,7 @@ void MsNoSleepThreadVista(THREAD *thread, void *param)
 	hKernel32 = LoadLibrary("kernel32.dll");
 
 	_SetThreadExecutionState =
-		(EXECUTION_STATE (__stdcall *)(EXECUTION_STATE))
+		(EXECUTION_STATE(__stdcall *)(EXECUTION_STATE))
 		GetProcAddress(hKernel32, "SetThreadExecutionState");
 
 	e = (MS_NOSLEEP *)param;
@@ -4264,7 +4692,7 @@ void MsNoSleepEnd(void *p)
 	Free(e);
 }
 
-static wchar_t ms_computer_name_full_cache[MAX_SIZE] = {0};
+static wchar_t ms_computer_name_full_cache[MAX_SIZE] = { 0 };
 
 // Get the full name of the computer
 void MsGetComputerNameFull(wchar_t *name, UINT size)
@@ -4623,7 +5051,7 @@ bool MsCheckFileDigitalSignatureW(HWND hWnd, wchar_t *name, bool *danger)
 {
 	HRESULT ret = S_OK;
 	wchar_t *tmp;
-	LONG (WINAPI *_WinVerifyTrust)(HWND, GUID *, LPVOID) = NULL;
+	LONG(WINAPI * _WinVerifyTrust)(HWND, GUID *, LPVOID) = NULL;
 	HINSTANCE hDll;
 	// Validate arguments
 	if (name == NULL)
@@ -4645,7 +5073,7 @@ bool MsCheckFileDigitalSignatureW(HWND hWnd, wchar_t *name, bool *danger)
 	}
 
 	_WinVerifyTrust =
-		(LONG (__stdcall *)(HWND,GUID *,LPVOID))
+		(LONG(__stdcall *)(HWND, GUID *, LPVOID))
 		GetProcAddress(hDll, "WinVerifyTrust");
 	if (_WinVerifyTrust == NULL)
 	{
@@ -5156,7 +5584,7 @@ bool MsDisableIme()
 	HINSTANCE h;
 	bool ret = false;
 	char dll_name[MAX_PATH];
-	BOOL (WINAPI *_ImmDisableIME)(DWORD);
+	BOOL(WINAPI * _ImmDisableIME)(DWORD);
 
 	Format(dll_name, sizeof(dll_name), "%s\\imm32.dll", MsGetSystem32Dir());
 	h = MsLoadLibrary(dll_name);
@@ -5165,7 +5593,7 @@ bool MsDisableIme()
 		return false;
 	}
 
-	_ImmDisableIME = (BOOL (__stdcall *)(DWORD))GetProcAddress(h, "ImmDisableIME");
+	_ImmDisableIME = (BOOL(__stdcall *)(DWORD))GetProcAddress(h, "ImmDisableIME");
 
 	if (_ImmDisableIME != NULL)
 	{
@@ -5902,7 +6330,7 @@ MS_ADAPTER_LIST *MsCreateAdapterListInnerExVista(bool no_info)
 
 				if (a->IsWireless ||
 					r->Type != IF_TYPE_ETHERNET_CSMACD ||
-					r->MediaType != NdisMedium802_3 || 
+					r->MediaType != NdisMedium802_3 ||
 					(r->PhysicalMediumType != 0 && r->PhysicalMediumType != NdisPhysicalMedium802_3))
 				{
 					a->IsNotEthernetLan = true;
@@ -6087,9 +6515,9 @@ UINT MsKillProcessByExeName(wchar_t *name)
 
 	return num;
 }
-UINT MsKillProcessByExeFileNameList(LIST* name_list)
+UINT MsKillProcessByExeFileNameList(LIST *name_list)
 {
-	LIST* o;
+	LIST *o;
 	UINT me, i;
 	UINT num = 0;
 	// Validate arguments
@@ -6103,7 +6531,7 @@ UINT MsKillProcessByExeFileNameList(LIST* name_list)
 
 	for (i = 0;i < LIST_NUM(o);i++)
 	{
-		MS_PROCESS* p = LIST_DATA(o, i);
+		MS_PROCESS *p = LIST_DATA(o, i);
 		if (p->ProcessId != me)
 		{
 			wchar_t exe_name[MAX_PATH] = CLEAN;
@@ -6128,7 +6556,7 @@ UINT MsKillProcessByExeFileNameList(LIST* name_list)
 // Kill all screenshot processes
 void MsKillScreenshotProcesses()
 {
-	LIST* o = NewList(NULL);
+	LIST *o = NewList(NULL);
 
 	AddUniStrToUniStrList(o, L"SnippingTool.exe");
 	AddUniStrToUniStrList(o, L"ScreenClippingHost.exe");
@@ -6259,7 +6687,7 @@ bool MsKillProcess(UINT id)
 	return true;
 }
 
-bool MsKillProcessByHandle(void* handle)
+bool MsKillProcessByHandle(void *handle)
 {
 	HANDLE h = (HANDLE)handle;
 	if (h == NULL)
@@ -6411,7 +6839,7 @@ void MsFreeProcessList(LIST *o)
 }
 
 // Determine if process is 64bit
-bool MsIs64bitProcess(void* handle)
+bool MsIs64bitProcess(void *handle)
 {
 	if (handle == NULL)
 	{
@@ -6537,7 +6965,7 @@ LIST *MsGetProcessListNt(UINT flags)
 			if (ok)
 			{
 				MS_PROCESS *p = ZeroMalloc(sizeof(MS_PROCESS));
-				wchar_t* cmdline = NULL;
+				wchar_t *cmdline = NULL;
 
 				StrCpy(p->ExeFilename, sizeof(p->ExeFilename), exe);
 				UniStrCpy(p->ExeFilenameW, sizeof(p->ExeFilenameW), exe_w);
@@ -6547,6 +6975,51 @@ LIST *MsGetProcessListNt(UINT flags)
 				if (flags & MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE)
 				{
 					cmdline = MsGetProcessCommandLineW(h);
+				}
+
+				if (flags & MS_GET_PROCESS_LIST_FLAG_GET_SID)
+				{
+					HANDLE token = NULL;
+					if (ms->nt->OpenProcessToken(h, TOKEN_QUERY, &token))
+					{
+						DWORD token_size = 0;
+
+						ms->nt->GetTokenInformation(token, TokenUser, NULL, 0, &token_size);
+
+						if (token_size >= 1)
+						{
+							DWORD token_size_new = 0;
+							TOKEN_USER *user_data = ZeroMalloc(token_size);
+
+							if (ms->nt->GetTokenInformation(token, TokenUser, user_data, token_size, &token_size_new) && token_size == token_size_new)
+							{
+								void *sid = user_data->User.Sid;
+								if (ms->nt->IsValidSid(sid))
+								{
+									UINT sid_size = ms->nt->GetLengthSid(sid);
+
+									if (sid_size >= 1 && sid_size <= sizeof(p->SidData))
+									{
+										p->SidSize = sid_size;
+										Copy(p->SidData, sid, sid_size);
+									}
+								}
+							}
+
+							Free(user_data);
+						}
+
+						token_size = sizeof(UINT);
+						DWORD token_size_new = 0;
+						UINT session_id = 0;
+
+						if (ms->nt->GetTokenInformation(token, MaxTokenInfoClass, &session_id, token_size, &token_size_new) && token_size == token_size_new)
+						{
+							p->SessionId = session_id;
+						}
+
+						CloseHandle(token);
+					}
 				}
 
 				if (UniIsEmptyStr(cmdline) == false)
@@ -6578,18 +7051,18 @@ LIST *MsGetProcessList9x()
 {
 	HANDLE h;
 	LIST *o;
-	HANDLE (WINAPI *CreateToolhelp32Snapshot)(DWORD, DWORD);
-	BOOL (WINAPI *Process32First)(HANDLE, LPPROCESSENTRY32);
-	BOOL (WINAPI *Process32Next)(HANDLE, LPPROCESSENTRY32);
+	HANDLE(WINAPI * CreateToolhelp32Snapshot)(DWORD, DWORD);
+	BOOL(WINAPI * Process32First)(HANDLE, LPPROCESSENTRY32);
+	BOOL(WINAPI * Process32Next)(HANDLE, LPPROCESSENTRY32);
 
 	CreateToolhelp32Snapshot =
-		(HANDLE (__stdcall *)(DWORD,DWORD))
+		(HANDLE(__stdcall *)(DWORD, DWORD))
 		GetProcAddress(ms->hKernel32, "CreateToolhelp32Snapshot");
 	Process32First =
-		(BOOL (__stdcall *)(HANDLE,LPPROCESSENTRY32))
+		(BOOL(__stdcall *)(HANDLE, LPPROCESSENTRY32))
 		GetProcAddress(ms->hKernel32, "Process32First");
 	Process32Next =
-		(BOOL (__stdcall *)(HANDLE,LPPROCESSENTRY32))
+		(BOOL(__stdcall *)(HANDLE, LPPROCESSENTRY32))
 		GetProcAddress(ms->hKernel32, "Process32Next");
 
 	o = NewListFast(MsCompareProcessList);
@@ -6628,7 +7101,7 @@ LIST *MsGetProcessList9x()
 }
 
 // Get the Process List
-LIST* MsGetProcessList(UINT flags)
+LIST *MsGetProcessList(UINT flags)
 {
 	if (MsIsNt() == false)
 	{
@@ -6936,8 +7409,8 @@ void MsUserModeTrayMenu(HWND hWnd)
 
 	// Create a menu
 	h = CreatePopupMenu();
-//	MsAppendMenu(h, MF_ENABLED | MF_STRING, 10001, _UU("SVC_USERMODE_MENU_1"));
-//	MsAppendMenu(h, MF_SEPARATOR, 10002, NULL);
+	//	MsAppendMenu(h, MF_ENABLED | MF_STRING, 10001, _UU("SVC_USERMODE_MENU_1"));
+	//	MsAppendMenu(h, MF_SEPARATOR, 10002, NULL);
 
 	if (MsIsNt())
 	{
@@ -7488,7 +7961,7 @@ void MsUserModeW(wchar_t *title, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop
 	// Creating the main window
 	Zero(&wc, sizeof(wc));
 	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wc.hCursor = LoadCursor(NULL,IDC_ARROW);
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.hIcon = LoadIcon(hDll, MAKEINTRESOURCE(icon));
 	wc.hInstance = ms->hInst;
 	wc.lpfnWndProc = MsUserModeWindowProc;
@@ -7820,19 +8293,19 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 		{
 			// Check whether there is the SCM in the service mode
 			_StartServiceCtrlDispatcher =
-				(BOOL (__stdcall *)(const LPSERVICE_TABLE_ENTRY))
+				(BOOL(__stdcall *)(const LPSERVICE_TABLE_ENTRY))
 				GetProcAddress(h_advapi32, "StartServiceCtrlDispatcherW");
 
 			_RegisterServiceCtrlHandler =
-				(SERVICE_STATUS_HANDLE (__stdcall *)(LPCTSTR,LPHANDLER_FUNCTION))
+				(SERVICE_STATUS_HANDLE(__stdcall *)(LPCTSTR, LPHANDLER_FUNCTION))
 				GetProcAddress(h_advapi32, "RegisterServiceCtrlHandlerW");
 
 			_SetServiceStatus =
-				(BOOL (__stdcall *)(SERVICE_STATUS_HANDLE,LPSERVICE_STATUS))
+				(BOOL(__stdcall *)(SERVICE_STATUS_HANDLE, LPSERVICE_STATUS))
 				GetProcAddress(h_advapi32, "SetServiceStatus");
 
 			if (_StartServiceCtrlDispatcher != NULL &&
-				_RegisterServiceCtrlHandler != NULL && 
+				_RegisterServiceCtrlHandler != NULL &&
 				_SetServiceStatus != NULL)
 			{
 				is_win32_service_mode = true;
@@ -7901,9 +8374,9 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 		{
 			arg = t->Token[0];
 		}
-		if(t->NumTokens >= 2)
+		if (t->NumTokens >= 2)
 		{
-			if(StrCmpi(t->Token[1], SVC_ARG_SILENT) == 0)
+			if (StrCmpi(t->Token[1], SVC_ARG_SILENT) == 0)
 			{
 				silent = true;
 			}
@@ -8108,7 +8581,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				{
 					// Already installed
 					// Show a message asking if you want to uninstall
-					if(silent == true)
+					if (silent == true)
 					{
 						// Always cancel the operation
 						break;
@@ -8128,7 +8601,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 							if (MsStopService(service_name) == false)
 							{
 								// Failed to stop
-								if(silent == false)
+								if (silent == false)
 								{
 									MsgBoxEx(NULL, MB_ICONSTOP, _UU("SVC_STOP_FAILED"),
 										service_title, service_name);
@@ -8140,7 +8613,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 						if (MsUninstallService(service_name) == false)
 						{
 							// Failed to uninstall
-							if(silent == false)
+							if (silent == false)
 							{
 								MsgBoxEx(NULL, MB_ICONSTOP, _UU("SVC_UNINSTALL_FAILED"),
 									service_title, service_name);
@@ -8154,7 +8627,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsInstallServiceW(service_name, service_title, service_description, path) == false)
 				{
 					// Failed to install
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONSTOP, _UU("SVC_INSTALL_FAILED"),
 							service_title, service_name);
@@ -8166,7 +8639,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsStartService(service_name) == false)
 				{
 					// Failed to start
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_INSTALL_FAILED_2"),
 							service_title, service_name, path);
@@ -8175,7 +8648,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				}
 
 				// All successful
-				if(silent == false)
+				if (silent == false)
 				{
 					MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_INSTALL_OK"),
 						service_title, service_name, path);
@@ -8190,7 +8663,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 
 				if (MsIsServiceInstalled(service_name) == false)
 				{
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_NOT_INSTALLED"),
 							service_title, service_name, path);
@@ -8205,7 +8678,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 					if (MsStopService(service_name) == false)
 					{
 						// Failed to stop
-						if(silent == false)
+						if (silent == false)
 						{
 							MsgBoxEx(NULL, MB_ICONSTOP, _UU("SVC_STOP_FAILED"),
 								service_title, service_name);
@@ -8217,7 +8690,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				// Uninstall the service
 				if (MsUninstallService(service_name) == false)
 				{
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONSTOP, _UU("SVC_UNINSTALL_FAILED"),
 							service_title, service_name);
@@ -8226,7 +8699,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				}
 
 				// All successful
-				if(silent == false)
+				if (silent == false)
 				{
 					MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_UNINSTALL_OK"),
 						service_title, service_name);
@@ -8241,7 +8714,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsIsServiceInstalled(service_name) == false)
 				{
 					// Service is not installed
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_NOT_INSTALLED"),
 							service_title, service_name);
@@ -8253,7 +8726,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsIsServiceRunning(service_name))
 				{
 					// Service is running
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVR_ALREADY_START"),
 							service_title, service_name);
@@ -8265,7 +8738,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsStartService(service_name) == false)
 				{
 					// Failed to start
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_START_FAILED"),
 							service_title, service_name);
@@ -8274,7 +8747,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				}
 
 				// All successful
-				if(silent == false)
+				if (silent == false)
 				{
 					MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_START_OK"),
 						service_title, service_name);
@@ -8289,7 +8762,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsIsServiceInstalled(service_name) == false)
 				{
 					// Service is not installed
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_NOT_INSTALLED"),
 							service_title, service_name);
@@ -8301,10 +8774,10 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsIsServiceRunning(service_name) == false)
 				{
 					// The service is stopped
-					if(silent == false)
+					if (silent == false)
 					{
-					MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_ALREADY_STOP"),
-						service_title, service_name);
+						MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_ALREADY_STOP"),
+							service_title, service_name);
 					}
 					break;
 				}
@@ -8312,7 +8785,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				if (MsStopService(service_name) == false)
 				{
 					// Failed to stop
-					if(silent == false)
+					if (silent == false)
 					{
 						MsgBoxEx(NULL, MB_ICONEXCLAMATION, _UU("SVC_STOP_FAILED"),
 							service_title, service_name);
@@ -8321,7 +8794,7 @@ UINT MsService(char *name, SERVICE_FUNCTION *start, SERVICE_FUNCTION *stop, UINT
 				}
 
 				// All successful
-				if(silent == false)
+				if (silent == false)
 				{
 					MsgBoxEx(NULL, MB_ICONINFORMATION, _UU("SVC_STOP_OK"),
 						service_title, service_name);
@@ -8483,7 +8956,7 @@ wchar_t *MsGetSessionUserName(UINT session_id)
 		wchar_t *ret;
 		wchar_t *name;
 		UINT size = 0;
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, session_id,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session_id,
 			WTSUserName, (wchar_t *)&name, &size) == false)
 		{
 			return NULL;
@@ -8556,7 +9029,7 @@ bool MsIsTerminalSessionActive(UINT session_id)
 		UINT size = sizeof(status);
 		bool active = true;
 
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, session_id,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session_id,
 			WTSConnectState, (wchar_t *)&status, &size) == false)
 		{
 			return true;
@@ -8589,7 +9062,7 @@ UINT MsGetCurrentTerminalSessionId()
 		UINT ret;
 		UINT *session_id = NULL;
 		UINT size = sizeof(session_id);
-		if (ms->nt->WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
+		if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
 			WTSSessionId, (wchar_t *)&session_id, &size) == false)
 		{
 			return 0;
@@ -8648,7 +9121,7 @@ bool MsIsUserSwitchingInstalled()
 
 	if (ms->nt->WTSDisconnectSession == NULL ||
 		ms->nt->WTSFreeMemory == NULL ||
-		ms->nt->WTSQuerySessionInformation == NULL)
+		ms->nt->WTSQuerySessionInformationW == NULL)
 	{
 		return false;
 	}
@@ -8976,7 +9449,7 @@ bool MsIsTerminalServiceInstalled()
 
 	if (ms->nt->WTSDisconnectSession == NULL ||
 		ms->nt->WTSFreeMemory == NULL ||
-		ms->nt->WTSQuerySessionInformation == NULL)
+		ms->nt->WTSQuerySessionInformationW == NULL)
 	{
 		return false;
 	}
@@ -9287,7 +9760,7 @@ bool MsUpdateServiceConfig(char *name)
 			MsRegWriteInt(REG_LOCAL_MACHINE, "Software\\" GC_REG_COMPANY_NAME "\\Update Service Config", name, 1);
 		}
 
-		
+
 		if (GET_KETA(GetOsInfo()->OsType, 100) >= 2)
 		{
 			SERVICE_DESCRIPTIONW d;
@@ -10136,7 +10609,7 @@ void MsUpdateCompatibleIDs(char *instance_name)
 			{
 				if (StrCmpi(title, device_title) == 0 || StrCmpi(title, device_title_old) == 0)
 				{
-					Format(keyname, sizeof(keyname), "Enum\\Root\\Net\\%s",t->Token[i]);
+					Format(keyname, sizeof(keyname), "Enum\\Root\\Net\\%s", t->Token[i]);
 					str = MsRegReadStr(REG_LOCAL_MACHINE, keyname, "CompatibleIDs");
 					if (str != NULL)
 					{
@@ -10284,9 +10757,9 @@ bool CALLBACK MsEnumThreadWindowProc(HWND hWnd, LPARAM lParam)
 // Test func 2
 void MsTestFunc2()
 {
-	LIST* o;
+	LIST *o;
 	ENUM_CHILD_WINDOW_PARAM p = CLEAN;
-	LIST* s = NewStrList();
+	LIST *s = NewStrList();
 
 	p.no_hidden_window = false;
 
@@ -10298,7 +10771,7 @@ void MsTestFunc2()
 		Print("num windows = %u\n", LIST_NUM(o));
 		for (i = 0;i < LIST_NUM(o);i++)
 		{
-			HWND* p = LIST_DATA(o, i);
+			HWND *p = LIST_DATA(o, i);
 
 			if (p != NULL)
 			{
@@ -10325,18 +10798,18 @@ void MsTestFunc2()
 	Sort(s);
 
 	{
-		BUF* buf = NewBuf();
+		BUF *buf = NewBuf();
 		UINT i;
 		wchar_t dirname[MAX_PATH] = CLEAN;
 		wchar_t filename[MAX_PATH] = CLEAN;
-		wchar_t fullpath [MAX_PATH] = CLEAN;
+		wchar_t fullpath[MAX_PATH] = CLEAN;
 		SYSTEMTIME st = CLEAN;
 
 		LocalTime(&st);
 
 		for (i = 0; i < LIST_NUM(s);i++)
 		{
-			char* s2 = LIST_DATA(s, i);
+			char *s2 = LIST_DATA(s, i);
 
 			WriteBuf(buf, s2, StrLen(s2));
 			WriteBuf(buf, "\r\n", 2);
@@ -10461,9 +10934,9 @@ LIST *EnumAllWindow()
 {
 	return EnumAllWindowEx(false, false);
 }
-LIST* EnumAllWindowEx2(ENUM_CHILD_WINDOW_PARAM* p)
+LIST *EnumAllWindowEx2(ENUM_CHILD_WINDOW_PARAM *p)
 {
-	LIST* o = NewWindowList();
+	LIST *o = NewWindowList();
 	ENUM_CHILD_WINDOW_PARAM p2 = CLEAN;
 
 	Copy(&p2, p, sizeof(ENUM_CHILD_WINDOW_PARAM));
@@ -10842,7 +11315,7 @@ bool MsCloseWarningWindow(NO_WARNING *nw, UINT thread_id)
 		{
 			break;
 		}
-		
+
 		if (MsIsVista() == false)
 		{
 			hWnd = LIST_DATA(o, i);
@@ -11656,7 +12129,7 @@ bool MsIsDeviceRunning(HDEVINFO info, SP_DEVINFO_DATA *dev_info_data)
 
 	if (SetupDiGetDeviceInfoListDetail(info, &detail) == false ||
 		ms->nt->CM_Get_DevNode_Status_Ex(&status, &problem, dev_info_data->DevInst,
-		0, detail.RemoteMachineHandle) != CR_SUCCESS)
+			0, detail.RemoteMachineHandle) != CR_SUCCESS)
 	{
 		return false;
 	}
@@ -12613,8 +13086,7 @@ void MsDeleteTempDir()
 			{
 				b = FindNextFileA(h, &data_a);
 			}
-		}
-		while (b);
+		} while (b);
 
 		FindClose(h);
 	}
@@ -12654,8 +13126,7 @@ void MsDeleteAllFile(char *dir)
 					RemoveDirectory(fullpath);
 				}
 			}
-		}
-		while (FindNextFile(h, &data));
+		} while (FindNextFile(h, &data));
 
 		FindClose(h);
 	}
@@ -12706,8 +13177,7 @@ void MsDeleteAllFileW(wchar_t *dir)
 					RemoveDirectoryW(fullpath);
 				}
 			}
-		}
-		while (FindNextFileW(h, &data));
+		} while (FindNextFileW(h, &data));
 
 		FindClose(h);
 	}
@@ -13996,6 +14466,146 @@ bool MsDetermineIsLockedByWtsApi()
 	return wts_is_locked_flag;
 }
 
+
+// New GUID
+void MsNewGuid(void *guid)
+{
+	if (guid == NULL)
+	{
+		return;
+	}
+
+	Zero(guid, sizeof(GUID));
+
+	CoCreateGuid(guid);
+}
+
+// 1 つ以上のロックされていない WTS セッションが存在するかどうか
+bool MsWtsOneOrMoreUnlockedSessionExists()
+{
+	WTS_SESSION_INFOA *info = CLEAN;
+	UINT count = 0;
+
+	UINT num_unlocked_sessions = 0;
+
+	if (MsIsNt() == false || ms->nt->WTSEnumerateSessionsA == NULL ||
+		ms->nt->WTSQuerySessionInformationW == NULL || ms->nt->WTSFreeMemory == NULL)
+	{
+		return true;
+	}
+
+	if (MsIsWindows7() == false)
+	{
+		return true;
+	}
+
+	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
+	{
+		return true;
+	}
+	else
+	{
+		UINT i;
+		for (i = 0;i < count;i++)
+		{
+			WTS_SESSION_INFOA *a = &info[i];
+
+			if (a->State == 0)
+			{
+				WTSINFOEXW_FIX1 *ex = CLEAN;
+				DWORD retsize = 0;
+
+				if (a->State == WTSActive)
+				{
+					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+					{
+						//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
+						WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+
+						bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
+
+						// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
+						// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
+
+						if (MsIsWindows8() == false)
+						{
+							is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+						}
+
+						if (is_locked == false)
+						{
+							num_unlocked_sessions++;
+						}
+
+						ms->nt->WTSFreeMemory(ex);
+					}
+				}
+			}
+		}
+
+		ms->nt->WTSFreeMemory(info);
+	}
+
+	return (num_unlocked_sessions >= 1);
+}
+
+void MsWtsTest1()
+{
+	WTS_SESSION_INFOA *info = CLEAN;
+	UINT count = 0;
+
+	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
+	{
+		Print("WTSEnumerateSessionsA error.\n");
+	}
+	else
+	{
+		Print("---\n");
+
+		UINT i;
+		for (i = 0;i < count;i++)
+		{
+			WTS_SESSION_INFOA *a = &info[i];
+
+			if (a->State == 0)
+			{
+				WTSINFOEXW_FIX1 *ex = CLEAN;
+				DWORD retsize = 0;
+
+				if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+				{
+					WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+
+					bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
+
+					// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
+					// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
+
+					if (MsIsWindows8() == false)
+					{
+						is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+					}
+
+					Print("Session %u: [%u]: '%s': %u -> %u\n", i, a->SessionId, a->pWinStationName, a->State,
+						is_locked);
+
+					ms->nt->WTSFreeMemory(ex);
+				}
+				else
+				{
+					Print("Session %u: [%u]: %s: %u: WTSQuerySessionInformationA error\n", i, a->SessionId, a->pWinStationName, a->State);
+				}
+			}
+		}
+
+		Print("\n");
+
+		ms->nt->WTSFreeMemory(info);
+	}
+}
+
 // IsLocked Window Proc
 LRESULT CALLBACK MsIsLockedWindowHandlerWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -14027,28 +14637,28 @@ LRESULT CALLBACK MsIsLockedWindowHandlerWindowProc(HWND hWnd, UINT msg, WPARAM w
 		break;
 
 	case WM_WTSSESSION_CHANGE:
+	{
+		char tmp[MAX_SIZE];
+
+		GetDateTimeStr64(tmp, sizeof(tmp), LocalTime64());
+
+		switch (wParam)
 		{
-			char tmp[MAX_SIZE];
+		case WTS_SESSION_LOCK:
+			Debug("%s: Enter Lock\n", tmp);
+			d->IsLockedFlag = true;
+			wts_is_locked_flag = true;
+			break;
 
-			GetDateTimeStr64(tmp, sizeof(tmp), LocalTime64());
-
-			switch (wParam)
-			{
-			case WTS_SESSION_LOCK:
-				Debug("%s: Enter Lock\n", tmp);
-				d->IsLockedFlag = true;
-				wts_is_locked_flag = true;
-				break;
-
-			case WTS_SESSION_UNLOCK:
-				Debug("%s: Enter Unlock\n", tmp);
-				d->IsLockedFlag = false;
-				wts_is_locked_flag = false;
-				break;
-			}
+		case WTS_SESSION_UNLOCK:
+			Debug("%s: Enter Unlock\n", tmp);
+			d->IsLockedFlag = false;
+			wts_is_locked_flag = false;
+			break;
 		}
+	}
 
-		break;
+	break;
 
 	case WM_DESTROY:
 		Debug("Unregister\n");
@@ -14426,126 +15036,144 @@ NT_API *MsLoadNtApiFunctions()
 
 	nt->hWS2_32 = LoadLibrary("Ws2_32.dll");
 
+	nt->hWinSta = LoadLibrary("winsta.dll");
+
 	// Read the function
 	nt->GetComputerNameExW =
-		(BOOL (__stdcall *)(COMPUTER_NAME_FORMAT,LPWSTR,LPDWORD))
+		(BOOL(__stdcall *)(COMPUTER_NAME_FORMAT, LPWSTR, LPDWORD))
 		GetProcAddress(nt->hKernel32, "GetComputerNameExW");
 
 	nt->IsWow64Process =
-		(BOOL (__stdcall *)(HANDLE,BOOL *))
+		(BOOL(__stdcall *)(HANDLE, BOOL *))
 		GetProcAddress(nt->hKernel32, "IsWow64Process");
 
 	nt->IsWow64Process2 =
-		(BOOL (__stdcall *)(HANDLE,USHORT *,USHORT *))
+		(BOOL(__stdcall *)(HANDLE, USHORT *, USHORT *))
 		GetProcAddress(nt->hKernel32, "IsWow64Process2");
 
 	nt->GetFileInformationByHandle =
-		(BOOL (__stdcall *)(HANDLE,LPBY_HANDLE_FILE_INFORMATION))
+		(BOOL(__stdcall *)(HANDLE, LPBY_HANDLE_FILE_INFORMATION))
 		GetProcAddress(nt->hKernel32, "GetFileInformationByHandle");
 
 	nt->GetProcessHeap =
-		(HANDLE (__stdcall *)())
+		(HANDLE(__stdcall *)())
 		GetProcAddress(nt->hKernel32, "GetProcessHeap");
 
 	nt->SetProcessShutdownParameters =
-		(BOOL (__stdcall *)(DWORD,DWORD))
+		(BOOL(__stdcall *)(DWORD, DWORD))
 		GetProcAddress(nt->hKernel32, "SetProcessShutdownParameters");
 
 	nt->GetNativeSystemInfo =
-		(void (__stdcall *)(SYSTEM_INFO *))
+		(void(__stdcall *)(SYSTEM_INFO *))
 		GetProcAddress(nt->hKernel32, "GetNativeSystemInfo");
 
 	nt->AdjustTokenPrivileges =
-		(BOOL (__stdcall *)(HANDLE,BOOL,PTOKEN_PRIVILEGES,DWORD,PTOKEN_PRIVILEGES,PDWORD))
+		(BOOL(__stdcall *)(HANDLE, BOOL, PTOKEN_PRIVILEGES, DWORD, PTOKEN_PRIVILEGES, PDWORD))
 		GetProcAddress(nt->hAdvapi32, "AdjustTokenPrivileges");
 
 	nt->LookupPrivilegeValue =
-		(BOOL (__stdcall *)(char *,char *,PLUID))
+		(BOOL(__stdcall *)(char *, char *, PLUID))
 		GetProcAddress(nt->hAdvapi32, "LookupPrivilegeValueA");
 
 	nt->OpenProcessToken =
-		(BOOL (__stdcall *)(HANDLE,DWORD,PHANDLE))
+		(BOOL(__stdcall *)(HANDLE, DWORD, PHANDLE))
 		GetProcAddress(nt->hAdvapi32, "OpenProcessToken");
 
 	nt->InitiateSystemShutdown =
-		(BOOL (__stdcall *)(LPTSTR,LPTSTR,DWORD,BOOL,BOOL))
+		(BOOL(__stdcall *)(LPTSTR, LPTSTR, DWORD, BOOL, BOOL))
 		GetProcAddress(nt->hAdvapi32, "InitiateSystemShutdownA");
 
 	nt->LogonUserW =
-		(BOOL (__stdcall *)(wchar_t *,wchar_t *,wchar_t *,DWORD,DWORD,HANDLE *))
+		(BOOL(__stdcall *)(wchar_t *, wchar_t *, wchar_t *, DWORD, DWORD, HANDLE *))
 		GetProcAddress(nt->hAdvapi32, "LogonUserW");
 
 	nt->LogonUserA =
-		(BOOL (__stdcall *)(char *,char *,char *,DWORD,DWORD,HANDLE * ))
+		(BOOL(__stdcall *)(char *, char *, char *, DWORD, DWORD, HANDLE *))
 		GetProcAddress(nt->hAdvapi32, "LogonUserA");
 
 	nt->DuplicateTokenEx =
-		(BOOL (__stdcall *)(HANDLE,DWORD,SECURITY_ATTRIBUTES *,SECURITY_IMPERSONATION_LEVEL,TOKEN_TYPE,HANDLE *))
+		(BOOL(__stdcall *)(HANDLE, DWORD, SECURITY_ATTRIBUTES *, SECURITY_IMPERSONATION_LEVEL, TOKEN_TYPE, HANDLE *))
 		GetProcAddress(nt->hAdvapi32, "DuplicateTokenEx");
 
 	nt->ConvertStringSidToSidA =
-		(BOOL (__stdcall *)(LPCSTR,PSID *))
+		(BOOL(__stdcall *)(LPCSTR, PSID *))
 		GetProcAddress(nt->hAdvapi32, "ConvertStringSidToSidA");
 
 	nt->GetTokenInformation =
-		(BOOL (__stdcall *)(HANDLE,TOKEN_INFORMATION_CLASS,void *,DWORD,PDWORD))
+		(BOOL(__stdcall *)(HANDLE, TOKEN_INFORMATION_CLASS, void *, DWORD, PDWORD))
 		GetProcAddress(nt->hAdvapi32, "GetTokenInformation");
 
 	nt->SetTokenInformation =
-		(BOOL (__stdcall *)(HANDLE,TOKEN_INFORMATION_CLASS,void *,DWORD))
+		(BOOL(__stdcall *)(HANDLE, TOKEN_INFORMATION_CLASS, void *, DWORD))
 		GetProcAddress(nt->hAdvapi32, "SetTokenInformation");
 
 	nt->CreateProcessAsUserA =
-		(BOOL (__stdcall *)(HANDLE,LPCSTR,LPSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_ATTRIBUTES,BOOL,DWORD,void *,LPCSTR,LPSTARTUPINFOA,LPPROCESS_INFORMATION))
+		(BOOL(__stdcall *)(HANDLE, LPCSTR, LPSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCSTR, LPSTARTUPINFOA, LPPROCESS_INFORMATION))
 		GetProcAddress(nt->hAdvapi32, "CreateProcessAsUserA");
 
 	nt->CreateProcessAsUserW =
-		(BOOL (__stdcall *)(HANDLE,LPCWSTR,LPWSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_ATTRIBUTES,BOOL,DWORD,void *,LPCWSTR,LPSTARTUPINFOW,LPPROCESS_INFORMATION))
+		(BOOL(__stdcall *)(HANDLE, LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION))
 		GetProcAddress(nt->hAdvapi32, "CreateProcessAsUserW");
 
+	nt->IsValidSid =
+		(BOOL(__stdcall *)(PSID))
+		GetProcAddress(nt->hAdvapi32, "IsValidSid");
+
+	nt->GetLengthSid =
+		(DWORD(__stdcall *)(PSID))
+		GetProcAddress(nt->hAdvapi32, "GetLengthSid");
+
 	nt->LookupAccountSidA =
-		(BOOL (__stdcall *)(LPCSTR,PSID,LPSTR,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE))
+		(BOOL(__stdcall *)(LPCSTR, PSID, LPSTR, LPDWORD, LPSTR, LPDWORD, PSID_NAME_USE))
 		GetProcAddress(nt->hAdvapi32, "LookupAccountSidA");
 
+	nt->LookupAccountSidW =
+		(BOOL(__stdcall *)(LPCWSTR, PSID, LPWSTR, LPDWORD, LPWSTR, LPDWORD, PSID_NAME_USE))
+		GetProcAddress(nt->hAdvapi32, "LookupAccountSidW");
+
 	nt->LookupAccountNameA =
-		(BOOL (__stdcall *)(LPCSTR,LPCSTR,PSID,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE))
+		(BOOL(__stdcall *)(LPCSTR, LPCSTR, PSID, LPDWORD, LPSTR, LPDWORD, PSID_NAME_USE))
 		GetProcAddress(nt->hAdvapi32, "LookupAccountNameA");
 
 	nt->SetNamedSecurityInfoW =
-		(DWORD (__stdcall *)(LPWSTR,UINT,SECURITY_INFORMATION,PSID,PSID,PACL,PACL))
+		(DWORD(__stdcall *)(LPWSTR, UINT, SECURITY_INFORMATION, PSID, PSID, PACL, PACL))
 		GetProcAddress(nt->hAdvapi32, "SetNamedSecurityInfoW");
 
 	nt->AddAccessAllowedAceEx =
-		(BOOL (__stdcall *)(PACL,DWORD,DWORD,DWORD,PSID))
+		(BOOL(__stdcall *)(PACL, DWORD, DWORD, DWORD, PSID))
 		GetProcAddress(nt->hAdvapi32, "AddAccessAllowedAceEx");
 
 	nt->QueryFullProcessImageNameA =
-		(BOOL (__stdcall *)(HANDLE,DWORD,LPSTR,PDWORD))
+		(BOOL(__stdcall *)(HANDLE, DWORD, LPSTR, PDWORD))
 		GetProcAddress(nt->hKernel32, "QueryFullProcessImageNameA");
 
 	nt->QueryFullProcessImageNameW =
-		(BOOL (__stdcall *)(HANDLE,DWORD,LPWSTR,PDWORD))
+		(BOOL(__stdcall *)(HANDLE, DWORD, LPWSTR, PDWORD))
 		GetProcAddress(nt->hKernel32, "QueryFullProcessImageNameW");
 
 	nt->RegLoadKeyW =
-		(LSTATUS (__stdcall *)(HKEY,LPCWSTR,LPCWSTR))
+		(LSTATUS(__stdcall *)(HKEY, LPCWSTR, LPCWSTR))
 		GetProcAddress(nt->hAdvapi32, "RegLoadKeyW");
 
 	nt->RegUnLoadKeyW =
-		(LSTATUS (__stdcall *)(HKEY,LPCWSTR))
+		(LSTATUS(__stdcall *)(HKEY, LPCWSTR))
 		GetProcAddress(nt->hAdvapi32, "RegUnLoadKeyW");
 
 	nt->CheckTokenMembership =
-		(BOOL (__stdcall*)(HANDLE, PSID, PBOOL))
+		(BOOL(__stdcall *)(HANDLE, PSID, PBOOL))
 		GetProcAddress(nt->hAdvapi32, "CheckTokenMembership");
 
 	nt->AllocateAndInitializeSid =
-		(BOOL(__stdcall*)(PSID_IDENTIFIER_AUTHORITY, BYTE, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, PSID*))
+		(BOOL(__stdcall *)(PSID_IDENTIFIER_AUTHORITY, BYTE, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, PSID *))
 		GetProcAddress(nt->hAdvapi32, "AllocateAndInitializeSid");
 
 	nt->FreeSid =
-		(PVOID(__stdcall*)(PSID))
+		(PVOID(__stdcall *)(PSID))
 		GetProcAddress(nt->hAdvapi32, "FreeSid");
+
+	nt->EqualSid =
+		(BOOL(__stdcall *)(PSID, PSID))
+		GetProcAddress(nt->hAdvapi32, "EqualSid");
 
 	nt->GetAddrInfoExW =
 		(int(__stdcall *)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE))
@@ -14558,6 +15186,10 @@ NT_API *MsLoadNtApiFunctions()
 	nt->GetAddrInfoExCancel =
 		(int(__stdcall *)(LPHANDLE))
 		GetProcAddress(nt->hWS2_32, "GetAddrInfoExCancel");
+
+	nt->WinStationQueryInformationW =
+		(BOOLEAN(__stdcall *)(HANDLE, ULONG, UINT, PVOID, ULONG, PULONG))
+		GetProcAddress(nt->hWinSta, "WinStationQueryInformationW");
 
 	// Determine WoW64
 	if (Is32())
@@ -14591,15 +15223,15 @@ NT_API *MsLoadNtApiFunctions()
 	if (info.dwMajorVersion >= 5)
 	{
 		nt->UpdateDriverForPlugAndPlayDevicesW =
-			(BOOL (__stdcall *)(HWND,wchar_t *,wchar_t *,UINT,BOOL *))
+			(BOOL(__stdcall *)(HWND, wchar_t *, wchar_t *, UINT, BOOL *))
 			GetProcAddress(nt->hNewDev, "UpdateDriverForPlugAndPlayDevicesW");
 
 		nt->CM_Get_Device_ID_ExA =
-			(UINT (__stdcall *)(DWORD,char *,UINT,UINT,HANDLE))
+			(UINT(__stdcall *)(DWORD, char *, UINT, UINT, HANDLE))
 			GetProcAddress(nt->hSetupApi, "CM_Get_Device_ID_ExA");
 
 		nt->CM_Get_DevNode_Status_Ex =
-			(UINT (__stdcall *)(UINT *,UINT *,DWORD,UINT,HANDLE))
+			(UINT(__stdcall *)(UINT *, UINT *, DWORD, UINT, HANDLE))
 			GetProcAddress(nt->hSetupApi, "CM_Get_DevNode_Status_Ex");
 	}
 
@@ -14607,147 +15239,147 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hWtsApi32 != NULL)
 	{
 		// Terminal Services related API
-		nt->WTSQuerySessionInformation =
-			(UINT (__stdcall *)(HANDLE,DWORD,WTS_INFO_CLASS,wchar_t *,DWORD *))
+		nt->WTSQuerySessionInformationW =
+			(UINT(__stdcall *)(HANDLE, DWORD, WTS_INFO_CLASS, wchar_t *, DWORD *))
 			GetProcAddress(nt->hWtsApi32, "WTSQuerySessionInformationW");
 		nt->WTSFreeMemory =
-			(void (__stdcall *)(void *))
+			(void(__stdcall *)(void *))
 			GetProcAddress(nt->hWtsApi32, "WTSFreeMemory");
 		nt->WTSDisconnectSession =
-			(BOOL (__stdcall *)(HANDLE,DWORD,BOOL))
+			(BOOL(__stdcall *)(HANDLE, DWORD, BOOL))
 			GetProcAddress(nt->hWtsApi32, "WTSDisconnectSession");
 		nt->WTSEnumerateSessionsA =
-			(BOOL (__stdcall *)(HANDLE,DWORD,DWORD,PWTS_SESSION_INFOA *,DWORD *))
+			(BOOL(__stdcall *)(HANDLE, DWORD, DWORD, PWTS_SESSION_INFOA *, DWORD *))
 			GetProcAddress(nt->hWtsApi32, "WTSEnumerateSessionsA");
 		nt->WTSRegisterSessionNotification =
-			(BOOL (__stdcall *)(HWND,DWORD))
+			(BOOL(__stdcall *)(HWND, DWORD))
 			GetProcAddress(nt->hWtsApi32, "WTSRegisterSessionNotification");
 		nt->WTSUnRegisterSessionNotification =
-			(BOOL (__stdcall *)(HWND))
+			(BOOL(__stdcall *)(HWND))
 			GetProcAddress(nt->hWtsApi32, "WTSUnRegisterSessionNotification");
 	}
 
 	// Service related API
 	nt->OpenSCManager =
-		(SC_HANDLE (__stdcall *)(LPCTSTR,LPCTSTR,DWORD))
+		(SC_HANDLE(__stdcall *)(LPCTSTR, LPCTSTR, DWORD))
 		GetProcAddress(nt->hAdvapi32, "OpenSCManagerA");
 	nt->CreateServiceA =
-		(SC_HANDLE (__stdcall *)(SC_HANDLE,LPCTSTR,LPCTSTR,DWORD,DWORD,DWORD,DWORD,LPCTSTR,LPCTSTR,LPDWORD,LPCTSTR,LPCTSTR,LPCTSTR))
+		(SC_HANDLE(__stdcall *)(SC_HANDLE, LPCTSTR, LPCTSTR, DWORD, DWORD, DWORD, DWORD, LPCTSTR, LPCTSTR, LPDWORD, LPCTSTR, LPCTSTR, LPCTSTR))
 		GetProcAddress(nt->hAdvapi32, "CreateServiceA");
 	nt->CreateServiceW =
-		(SC_HANDLE (__stdcall *)(SC_HANDLE,LPCWSTR,LPCWSTR,DWORD,DWORD,DWORD,DWORD,LPCWSTR,LPCWSTR,LPDWORD,LPCWSTR,LPCWSTR,LPCWSTR))
+		(SC_HANDLE(__stdcall *)(SC_HANDLE, LPCWSTR, LPCWSTR, DWORD, DWORD, DWORD, DWORD, LPCWSTR, LPCWSTR, LPDWORD, LPCWSTR, LPCWSTR, LPCWSTR))
 		GetProcAddress(nt->hAdvapi32, "CreateServiceW");
 	nt->ChangeServiceConfig2 =
-		(BOOL (__stdcall *)(SC_HANDLE,DWORD,LPVOID))
+		(BOOL(__stdcall *)(SC_HANDLE, DWORD, LPVOID))
 		GetProcAddress(nt->hAdvapi32, "ChangeServiceConfig2W");
 	nt->CloseServiceHandle =
-		(BOOL (__stdcall *)(SC_HANDLE))
+		(BOOL(__stdcall *)(SC_HANDLE))
 		GetProcAddress(nt->hAdvapi32, "CloseServiceHandle");
 	nt->OpenService =
-		(SC_HANDLE (__stdcall *)(SC_HANDLE,LPCTSTR,DWORD))
+		(SC_HANDLE(__stdcall *)(SC_HANDLE, LPCTSTR, DWORD))
 		GetProcAddress(nt->hAdvapi32, "OpenServiceA");
 	nt->QueryServiceStatus =
-		(BOOL (__stdcall *)(SC_HANDLE,LPSERVICE_STATUS))
+		(BOOL(__stdcall *)(SC_HANDLE, LPSERVICE_STATUS))
 		GetProcAddress(nt->hAdvapi32, "QueryServiceStatus");
 	nt->StartService =
-		(BOOL (__stdcall *)(SC_HANDLE,DWORD,LPCTSTR))
+		(BOOL(__stdcall *)(SC_HANDLE, DWORD, LPCTSTR))
 		GetProcAddress(nt->hAdvapi32, "StartServiceA");
 	nt->ControlService =
-		(BOOL (__stdcall *)(SC_HANDLE,DWORD,LPSERVICE_STATUS))
+		(BOOL(__stdcall *)(SC_HANDLE, DWORD, LPSERVICE_STATUS))
 		GetProcAddress(nt->hAdvapi32, "ControlService");
 	nt->SetServiceStatus =
-		(BOOL (__stdcall *)(SERVICE_STATUS_HANDLE,LPSERVICE_STATUS))
+		(BOOL(__stdcall *)(SERVICE_STATUS_HANDLE, LPSERVICE_STATUS))
 		GetProcAddress(nt->hAdvapi32, "SetServiceStatus");
 	nt->RegisterServiceCtrlHandler =
-		(SERVICE_STATUS_HANDLE (__stdcall *)(LPCTSTR,LPHANDLER_FUNCTION))
+		(SERVICE_STATUS_HANDLE(__stdcall *)(LPCTSTR, LPHANDLER_FUNCTION))
 		GetProcAddress(nt->hAdvapi32, "RegisterServiceCtrlHandlerW");
 	nt->StartServiceCtrlDispatcher =
-		(BOOL (__stdcall *)(const LPSERVICE_TABLE_ENTRY))
+		(BOOL(__stdcall *)(const LPSERVICE_TABLE_ENTRY))
 		GetProcAddress(nt->hAdvapi32, "StartServiceCtrlDispatcherW");
 	nt->DeleteService =
-		(BOOL (__stdcall *)(SC_HANDLE))
+		(BOOL(__stdcall *)(SC_HANDLE))
 		GetProcAddress(nt->hAdvapi32, "DeleteService");
 	nt->RegisterEventSourceW =
-		(HANDLE (__stdcall *)(LPCWSTR,LPCWSTR))
+		(HANDLE(__stdcall *)(LPCWSTR, LPCWSTR))
 		GetProcAddress(nt->hAdvapi32, "RegisterEventSourceW");
 	nt->ReportEventW =
-		(BOOL (__stdcall *)(HANDLE,WORD,WORD,DWORD,PSID,WORD,DWORD,LPCWSTR *,LPVOID))
+		(BOOL(__stdcall *)(HANDLE, WORD, WORD, DWORD, PSID, WORD, DWORD, LPCWSTR *, LPVOID))
 		GetProcAddress(nt->hAdvapi32, "ReportEventW");
 	nt->DeregisterEventSource =
-		(BOOL (__stdcall *)(HANDLE))
+		(BOOL(__stdcall *)(HANDLE))
 		GetProcAddress(nt->hAdvapi32, "DeregisterEventSource");
 	nt->Wow64DisableWow64FsRedirection =
-		(BOOL (__stdcall *)(void **))
+		(BOOL(__stdcall *)(void **))
 		GetProcAddress(nt->hKernel32, "Wow64DisableWow64FsRedirection");
 	nt->Wow64EnableWow64FsRedirection =
-		(BOOLEAN (__stdcall *)(BOOLEAN))
+		(BOOLEAN(__stdcall *)(BOOLEAN))
 		GetProcAddress(nt->hKernel32, "Wow64EnableWow64FsRedirection");
 	nt->Wow64RevertWow64FsRedirection =
-		(BOOL (__stdcall *)(void *))
+		(BOOL(__stdcall *)(void *))
 		GetProcAddress(nt->hKernel32, "Wow64RevertWow64FsRedirection");
 
 	if (nt->hPsApi != NULL)
 	{
 		// Process related API
 		nt->EnumProcesses =
-			(BOOL (__stdcall *)(DWORD *,DWORD,DWORD *))
+			(BOOL(__stdcall *)(DWORD *, DWORD, DWORD *))
 			GetProcAddress(nt->hPsApi, "EnumProcesses");
 
 		nt->EnumProcessModules =
-			(BOOL (__stdcall *)(HANDLE,HMODULE * ,DWORD,DWORD *))
+			(BOOL(__stdcall *)(HANDLE, HMODULE *, DWORD, DWORD *))
 			GetProcAddress(nt->hPsApi, "EnumProcessModules");
 
 		nt->GetModuleFileNameExA =
-			(DWORD (__stdcall *)(HANDLE,HMODULE,LPSTR,DWORD))
+			(DWORD(__stdcall *)(HANDLE, HMODULE, LPSTR, DWORD))
 			GetProcAddress(nt->hPsApi, "GetModuleFileNameExA");
 
 		nt->GetModuleFileNameExW =
-			(DWORD (__stdcall *)(HANDLE,HMODULE,LPWSTR,DWORD))
+			(DWORD(__stdcall *)(HANDLE, HMODULE, LPWSTR, DWORD))
 			GetProcAddress(nt->hPsApi, "GetModuleFileNameExW");
 
 		nt->GetProcessImageFileNameA =
-			(DWORD (__stdcall *)(HANDLE,LPSTR,DWORD))
+			(DWORD(__stdcall *)(HANDLE, LPSTR, DWORD))
 			GetProcAddress(nt->hPsApi, "GetProcessImageFileNameA");
 
 		nt->GetProcessImageFileNameW =
-			(DWORD (__stdcall *)(HANDLE,LPWSTR,DWORD))
+			(DWORD(__stdcall *)(HANDLE, LPWSTR, DWORD))
 			GetProcAddress(nt->hPsApi, "GetProcessImageFileNameW");
 	}
 
 	// Registry related API
 	nt->RegDeleteKeyExA =
-		(LONG (__stdcall *)(HKEY,LPCTSTR,REGSAM,DWORD))
+		(LONG(__stdcall *)(HKEY, LPCTSTR, REGSAM, DWORD))
 		GetProcAddress(nt->hAdvapi32, "RegDeleteKeyExA");
 
 	// Security related API
 	if (nt->hSecur32 != NULL)
 	{
 		nt->GetUserNameExA =
-			(BOOL (__stdcall *)(UINT,LPSTR,PULONG))
+			(BOOL(__stdcall *)(UINT, LPSTR, PULONG))
 			GetProcAddress(nt->hSecur32, "GetUserNameExA");
 
 		nt->GetUserNameExW =
-			(BOOL (__stdcall *)(UINT,LPWSTR,PULONG))
+			(BOOL(__stdcall *)(UINT, LPWSTR, PULONG))
 			GetProcAddress(nt->hSecur32, "GetUserNameExW");
 
 		nt->LsaConnectUntrusted =
-			(NTSTATUS (__stdcall *)(PHANDLE))
+			(NTSTATUS(__stdcall *)(PHANDLE))
 			GetProcAddress(nt->hSecur32, "LsaConnectUntrusted");
 
 		nt->LsaLookupAuthenticationPackage =
-			(NTSTATUS (__stdcall *)(HANDLE,PLSA_STRING,PULONG))
+			(NTSTATUS(__stdcall *)(HANDLE, PLSA_STRING, PULONG))
 			GetProcAddress(nt->hSecur32, "LsaLookupAuthenticationPackage");
 
 		nt->LsaLogonUser =
-			(NTSTATUS (__stdcall *)(HANDLE,PLSA_STRING,SECURITY_LOGON_TYPE,ULONG,PVOID,ULONG,PTOKEN_GROUPS,PTOKEN_SOURCE,PVOID,PULONG,PLUID,PHANDLE,PQUOTA_LIMITS,PNTSTATUS))
+			(NTSTATUS(__stdcall *)(HANDLE, PLSA_STRING, SECURITY_LOGON_TYPE, ULONG, PVOID, ULONG, PTOKEN_GROUPS, PTOKEN_SOURCE, PVOID, PULONG, PLUID, PHANDLE, PQUOTA_LIMITS, PNTSTATUS))
 			GetProcAddress(nt->hSecur32, "LsaLogonUser");
 
 		nt->LsaDeregisterLogonProcess =
-			(NTSTATUS (__stdcall *)(HANDLE))
+			(NTSTATUS(__stdcall *)(HANDLE))
 			GetProcAddress(nt->hSecur32, "LsaDeregisterLogonProcess");
 
 		nt->LsaFreeReturnBuffer =
-			(NTSTATUS (__stdcall *)(PVOID))
+			(NTSTATUS(__stdcall *)(PVOID))
 			GetProcAddress(nt->hSecur32, "LsaFreeReturnBuffer");
 	}
 
@@ -14755,49 +15387,49 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hWcmapi != NULL)
 	{
 		nt->WcmQueryProperty =
-			(DWORD (__stdcall *)(const GUID *,LPCWSTR,MS_WCM_PROPERTY,PVOID,PDWORD,PBYTE *))
+			(DWORD(__stdcall *)(const GUID *, LPCWSTR, MS_WCM_PROPERTY, PVOID, PDWORD, PBYTE *))
 			GetProcAddress(nt->hWcmapi, "WcmQueryProperty");
 
 		nt->WcmSetProperty =
-			(DWORD (__stdcall *)(const GUID *,LPCWSTR,MS_WCM_PROPERTY,PVOID,DWORD,const BYTE *))
+			(DWORD(__stdcall *)(const GUID *, LPCWSTR, MS_WCM_PROPERTY, PVOID, DWORD, const BYTE *))
 			GetProcAddress(nt->hWcmapi, "WcmSetProperty");
 
 		nt->WcmFreeMemory =
-			(void (__stdcall *)(PVOID))
+			(void(__stdcall *)(PVOID))
 			GetProcAddress(nt->hWcmapi, "WcmFreeMemory");
 
 		nt->WcmGetProfileList =
-			(DWORD (__stdcall *)(PVOID,MS_WCM_PROFILE_INFO_LIST **))
+			(DWORD(__stdcall *)(PVOID, MS_WCM_PROFILE_INFO_LIST **))
 			GetProcAddress(nt->hWcmapi, "WcmGetProfileList");
 	}
 
 	nt->AllocateLocallyUniqueId =
-		(BOOL (__stdcall *)(PLUID))
+		(BOOL(__stdcall *)(PLUID))
 		GetProcAddress(nt->hAdvapi32, "AllocateLocallyUniqueId");
 
 	if (nt->hUserenv != NULL)
 	{
 		nt->RefreshPolicy =
-			(BOOL(__stdcall*)(BOOL))
+			(BOOL(__stdcall *)(BOOL))
 			GetProcAddress(nt->hUserenv, "RefreshPolicy");
 
 		nt->RefreshPolicyEx =
-			(BOOL(__stdcall*)(BOOL,DWORD))
+			(BOOL(__stdcall *)(BOOL, DWORD))
 			GetProcAddress(nt->hUserenv, "RefreshPolicyEx");
 	}
 
 	if (nt->hNtdll != NULL)
 	{
 		nt->NtQueryInformationProcess =
-			(NTSTATUS(__stdcall*)(HANDLE, NT_PROCESSINFOCLASS, PVOID, ULONG, PULONG))
+			(NTSTATUS(__stdcall *)(HANDLE, NT_PROCESSINFOCLASS, PVOID, ULONG, PULONG))
 			GetProcAddress(nt->hNtdll, "NtQueryInformationProcess");
 
 		nt->NtWow64QueryInformationProcess64 =
-			(NTSTATUS(__stdcall*)(HANDLE, NT_PROCESSINFOCLASS, PVOID, ULONG, PULONG))
+			(NTSTATUS(__stdcall *)(HANDLE, NT_PROCESSINFOCLASS, PVOID, ULONG, PULONG))
 			GetProcAddress(nt->hNtdll, "NtWow64QueryInformationProcess64");
 
 		nt->NtWow64ReadVirtualMemory64 =
-			(NTSTATUS(__stdcall*)(HANDLE, UINT64, PVOID, ULONG64, PULONG64))
+			(NTSTATUS(__stdcall *)(HANDLE, UINT64, PVOID, ULONG64, PULONG64))
 			GetProcAddress(nt->hNtdll, "NtWow64ReadVirtualMemory64");
 
 		if (is_wow64)
@@ -14816,16 +15448,16 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hUser32 != NULL)
 	{
 		nt->SwitchDesktop =
-			(BOOL (__stdcall *)(HDESK))
+			(BOOL(__stdcall *)(HDESK))
 			GetProcAddress(nt->hUser32, "SwitchDesktop");
 		nt->OpenDesktopA =
-			(HDESK (__stdcall *)(LPTSTR,DWORD,BOOL,ACCESS_MASK))
+			(HDESK(__stdcall *)(LPTSTR, DWORD, BOOL, ACCESS_MASK))
 			GetProcAddress(nt->hUser32, "OpenDesktopA");
 		nt->CloseDesktop =
-			(BOOL (__stdcall *)(HDESK))
+			(BOOL(__stdcall *)(HDESK))
 			GetProcAddress(nt->hUser32, "CloseDesktop");
 		nt->SetWindowDisplayAffinity =
-			(BOOL(__stdcall*)(HWND, DWORD))
+			(BOOL(__stdcall *)(HWND, DWORD))
 			GetProcAddress(nt->hUser32, "SetWindowDisplayAffinity");
 	}
 
@@ -14833,7 +15465,7 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hDwmapi)
 	{
 		nt->DwmIsCompositionEnabled =
-			(HRESULT (__stdcall *)(BOOL *))
+			(HRESULT(__stdcall *)(BOOL *))
 			GetProcAddress(nt->hDwmapi, "DwmIsCompositionEnabled");
 	}
 
@@ -14841,7 +15473,7 @@ NT_API *MsLoadNtApiFunctions()
 	if (nt->hDbgHelp != NULL)
 	{
 		nt->MiniDumpWriteDump =
-			(BOOL (__stdcall *)(HANDLE,DWORD,HANDLE,MINIDUMP_TYPE,PMINIDUMP_EXCEPTION_INFORMATION,PMINIDUMP_USER_STREAM_INFORMATION,PMINIDUMP_CALLBACK_INFORMATION))
+			(BOOL(__stdcall *)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION))
 			GetProcAddress(nt->hDbgHelp, "MiniDumpWriteDump");
 	}
 
@@ -14875,6 +15507,11 @@ void MsFreeNtApiFunctions(NT_API *nt)
 	if (nt->hWtsApi32 != NULL)
 	{
 		FreeLibrary(nt->hWtsApi32);
+	}
+
+	if (nt->hWinSta != NULL)
+	{
+		FreeLibrary(nt->hWinSta);
 	}
 
 	if (nt->hPsApi != NULL)
@@ -15594,7 +16231,7 @@ UINT MsRegReadIntEx2(UINT root, char *keyname, char *valuename, bool force32bit,
 	}
 
 	return value;
-}
+		}
 
 // Get a string list
 LIST *MsRegReadStrList(UINT root, char *keyname, char *valuename)
@@ -16877,13 +17514,13 @@ void MsInit()
 		if (hMsi != NULL)
 		{
 			_MsiConfigureProductW =
-				(UINT (__stdcall *)(LPCWSTR,int,INSTALLSTATE)) GetProcAddress(hMsi, "MsiConfigureProductW");
+				(UINT(__stdcall *)(LPCWSTR, int, INSTALLSTATE)) GetProcAddress(hMsi, "MsiConfigureProductW");
 			_MsiGetProductInfoW =
-				(UINT (__stdcall *)(LPCWSTR,LPCWSTR,LPWSTR,LPDWORD)) GetProcAddress(hMsi, "MsiGetProductInfoW");
+				(UINT(__stdcall *)(LPCWSTR, LPCWSTR, LPWSTR, LPDWORD)) GetProcAddress(hMsi, "MsiGetProductInfoW");
 			_MsiSetInternalUI =
-				(INSTALLUILEVEL (__stdcall *)(INSTALLUILEVEL,HWND *)) GetProcAddress(hMsi, "MsiSetInternalUI");
+				(INSTALLUILEVEL(__stdcall *)(INSTALLUILEVEL, HWND *)) GetProcAddress(hMsi, "MsiSetInternalUI");
 			_MsiLocateComponentW =
-				(INSTALLSTATE (__stdcall *)(LPCWSTR,LPWSTR,LPDWORD)) GetProcAddress(hMsi, "MsiLocateComponentW");
+				(INSTALLSTATE(__stdcall *)(LPCWSTR, LPWSTR, LPDWORD)) GetProcAddress(hMsi, "MsiLocateComponentW");
 		}
 	}
 
@@ -17336,7 +17973,7 @@ wchar_t *MsGetPersonalStartMenuDirW()
 
 	return ms->PersonalStartMenuDirW;
 }
-wchar_t* MsGetMyPicturesDirW()
+wchar_t *MsGetMyPicturesDirW()
 {
 	if (ms->MyPicturesDirW == NULL)
 	{

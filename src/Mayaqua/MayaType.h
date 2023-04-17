@@ -386,6 +386,7 @@ typedef struct PRAND PRAND;
 typedef struct ACTIVE_PATCH_ENTRY ACTIVE_PATCH_ENTRY;
 typedef struct LOCKOUT LOCKOUT;
 typedef struct LOCKOUT_ENTRY LOCKOUT_ENTRY;
+typedef struct DIFF_ENTRY DIFF_ENTRY;
 
 // Str.h
 typedef struct TOKEN_LIST TOKEN_LIST;

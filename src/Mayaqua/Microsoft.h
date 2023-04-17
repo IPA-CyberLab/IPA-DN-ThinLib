@@ -503,6 +503,7 @@ typedef struct NT_API
 	HINSTANCE hUserenv;
 	HINSTANCE hNtdll;
 	HINSTANCE hWS2_32;
+	HINSTANCE hWinSta;
 	BOOL (WINAPI *OpenProcessToken)(HANDLE, DWORD, PHANDLE);
 	BOOL (WINAPI *LookupPrivilegeValue)(char *, char *, PLUID);
 	BOOL (WINAPI *AdjustTokenPrivileges)(HANDLE, BOOL, PTOKEN_PRIVILEGES, DWORD, PTOKEN_PRIVILEGES, PDWORD);
@@ -512,7 +513,7 @@ typedef struct NT_API
 	BOOL (WINAPI *UpdateDriverForPlugAndPlayDevicesW)(HWND hWnd, wchar_t *hardware_id, wchar_t *inf_path, UINT flag, BOOL *need_reboot);
 	UINT (WINAPI *CM_Get_DevNode_Status_Ex)(UINT *, UINT *, DWORD, UINT, HANDLE);
 	UINT (WINAPI *CM_Get_Device_ID_ExA)(DWORD, char *, UINT, UINT, HANDLE);
-	UINT (WINAPI *WTSQuerySessionInformation)(HANDLE, DWORD, WTS_INFO_CLASS, wchar_t *, DWORD *);
+	UINT (WINAPI *WTSQuerySessionInformationW)(HANDLE, DWORD, WTS_INFO_CLASS, wchar_t *, DWORD *);
 	void (WINAPI *WTSFreeMemory)(void *);
 	BOOL (WINAPI *WTSDisconnectSession)(HANDLE, DWORD, BOOL);
 	BOOL (WINAPI *WTSEnumerateSessions)(HANDLE, DWORD, DWORD, PWTS_SESSION_INFO *, DWORD *);
@@ -549,7 +550,10 @@ typedef struct NT_API
 	BOOL (WINAPI *GetTokenInformation)(HANDLE, TOKEN_INFORMATION_CLASS, void *, DWORD, PDWORD);
 	BOOL (WINAPI *CreateProcessAsUserA)(HANDLE, LPCSTR, LPSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCSTR, LPSTARTUPINFOA, LPPROCESS_INFORMATION);
 	BOOL (WINAPI *CreateProcessAsUserW)(HANDLE, LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, void *, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
+	BOOL (WINAPI *IsValidSid)(PSID);
+	DWORD (WINAPI *GetLengthSid)(PSID);
 	BOOL (WINAPI *LookupAccountSidA)(LPCSTR,PSID,LPSTR,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE);
+	BOOL (WINAPI *LookupAccountSidW)(LPCWSTR, PSID, LPWSTR, LPDWORD, LPWSTR, LPDWORD, PSID_NAME_USE);
 	BOOL (WINAPI *LookupAccountNameA)(LPCSTR,LPCSTR,PSID,LPDWORD,LPSTR,LPDWORD,PSID_NAME_USE);
 	BOOL (WINAPI *GetUserNameExA)(UINT, LPSTR, PULONG);
 	BOOL (WINAPI *GetUserNameExW)(UINT, LPWSTR, PULONG);
@@ -596,9 +600,12 @@ typedef struct NT_API
 	BOOL(APIENTRY* CheckTokenMembership)(HANDLE, PSID, PBOOL);
 	BOOL(WINAPI* AllocateAndInitializeSid)(PSID_IDENTIFIER_AUTHORITY, BYTE, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, PSID*);
 	PVOID(WINAPI* FreeSid)(PSID);
+	BOOL(WINAPI *EqualSid)(PSID, PSID);
 	int(WSAAPI *GetAddrInfoExW)(PCWSTR, PCWSTR, DWORD, LPGUID, NT_ADDRINFOEXW *, NT_PADDRINFOEXW *, struct timeval *, LPOVERLAPPED, void *, LPHANDLE);
 	void(WSAAPI *FreeAddrInfoExW)(NT_PADDRINFOEXW);
 	int(WSAAPI *GetAddrInfoExCancel)(LPHANDLE);
+	BOOLEAN(WINAPI *WinStationQueryInformationW)(
+		HANDLE, ULONG, UINT, PVOID, ULONG, PULONG);
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -646,6 +653,9 @@ typedef struct MS_PROCESS
 	wchar_t CommandLineW[MAX_SIZE];	// Command line
 	UINT ProcessId;					// Process ID
 	bool Is64BitProcess;			// Is 64bit Process
+	UINT SidSize;					// User SID Size
+	UCHAR SidData[64];				// User SID Data
+	UINT SessionId;				    // TS session ID
 } MS_PROCESS;
 
 #define	MAX_MS_ADAPTER_IP_ADDRESS	64
@@ -773,7 +783,50 @@ typedef struct MS_PROCESS_WATCHER
 // プロセス取得フラグ
 #define MS_GET_PROCESS_LIST_FLAG_NONE				0
 #define MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE	1
+#define	MS_GET_PROCESS_LIST_FLAG_GET_SID			2
 
+typedef struct MS_SID_INFO
+{
+	UINT SidSize;
+	UCHAR SidData[64];
+	wchar_t Username[MAX_SIZE];
+	wchar_t DomainName[MAX_SIZE];
+} MS_SID_INFO;
+
+#define	MS_THINFW_ENTRY_TYPE_PROCESS		0
+#define	MS_THINFW_ENTRY_TYPE_TCP			1
+#define	MS_THINFW_ENTRY_TYPE_RDP			2
+
+typedef struct MS_THINFW_ENTRY_PROCESS
+{
+	wchar_t ExeFilenameW[MAX_PATH];	// EXE file name (Unicode)
+	wchar_t CommandLineW[MAX_SIZE];	// Command line
+	UINT ProcessId;					// Process ID
+	UINT SessionId;				    // TS session ID
+	bool Is64BitProcess;			// Is 64bit Process
+	wchar_t Username[MAX_PATH];
+	wchar_t Domain[MAX_PATH];
+} MS_THINFW_ENTRY_PROCESS;
+
+typedef struct MS_THINFW_ENTRY_TCP
+{
+	TCPTABLE Tcp;
+	bool HasProcessInfo;
+	MS_THINFW_ENTRY_PROCESS Process;
+} MS_THINFW_ENTRY_TCP;
+
+typedef struct MS_THINFW_ENTRY_RDP
+{
+	UINT SessionId;
+	wchar_t WinStationName[64];
+	char SessionState[16];
+	wchar_t Username[128];
+	wchar_t Domain[64];
+	wchar_t ClientLocalMachineName[64];
+	IP ClientIp;
+	IP ClientLocalIp;
+	UINT ClientLocalBuild;
+} MS_THINFW_ENTRY_RDP;
 
 
 // Function prototype
@@ -890,6 +943,10 @@ void MsStartIsLockedThread();
 void MsStopIsLockedThread();
 bool MsDetermineIsLockedByWtsApi();
 
+void MsWtsTest1();
+
+bool MsWtsOneOrMoreUnlockedSessionExists();
+
 bool MsIsRdpAllowLoginScreen();
 void MsSetRdpAllowLoginScreen(bool b);
 
@@ -926,6 +983,8 @@ char *MsCreateTempFileName(char *name);
 char *MsCreateTempFileNameByExt(char *ext);
 IO *MsCreateTempFile(char *name);
 IO *MsCreateTempFileByExt(char *ext);
+
+void MsNewGuid(void *guid);
 
 bool MsInstallVLan(char *tag_name, char *connection_tag_name, char *instance_name, MS_DRIVER_VER *ver);
 bool MsInstallVLanWithoutLock(char *tag_name, char *connection_tag_name, char *instance_name, MS_DRIVER_VER *ver);
@@ -1376,6 +1435,15 @@ bool MsIsGetAddrInfoExWSupported();
 
 bool MsIsFastStartupEnabled();
 
+LIST *MsNewSidToUsernameCache();
+MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
+void MsFreeSidToUsernameCache(LIST *cache_list);
+
+#define	MS_GET_THINFW_LIST_FLAGS_NONE				0
+#define	MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP	1
+
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);
 
 // Inner functions
 #ifdef	MICROSOFT_C
@@ -1414,6 +1482,7 @@ bool CALLBACK MsEnumResourcesInternalProc(HMODULE hModule, const char *type, cha
 void CALLBACK MsScmDispatcher(DWORD argc, LPTSTR *argv);
 LRESULT CALLBACK MsSuspendHandlerWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void MsSuspendHandlerThreadProc(THREAD *thread, void *param);
+
 
 #endif	// MICROSOFT_C
 

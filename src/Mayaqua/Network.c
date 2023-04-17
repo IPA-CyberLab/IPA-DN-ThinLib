@@ -18307,6 +18307,10 @@ void GetHostNameThread(THREAD *t, void *p)
 // Get the host name
 bool GetHostName(char *hostname, UINT size, IP *ip)
 {
+	return GetHostNameEx(hostname, size, ip, false);
+}
+bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name) 
+{
 	THREAD *t;
 	IP *p_ip;
 	bool ret;
@@ -18342,7 +18346,7 @@ bool GetHostName(char *hostname, UINT size, IP *ip)
 	ret = GetHostCache(hostname, size, ip);
 	if (ret == false)
 	{
-		if (IsIP4(ip))
+		if (IsIP4(ip) && no_netbios_name == false)
 		{
 			ret = GetNetBiosName(hostname, size, ip);
 			if (ret)

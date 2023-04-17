@@ -195,6 +195,7 @@ void FreeIni(LIST *o);
 UINT IniIntValue(LIST *o, char *key);
 UINT64 IniInt64Value(LIST *o, char *key);
 char *IniStrValue(LIST *o, char *key);
+bool IniBoolValue(LIST *o, char *key);
 wchar_t *IniUniStrValue(LIST *o, char *key);
 bool IniHasValue(LIST *o, char *key);
 bool InStr(char *str, char *keyword);

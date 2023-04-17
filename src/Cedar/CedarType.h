@@ -736,5 +736,10 @@ typedef struct SU_ADAPTER SU_ADAPTER;
 typedef struct SU_ADAPTER_LIST SU_ADAPTER_LIST;
 
 
+// ==============================================================
+//  DU.h
+// ==============================================================
+typedef struct TF_SERVICE TF_SERVICE;
+
 
 #endif	// CEDARTYPE_H
