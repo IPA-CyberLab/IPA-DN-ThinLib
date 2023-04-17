@@ -1199,8 +1199,11 @@ void WtInitWtConnectFromInternetSetting(WT_CONNECT *c, INTERNET_SETTING	*s)
 	c->ZttpServerPort = s->ZttpServerPort;
 
 	// ZTTP_Test
-	c->EnableZttp = true;
-	StrCpy(c->ZttpServerHostName, sizeof(c->ZttpServerHostName), "pc37.sehosts.com");
-	c->ZttpServerPort = 443;
+	if (false)
+	{
+		c->EnableZttp = true;
+		StrCpy(c->ZttpServerHostName, sizeof(c->ZttpServerHostName), "pc37.sehosts.com");
+		c->ZttpServerPort = 443;
+	}
 }
 

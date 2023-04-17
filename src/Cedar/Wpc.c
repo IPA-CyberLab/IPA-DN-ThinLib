@@ -1051,12 +1051,14 @@ BUF *HttpRequestEx6(URL_DATA *data, INTERNET_SETTING *setting,
 	StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), setting->ZttpServerHostName);
 	con.ZttpServerPort = setting->ZttpServerPort;
 
-	// ZTTP_Test
-	if (wt != NULL && wt->Wide->Type != WIDE_TYPE_GATE)
+	if (false) // ZTTP_Test
 	{
-		con.EnableZttp = true;
-		StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), "pc37.sehosts.com");
-		con.ZttpServerPort = 443;
+		if (wt != NULL && wt->Wide->Type != WIDE_TYPE_GATE)
+		{
+			con.EnableZttp = true;
+			StrCpy(con.ZttpServerHostName, sizeof(con.ZttpServerHostName), "pc37.sehosts.com");
+			con.ZttpServerPort = 443;
+		}
 	}
 
 	if (setting->ProxyType != PROXY_HTTP || data->Secure)

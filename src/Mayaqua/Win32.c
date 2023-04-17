@@ -229,7 +229,7 @@ void Win32ShowDiskSpaceWarningOnBoot()
 	{
 		if (total_size >= 10000000)
 		{
-			UINT64 free_mb_64 = (((used_size / 1000000ULL)  + 99ULL)/ 100ULL) * 100ULL;
+			UINT64 free_mb_64 = (((free_size / 1000000ULL)  + 99ULL)/ 100ULL) * 100ULL;
 			if (free_mb_64 <= 500) // 500MB 以下になった場合に 100MB 単位で警告
 			{
 				char reg_value_name[MAX_PATH] = CLEAN;

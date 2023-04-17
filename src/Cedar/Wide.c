@@ -4115,7 +4115,7 @@ WIDE *WideGateStart()
 		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 	}
 
-	if (true) // TODO  ZTTP_Test
+	if (false) // TODO  ZTTP_Test
 	{
 		// ZTTP 中継ゲートウェイ機能を開始
 		w->wt->ZttpGw = NewZttpGw(NULL);
