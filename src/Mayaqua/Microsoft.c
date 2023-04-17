@@ -425,9 +425,14 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 	UINT64 tick = Tick64();
 
-	LIST *process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE);
+	LIST *process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | ((flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE) ? 0 : MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE));
 
-	LIST *tcp_list = GetTcpTableList();
+	LIST *tcp_list = NULL;
+	
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == false)
+	{
+		tcp_list = GetTcpTableList();
+	}
 
 	// Terminal Sessions List
 	if (true)
@@ -572,7 +577,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 						if (ok)
 						{
-							UniPrint(L"%s\n", key);
+							//UniPrint(L"%s\n", key);
 
 							Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
 						}
@@ -599,7 +604,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 			UniFormat(key, sizeof(key), L"PROC:%u:%s", data.ProcessId, data.ExeFilenameW);
 
-			//Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_PROCESS, process_tick));
+			Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_PROCESS, tick));
 		}
 	}
 
@@ -634,11 +639,10 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 					}
 				}
 
-				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u:%u:%u",
-					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort,
-					t->Status, t->ProcessId);
+				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u",
+					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort);
 
-				//Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
+				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
 			}
 		}
 	}

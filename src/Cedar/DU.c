@@ -4594,6 +4594,8 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchTcp = false;
 	UINT cfg_ReportMailIntervalMsec = 5000;
 	bool cfg_OnlyWhenLocked = false;
+	bool cfg_IncludeProcessCommandLine = false;
+	bool cfg_EnableFirewall = false;
 
 	LIST *current_list = NULL;
 
@@ -4623,6 +4625,7 @@ void TfMain(TF_SERVICE *svc)
 
 					// Interpret ini
 					cfg_Enable = IniBoolValue(ini, "Enable");
+					cfg_EnableFirewall = IniBoolValue(ini, "EnableFirewall");
 					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
 					if (cfg_SettingReloadIntervalMsec == 0)
 					{
@@ -4635,6 +4638,7 @@ void TfMain(TF_SERVICE *svc)
 					}
 					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
 					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
+					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
 					cfg_OnlyWhenLocked = IniBoolValue(ini, "OnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
 					cfg_ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
@@ -4642,6 +4646,26 @@ void TfMain(TF_SERVICE *svc)
 					{
 						cfg_ReportMailIntervalMsec = 5000;
 					}
+
+					TF_REPORT_SETTINGS rep = CLEAN;
+					rep.EnableTcpHostnameLookup = IniBoolValue(ini, "EnableTcpHostnameLookup");
+
+					rep.ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
+					StrCpy(rep.ReportMailHost, sizeof(rep.ReportMailHost), IniStrValue(ini, "ReportMailHost"));
+					rep.ReportMailPort = IniIntValue(ini, "ReportMailPort");
+					StrCpy(rep.ReportMailUsername, sizeof(rep.ReportMailUsername), IniStrValue(ini, "ReportMailUsername"));
+					StrCpy(rep.ReportMailPassword, sizeof(rep.ReportMailPassword), IniStrValue(ini, "ReportMailPassword"));
+					rep.ReportMailSslType = IniIntValue(ini, "ReportMailSslType");
+					rep.ReportMailAuthType = IniIntValue(ini, "ReportMailAuthType");
+					StrCpy(rep.ReportMailFrom, sizeof(rep.ReportMailFrom), IniStrValue(ini, "ReportMailFrom"));
+					StrCpy(rep.ReportMailTo, sizeof(rep.ReportMailTo), IniStrValue(ini, "ReportMailTo"));
+					StrCpy(rep.ReportMailSubjectPrefix, sizeof(rep.ReportMailSubjectPrefix), IniStrValue(ini, "ReportMailSubjectPrefix"));
+
+					StrCpy(rep.ReportSyslogHost, sizeof(rep.ReportSyslogHost), IniStrValue(ini, "ReportSyslogHost"));
+					rep.ReportSyslogPort = IniIntValue(ini, "ReportSyslogPort");
+					StrCpy(rep.ReportSyslogPrefix, sizeof(rep.ReportSyslogPrefix), IniStrValue(ini, "ReportSyslogPrefix"));
+
+					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
 				}
 				else
 				{
@@ -4678,7 +4702,8 @@ void TfMain(TF_SERVICE *svc)
 
 				if (is_locked)
 				{
-					LIST *now_list = MsGetThinFwList(sid_cache, MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP);
+					LIST *now_list = MsGetThinFwList(sid_cache,
+						(cfg_IncludeProcessCommandLine ? 0 : MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE | MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP) | (cfg_EnableWatchTcp ? 0 : MS_GET_THINFW_LIST_FLAGS_NO_TCP));
 
 					if (current_list == NULL)
 					{

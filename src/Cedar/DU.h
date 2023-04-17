@@ -89,6 +89,28 @@ struct TF_SERVICE
 	THREAD *Thread;
 };
 
+struct TF_REPORT_SETTINGS
+{
+	bool EnableTcpHostnameLookup;
+
+	UINT ReportMailIntervalMsec;
+	char ReportMailHost[MAX_PATH];
+	UINT ReportMailPort;
+	char ReportMailUsername[MAX_PATH];
+	char ReportMailPassword[MAX_PATH];
+	UINT ReportMailSslType;
+	UINT ReportMailAuthType;
+	char ReportMailFrom[MAX_PATH];
+	char ReportMailTo[1500];
+	char ReportMailSubjectPrefix[MAX_PATH];
+
+	char ReportSyslogHost[MAX_PATH];
+	UINT ReportSyslogPort;
+	char ReportSyslogPrefix[MAX_PATH];
+
+	bool ReportSaveToDir;
+};
+
 void DUExec();
 
 TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename);

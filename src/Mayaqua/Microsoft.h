@@ -1441,6 +1441,8 @@ void MsFreeSidToUsernameCache(LIST *cache_list);
 
 #define	MS_GET_THINFW_LIST_FLAGS_NONE				0
 #define	MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP	1
+#define	MS_GET_THINFW_LIST_FLAGS_NO_TCP				2
+#define	MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE	4
 
 LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);

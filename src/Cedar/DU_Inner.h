@@ -164,6 +164,8 @@ typedef struct DU_ABOUT
 
 
 
+
+
 // 関数プロトタイプ宣言
 void DuMain(DU *du);
 UINT DuMainDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
