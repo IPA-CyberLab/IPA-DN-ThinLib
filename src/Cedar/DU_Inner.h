@@ -273,6 +273,8 @@ bool DuGovFw1Main(bool mandate);
 #define	FW_PARSED_ACCESS_JITTER_ALLOW_CLIENT	2
 
 
+#define	THINFW_MAX_LINE_SIZE					4096
+
 
 bool FwParseRuleStr(ACCESS *a, char *str);
 void FwParseIpAndMask(IP *ip, IP *mask, char *str);
@@ -282,6 +284,11 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 
 
 void TfMain(TF_SERVICE *svc);
+void TfReportThreadProc(THREAD *thread, void *param);
+void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e);
+
+
+
 
 
 

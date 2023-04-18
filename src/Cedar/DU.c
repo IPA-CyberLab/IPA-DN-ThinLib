@@ -4568,6 +4568,164 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 	}
 }
 
+void TfReportThreadProc(THREAD *thread, void *param)
+{
+	TF_SERVICE *svc;
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	svc = (TF_SERVICE *)param;
+
+	while (svc->ReportThreadHaltFlag == false)
+	{
+		while (true)
+		{
+			if (svc->ReportThreadHaltFlag)
+			{
+				break;
+			}
+
+			DIFF_ENTRY *e = NULL;
+			
+			LockQueue(svc->ReportQueue);
+			{
+				e = GetNext(svc->ReportQueue);
+			}
+			UnlockQueue(svc->ReportQueue);
+
+			if (e == NULL)
+			{
+				break;
+			}
+
+			TF_REPORT_SETTINGS st = CLEAN;
+			Lock(svc->CurrentReportSettingsLock);
+			{
+				Copy(&st, &svc->CurrentReportSettings, sizeof(TF_REPORT_SETTINGS));
+			}
+			Unlock(svc->CurrentReportSettingsLock);
+
+			UINT gethostname_flag = GETHOSTNAME_FLAG_NO_NETBIOS_NAME | GETHOSTNAME_USE_DNS_API;
+
+			if (st.EnableTcpHostnameLookup)
+			{
+				// Resolve hostname
+				if (e->Param == MS_THINFW_ENTRY_TYPE_TCP)
+				{
+					MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
+
+					if (IsZeroIP(&tcp->Tcp.RemoteIP) == false && IsLocalHostIP(&tcp->Tcp.RemoteIP) == false)
+					{
+						GetHostNameEx(tcp->RemoteIPHostname_Resolved, sizeof(tcp->RemoteIPHostname_Resolved), &tcp->Tcp.RemoteIP, st.HostnameLookupTimeoutMsec, gethostname_flag);
+					}
+				}
+				else if (e->Param == MS_THINFW_ENTRY_TYPE_RDP)
+				{
+					MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
+
+					if (IsZeroIP(&rdp->ClientIp) == false && IsLocalHostIP(&rdp->ClientIp) == false)
+					{
+						GetHostNameEx(rdp->ClientHostname_Resolved, sizeof(rdp->ClientHostname_Resolved), &rdp->ClientIp, st.HostnameLookupTimeoutMsec, gethostname_flag);
+					}
+				}
+			}
+
+			wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
+			TfGetStr(tmp, sizeof(tmp), e);
+			if (UniIsFilledUniStr(tmp))
+			{
+				UniPrint(L"%s\n", tmp);
+			}
+
+			Free(e);
+		}
+
+		if (svc->ReportThreadHaltFlag)
+		{
+			break;
+		}
+
+		Wait(svc->ReportThreadHaltEvent, 256);
+	}
+}
+
+void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
+{
+	ClearUniStr(dst, 0);
+	if (dst == NULL || e == NULL)
+	{
+		return;
+	}
+	MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
+
+	wchar_t ep_info[768] = CLEAN;
+	char ep_hostname[270] = CLEAN;
+	wchar_t proc_info[MAX_SIZE * 2] = CLEAN;
+
+	switch (e->Param)
+	{
+	case MS_THINFW_ENTRY_TYPE_TCP:
+		DoNothing();
+
+		char local_ip[128] = CLEAN;
+		char remote_ip[128] = CLEAN;
+
+		//if (IsIP6(&tcp->Tcp.LocalIP))
+		//{
+		//	Format(local_ip, sizeof(local_ip), "[%r]", &tcp->Tcp.LocalIP);
+		//	Format(remote_ip, sizeof(remote_ip), "[%r]", &tcp->Tcp.RemoteIP);
+		//}
+		//else
+		//{
+			IPToStr(local_ip, sizeof(local_ip), &tcp->Tcp.LocalIP);
+			IPToStr(remote_ip, sizeof(remote_ip), &tcp->Tcp.RemoteIP);
+		//}
+
+
+		if (IsFilledStr(tcp->RemoteIPHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "RemoteHost: %s, ",
+				tcp->RemoteIPHostname_Resolved, tcp->Tcp.RemotePort);
+		}
+
+		if (IsZeroIP(&tcp->Tcp.RemoteIP))
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(Local: %S:%u)",
+				local_ip, tcp->Tcp.LocalPort);
+		}
+		else
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(%SRemoteIP: %S, RemotePort: %u, LocalIP: %S, LocalPort: %u)",
+				ep_hostname,
+				remote_ip, tcp->Tcp.RemotePort,
+				local_ip, tcp->Tcp.LocalPort);
+		}
+
+		if (tcp->HasProcessInfo)
+		{
+			UniFormat(proc_info, sizeof(proc_info),
+				L" ProcessInfo=(PID: %u, %ubit, EXE: %s, User: %s\\%s, TerminalSessionId: %u)",
+				tcp->Process.ProcessId,
+				tcp->Process.Is64BitProcess ? 64 : 32,
+				tcp->Process.ExeFilenameW,
+				tcp->Process.Domain,
+				tcp->Process.Username,
+				tcp->Process.SessionId);
+		}
+
+		StrToUni(dst, dst_size, tcp->Type);
+		UniStrCat(dst, dst_size, L" ");
+		UniStrCat(dst, dst_size, ep_info);
+		UniStrCat(dst, dst_size, proc_info);
+
+		break;
+	}
+}
+
 void TfMain(TF_SERVICE *svc)
 {
 	if (svc == NULL)
@@ -4593,11 +4751,16 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchTcp = false;
 	UINT cfg_ReportMailIntervalMsec = 5000;
-	bool cfg_OnlyWhenLocked = false;
+	bool cfg_WatchOnlyWhenLocked = false;
 	bool cfg_IncludeProcessCommandLine = false;
 	bool cfg_EnableFirewall = false;
 
 	LIST *current_list = NULL;
+
+	// Init report thread
+	svc->ReportQueue = NewQueue();
+	svc->ReportThreadHaltEvent = NewEvent();
+	svc->ReportThread = NewThread(TfReportThreadProc, svc);
 
 	while (svc->HaltFlag == false)
 	{
@@ -4639,7 +4802,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
 					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
 					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
-					cfg_OnlyWhenLocked = IniBoolValue(ini, "OnlyWhenLocked");
+					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
 					cfg_ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
 					if (cfg_ReportMailIntervalMsec == 0)
@@ -4666,12 +4829,38 @@ void TfMain(TF_SERVICE *svc)
 					StrCpy(rep.ReportSyslogPrefix, sizeof(rep.ReportSyslogPrefix), IniStrValue(ini, "ReportSyslogPrefix"));
 
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
+
+					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
+
+					if (rep.HostnameLookupTimeoutMsec == 0) rep.HostnameLookupTimeoutMsec = 1000;
+					if (rep.ReportMailIntervalMsec == 0) rep.ReportMailIntervalMsec = 5000;
+
+					Lock(svc->CurrentReportSettingsLock);
+					{
+						Copy(&svc->CurrentReportSettings, &rep, sizeof(TF_REPORT_SETTINGS));
+					}
+					Unlock(svc->CurrentReportSettingsLock);
 				}
 				else
 				{
 					FreeBuf(new_content);
 				}
 			}
+			else
+			{
+				cfg_Enable = false;
+				cfg_SettingReloadIntervalMsec = 10000;
+				cfg_WatchPollingIntervalMsec = 250;
+				cfg_EnableWatchRdp = false;
+				cfg_EnableWatchProcess = false;
+				cfg_EnableWatchTcp = false;
+				cfg_ReportMailIntervalMsec = 5000;
+				cfg_WatchOnlyWhenLocked = false;
+				cfg_IncludeProcessCommandLine = false;
+				cfg_EnableFirewall = false;
+			}
+
+			// Get current DNS servers list
 
 			last_cfg_read = now;
 			AddInterrupt(im, now + (UINT64)cfg_SettingReloadIntervalMsec);
@@ -4685,29 +4874,33 @@ void TfMain(TF_SERVICE *svc)
 			if (cfg_Enable)
 			{
 				// Determine whether run the watch procedures
-				bool is_locked = false;
+				bool is_watch_active = false;
 
-				if (cfg_OnlyWhenLocked)
+				if (cfg_WatchOnlyWhenLocked)
 				{
 					if (svc->Mode == TF_SVC_MODE_SYSTEMMODE)
 					{
 						// Use the terminal service API
-						is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
+						is_watch_active = !MsWtsOneOrMoreUnlockedSessionExists();
+					}
+					else
+					{
+						// Use mouse pointer movement to detect inactivity
 					}
 				}
 				else
 				{
-					is_locked = true;
+					is_watch_active = true;
 				}
 
-				if (is_locked)
+				if (is_watch_active)
 				{
 					LIST *now_list = MsGetThinFwList(sid_cache,
 						(cfg_IncludeProcessCommandLine ? 0 : MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE | MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP) | (cfg_EnableWatchTcp ? 0 : MS_GET_THINFW_LIST_FLAGS_NO_TCP));
 
 					if (current_list == NULL)
 					{
-						// Initialize
+						// Initialize watcher
 						current_list = NewDiffList();
 
 						LIST *diff = UpdateDiffList(current_list, now_list);
@@ -4717,10 +4910,66 @@ void TfMain(TF_SERVICE *svc)
 					}
 					else
 					{
-						// Update
+						// Update watcher
 						LIST *diff = UpdateDiffList(current_list, now_list);
 
-						Print("%u\n", LIST_NUM(diff));
+						//Print("%u\n", LIST_NUM(diff));
+
+						// Classifying each of diff entries and insert them to the queue
+						LockQueue(svc->ReportQueue);
+						{
+							UINT i;
+							for (i = 0;i < LIST_NUM(diff);i++)
+							{
+								DIFF_ENTRY *e = (DIFF_ENTRY *)LIST_DATA(diff, i);
+
+								bool ok = false;
+
+								switch (e->Param)
+								{
+								case MS_THINFW_ENTRY_TYPE_PROCESS:
+									ok = true;
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_TCP:
+									if (e->IsAdded) // TCP process: only new entries shall be reported
+									{
+										MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)e->Data;
+
+										if (IsLocalHostIP(&tcp->Tcp.RemoteIP) || IsLocalHostIP(&tcp->Tcp.LocalIP) ||
+											IsIPLocalHostOrMySelf(&tcp->Tcp.RemoteIP))
+										{
+											// localhost: Do not report
+										}
+										else
+										{
+											ok = true;
+										}
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_RDP:
+									DoNothing();
+									MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)e->Data;
+
+									if (IsLocalHostIP(&rdp->ClientIp) || IsIPLocalHostOrMySelf(&rdp->ClientIp))
+									{
+										// localhost: Do not report
+									}
+									else
+									{
+										ok = true;
+									}
+									break;
+								}
+
+								if (ok)
+								{
+									InsertQueue(svc->ReportQueue, Clone(e, sizeof(DIFF_ENTRY)));
+								}
+							}
+						}
+						UnlockQueue(svc->ReportQueue);
 
 						FreeDiffList(diff);
 					}
@@ -4731,7 +4980,7 @@ void TfMain(TF_SERVICE *svc)
 				{
 					if (current_list != NULL)
 					{
-						// Free
+						// Free watcher
 						FreeDiffList(current_list);
 						current_list = NULL;
 					}
@@ -4751,10 +5000,29 @@ void TfMain(TF_SERVICE *svc)
 
 	if (current_list != NULL)
 	{
-		// Free
+		// Free watcher
 		FreeDiffList(current_list);
 		current_list = NULL;
 	}
+
+	// Free report thread
+	svc->ReportThreadHaltFlag = true;
+	Set(svc->ReportThreadHaltEvent);
+	WaitThread(svc->ReportThread, INFINITE);
+	ReleaseThread(svc->ReportThread);
+	ReleaseEvent(svc->ReportThreadHaltEvent);
+
+	while (true)
+	{
+		DIFF_ENTRY *e = GetNext(svc->ReportQueue);
+		if (e == NULL)
+		{
+			break;
+		}
+
+		Free(e);
+	}
+	ReleaseQueue(svc->ReportQueue);
 
 	FreeInterruptManager(im);
 
@@ -4792,6 +5060,8 @@ void TfStopService(TF_SERVICE *svc)
 
 	ReleaseEvent(svc->HaltEvent);
 
+	DeleteLock(svc->CurrentReportSettingsLock);
+
 	Free(svc);
 }
 
@@ -4803,6 +5073,8 @@ TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename)
 	}
 
 	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
+
+	svc->CurrentReportSettingsLock = NewLock();
 
 	svc->Mode = mode;
 

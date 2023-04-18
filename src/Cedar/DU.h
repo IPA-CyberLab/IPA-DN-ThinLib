@@ -80,18 +80,11 @@
 #define	TF_SVC_MODE_SYSTEMMODE		0
 #define	TF_SVC_MODE_USERNAME		1
 
-struct TF_SERVICE
-{
-	UINT Mode;
-	wchar_t SettingFileName[MAX_PATH];
-	EVENT *HaltEvent;
-	bool HaltFlag;
-	THREAD *Thread;
-};
-
 struct TF_REPORT_SETTINGS
 {
 	bool EnableTcpHostnameLookup;
+
+	UINT HostnameLookupTimeoutMsec;
 
 	UINT ReportMailIntervalMsec;
 	char ReportMailHost[MAX_PATH];
@@ -109,6 +102,23 @@ struct TF_REPORT_SETTINGS
 	char ReportSyslogPrefix[MAX_PATH];
 
 	bool ReportSaveToDir;
+};
+
+struct TF_SERVICE
+{
+	UINT Mode;
+	wchar_t SettingFileName[MAX_PATH];
+	EVENT *HaltEvent;
+	bool HaltFlag;
+	THREAD *Thread;
+
+	LOCK *CurrentReportSettingsLock;
+	TF_REPORT_SETTINGS CurrentReportSettings;
+
+	QUEUE *ReportQueue;
+	THREAD *ReportThread;
+	EVENT *ReportThreadHaltEvent;
+	bool ReportThreadHaltFlag;
 };
 
 void DUExec();

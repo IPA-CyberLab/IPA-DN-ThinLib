@@ -113,6 +113,7 @@ typedef enum    _PNP_VETO_TYPE {
 #include <tlhelp32.h>
 #include <wincon.h>
 #include <Nb30.h>
+#include <WinDNS.h>
 #include <shlobj.h>
 #include <commctrl.h>
 #include <Dbghelp.h>
@@ -431,7 +432,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 	
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == false)
 	{
-		tcp_list = GetTcpTableList();
+		tcp_list = Win32GetTcpTableList_v4v6();
 	}
 
 	// Terminal Sessions List
@@ -621,7 +622,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 				t->Status == TCP_STATE_ESTAB || t->Status == TCP_STATE_FIN_WAIT1 ||
 				t->Status == TCP_STATE_FIN_WAIT2 || t->Status == TCP_STATE_CLOSE_WAIT ||
 				t->Status == TCP_STATE_CLOSING || t->Status == TCP_STATE_LAST_ACK ||
-				t->Status == TCP_STATE_TIME_WAIT)
+				t->Status == TCP_STATE_LISTEN)
 			{
 				MS_THINFW_ENTRY_TCP data = CLEAN;
 
@@ -641,6 +642,43 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u",
 					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort);
+				//UniPrint(L"%s\n", key);
+
+				bool is_server_session = false;
+
+				if (t->Status != TCP_STATE_LISTEN && IsZeroIP(&t->RemoteIP) == false)
+				{
+					UINT j;
+					for (j = 0;j < LIST_NUM(tcp_list);j++)
+					{
+						TCPTABLE *t2 = LIST_DATA(tcp_list, j);
+
+						if (t2->Status == TCP_STATE_LISTEN)
+						{
+							if (t2->LocalPort == t->LocalPort)
+							{
+								if (IsZeroIP(&t2->LocalIP) ||
+									CmpIpAddr(&t2->LocalIP, &t->LocalIP))
+								{
+									is_server_session = true;
+								}
+							}
+						}
+					}
+				}
+
+				if (t->Status == TCP_STATE_LISTEN)
+				{
+					StrCpy(data.Type, sizeof(data.Type), "TCP_ServerListening");
+				}
+				else if (is_server_session)
+				{
+					StrCpy(data.Type, sizeof(data.Type), "TCP_ServerConnection");
+				}
+				else
+				{
+					StrCpy(data.Type, sizeof(data.Type), "TCP_ClientConnection");
+				}
 
 				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
 			}
@@ -678,6 +716,36 @@ void MsFreeSidToUsernameCache(LIST *cache_list)
 	}
 
 	ReleaseList(cache_list);
+}
+
+LIST *MsGetCurrentDnsServersList()
+{
+	LIST *ret = NewListFast(NULL);
+
+	UINT tmp_size = 32768;
+	UCHAR* tmp = ZeroMalloc(tmp_size);
+
+	// no way to get IPv6 DNS servers address??
+	// https://learn.microsoft.com/en-us/windows/win32/api/windns/nf-windns-dnsqueryconfig
+	UINT err = DnsQueryConfig(DnsConfigDnsServerList, false, NULL, NULL, (void *)tmp, &tmp_size);
+
+	if (err == 0)
+	{
+		IP4_ARRAY *a = (IP4_ARRAY *)tmp;
+		UINT i;
+		for (i = 0;i < a->AddrCount;i++)
+		{
+			IP ip = CLEAN;
+
+			InAddrToIP(&ip, (struct in_addr *)&a->AddrArray[i]);
+
+			Add(ret, Clone(&ip, sizeof(IP)));
+		}
+	}
+
+	Free(tmp);
+
+	return ret;
 }
 
 MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size)
@@ -15195,6 +15263,10 @@ NT_API *MsLoadNtApiFunctions()
 		(BOOLEAN(__stdcall *)(HANDLE, ULONG, UINT, PVOID, ULONG, PULONG))
 		GetProcAddress(nt->hWinSta, "WinStationQueryInformationW");
 
+	nt->GetLastInputInfo =
+		(BOOL(__cdecl *)(PLASTINPUTINFO))
+		GetProcAddress(nt->hUser32, "GetLastInputInfo");
+
 	// Determine WoW64
 	if (Is32())
 	{
@@ -15561,6 +15633,43 @@ void MsFreeNtApiFunctions(NT_API *nt)
 	FreeLibrary(nt->hKernel32);
 
 	Free(nt);
+}
+
+UINT64 MsGetIdleTick()
+{
+	if (MsIsNt() == false || ms->nt->GetLastInputInfo == NULL)
+	{
+		return 0;
+	}
+
+	LASTINPUTINFO t = CLEAN;
+
+	t.cbSize = sizeof(LASTINPUTINFO);
+
+	if (ms->nt->GetLastInputInfo(&t) == false)
+	{
+		return false;
+	}
+
+	UINT now = GetTickCount();
+	UINT a = t.dwTime;
+
+	UINT x = now - a;
+	if (x >= 0x80000000)
+	{
+		UINT y = a - now;
+		if (y <= (10 * 1000))
+		{
+			x = 0;
+		}
+	}
+
+	if (x == 0)
+	{
+		x = 1;
+	}
+
+	return (UINT64)x;
 }
 
 // Get whether the screen color is like to Aero of Windows Vista or later
