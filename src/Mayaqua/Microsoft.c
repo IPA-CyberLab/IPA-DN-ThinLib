@@ -585,7 +585,7 @@ void MsFreeDnsCacheList(MS_DNS_CACHE *c)
 	Free(c);
 }
 
-void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc)
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args)
 {
 	if (data == NULL || proc == NULL || sid_cache == NULL)
 	{
@@ -610,7 +610,22 @@ void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *dat
 	}
 
 	UniStrCpy(data->ExeFilenameW, sizeof(data->ExeFilenameW), proc->ExeFilenameW);
-	UniStrCpy(data->CommandLineW, sizeof(data->CommandLineW), proc->CommandLineW);
+
+	bool is_svc = false;
+
+	if (UniEndWith(data->ExeFilenameW, L"\\svchost.exe"))
+	{
+		if (UniStartWith(data->ExeFilenameW, MsGetWindowDirW()))
+		{
+			is_svc = true;
+		}
+	}
+
+	if (no_args == false || is_svc)
+	{
+		UniStrCpy(data->CommandLineW, sizeof(data->CommandLineW), proc->CommandLineW);
+	}
+
 	data->ProcessId = proc->ProcessId;
 	data->SessionId = proc->SessionId;
 	data->Is64BitProcess = proc->Is64BitProcess;
@@ -655,11 +670,13 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 	MS_DNS_CACHE *dns_cache = NULL;
 
+	LIST *rdp_session_kv_list = NewKvList();
+
 	LIST *a_list = NewListFast(MsCmpDnsCache_A);
 
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_PROCESS) == 0)
 	{
-		process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | ((flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE) ? 0 : MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE));
+		process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE | MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS);
 	}
 
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == 0)
@@ -758,6 +775,103 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 					data.SessionId = ex1->SessionId;
 					UniStrCpy(data.WinStationName, sizeof(data.WinStationName), ex1->WinStationName);
 
+					char *state_str = MsGetWtsSessionStateStr(ex1->SessionState);
+
+					StrCpy(data.SessionState, sizeof(data.SessionState), state_str);
+
+					UniStrCpy(data.Username, sizeof(data.Username), ex1->UserName);
+					UniStrCpy(data.Domain, sizeof(data.Domain), ex1->DomainName);
+
+					WTSCLIENTW *client_info = CLEAN;
+					DWORD retsize = 0;
+
+					// https://learn.microsoft.com/en-us/previous-versions/aa383827(v=vs.85)
+					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
+					if (ms->nt->WinStationQueryInformationW != NULL)
+					{
+						NT_WINSTATIONREMOTEADDRESS ntaddr = CLEAN;
+
+						UINT retsize = 0;
+
+						if (ms->nt->WinStationQueryInformationW(NULL,
+							ex1->SessionId,
+							WinStationRemoteAddress,
+							&ntaddr,
+							sizeof(ntaddr),
+							&retsize) && retsize == sizeof(ntaddr))
+						{
+							if (ntaddr.sin_family == AF_INET)
+							{
+								UCHAR ipv4_addr[4] = CLEAN;
+								Copy(ipv4_addr, &ntaddr.ipv4.in_addr, 4);
+								InAddrToIP(&data.ClientIp, (struct in_addr *)ipv4_addr);
+							}
+							else if (ntaddr.sin_family == AF_INET6)
+							{
+								IPV6_ADDR addr = CLEAN;
+								Copy(&addr, ntaddr.ipv6.sin6_addr, 16);
+								IPv6AddrToIP(&data.ClientIp, &addr);
+								// data.ClientIp.ipv6_scope_id = ntaddr.ipv6.sin6_scope_id; // alwayz zero!!
+							}
+						}
+					}
+
+					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+						WTSClientInfo, (void *)&client_info, &retsize) && retsize >= sizeof(WTSCLIENTW))
+					{
+						UniStrCpy(data.ClientLocalMachineName, sizeof(data.ClientLocalMachineName), client_info->ClientName);
+
+						if (client_info->ClientAddressFamily == AF_INET)
+						{
+							UCHAR ipv4_addr[4] = CLEAN;
+							UINT i;
+							for (i = 0;i < 4;i++)
+							{
+								ipv4_addr[i] = (UCHAR)client_info->ClientAddress[i];
+							}
+							InAddrToIP(&data.ClientLocalIp, (struct in_addr *)ipv4_addr);
+						}
+						else if (client_info->ClientAddressFamily == AF_INET6)
+						{
+							IPV6_ADDR addr = CLEAN;
+							UINT i;
+							for (i = 0;i < 8;i++)
+							{
+								USHORT us = client_info->ClientAddress[i];
+								us = Endian16(us);
+								Copy(&addr.Value[i * 2], &us, 2);
+							}
+							IPv6AddrToIP(&data.ClientLocalIp, &addr);
+						}
+
+						data.ClientLocalBuild = client_info->ClientBuildNumber;
+
+						ms->nt->WTSFreeMemory(client_info);
+					}
+
+					ms->nt->WTSFreeMemory(ex);
+
+					if (IsZeroIP(&data.ClientIp) == false)
+					{
+						MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
+
+						if (found_a != NULL)
+						{
+							StrCpy(data.ClientHostname_Resolved, sizeof(data.ClientHostname_Resolved),
+								found_a->Hostname);
+						}
+					}
+
+					bool ok = true;
+
+					if (flags & MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP)
+					{
+						if (IsLocalHostIP(&data.ClientIp))
+						{
+							ok = false;
+						}
+					}
+
 					if (UniStrCmpi(data.WinStationName, L"Services") == 0 ||
 						UniStrCmpi(data.WinStationName, L"Console") == 0 ||
 						UniStrCmpi(data.WinStationName, L"") == 0 ||
@@ -769,118 +883,27 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 						ex1->SessionState == WTSDown ||
 						ex1->SessionState == WTSInit)
 					{
+						ok = false;
 					}
-					else
+
+					if (data.SessionId != 0 || UniStrCmpi(data.WinStationName, L"Services") == 0)
 					{
-						char *state_str = MsGetWtsSessionStateStr(ex1->SessionState);
+						char session_id_str[16] = CLEAN;
+						ToStr(session_id_str, ex1->SessionId);
+						AddKvList(rdp_session_kv_list, session_id_str, &data, sizeof(data), 0, 0);
+					}
 
-						StrCpy(data.SessionState, sizeof(data.SessionState), state_str);
-
-						UniStrCpy(data.Username, sizeof(data.Username), ex1->UserName);
-						UniStrCpy(data.Domain, sizeof(data.Domain), ex1->DomainName);
-
-						WTSCLIENTW *client_info = CLEAN;
-						DWORD retsize = 0;
-
-						bool ok = true;
-
-						// https://learn.microsoft.com/en-us/previous-versions/aa383827(v=vs.85)
-						// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-tsts/5b5a44b3-155f-4159-aad9-794e97275a3f
-						if (ms->nt->WinStationQueryInformationW != NULL)
-						{
-							NT_WINSTATIONREMOTEADDRESS ntaddr = CLEAN;
-
-							UINT retsize = 0;
-
-							if (ms->nt->WinStationQueryInformationW(NULL,
-								ex1->SessionId,
-								WinStationRemoteAddress,
-								&ntaddr,
-								sizeof(ntaddr),
-								&retsize) && retsize == sizeof(ntaddr))
-							{
-								if (ntaddr.sin_family == AF_INET)
-								{
-									UCHAR ipv4_addr[4] = CLEAN;
-									Copy(ipv4_addr, &ntaddr.ipv4.in_addr, 4);
-									InAddrToIP(&data.ClientIp, (struct in_addr *)ipv4_addr);
-								}
-								else if (ntaddr.sin_family == AF_INET6)
-								{
-									IPV6_ADDR addr = CLEAN;
-									Copy(&addr, ntaddr.ipv6.sin6_addr, 16);
-									IPv6AddrToIP(&data.ClientIp, &addr);
-									// data.ClientIp.ipv6_scope_id = ntaddr.ipv6.sin6_scope_id; // alwayz zero!!
-								}
-							}
-						}
-
-						if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-							WTSClientInfo, (void *)&client_info, &retsize) && retsize >= sizeof(WTSCLIENTW))
-						{
-							UniStrCpy(data.ClientLocalMachineName, sizeof(data.ClientLocalMachineName), client_info->ClientName);
-
-							if (client_info->ClientAddressFamily == AF_INET)
-							{
-								UCHAR ipv4_addr[4] = CLEAN;
-								UINT i;
-								for (i = 0;i < 4;i++)
-								{
-									ipv4_addr[i] = (UCHAR)client_info->ClientAddress[i];
-								}
-								InAddrToIP(&data.ClientLocalIp, (struct in_addr *)ipv4_addr);
-							}
-							else if (client_info->ClientAddressFamily == AF_INET6)
-							{
-								IPV6_ADDR addr = CLEAN;
-								UINT i;
-								for (i = 0;i < 8;i++)
-								{
-									USHORT us = client_info->ClientAddress[i];
-									us = Endian16(us);
-									Copy(&addr.Value[i * 2], &us, 2);
-								}
-								IPv6AddrToIP(&data.ClientLocalIp, &addr);
-							}
-
-							data.ClientLocalBuild = client_info->ClientBuildNumber;
-
-							ms->nt->WTSFreeMemory(client_info);
-						}
-
-						ms->nt->WTSFreeMemory(ex);
-
-						if (IsZeroIP(&data.ClientIp) == false)
-						{
-							MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
-
-							if (found_a != NULL)
-							{
-								StrCpy(data.ClientHostname_Resolved, sizeof(data.ClientHostname_Resolved),
-									found_a->Hostname);
-							}
-						}
-
+					if (ok)
+					{
 						UniFormat(key, sizeof(key), L"RDP:%u:%s:%S:%s:%s:%s:[%r]:%u:[%r]",
 							data.SessionId, data.WinStationName, data.SessionState,
 							data.Username, data.Domain, data.ClientLocalMachineName,
 							&data.ClientLocalIp, data.ClientLocalBuild,
 							&data.ClientIp);
 
-						if (flags & MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP)
-						{
-							if (IsLocalHostIP(&data.ClientIp))
-							{
-								ok = false;
-							}
-						}
+						//UniPrint(L"%s\n", key);
 
-						if (ok)
-						{
-							//UniPrint(L"%s\n", key);
-
-							Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
-						}
+						Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
 					}
 				}
 			}
@@ -900,9 +923,30 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 			MS_THINFW_ENTRY_PROCESS data = CLEAN;
 
-			MsProcessToThinFwEntryProcess(sid_cache, &data, proc);
+			MsProcessToThinFwEntryProcess(sid_cache, &data, proc, (flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE));
+
+			char session_id_str[16] = CLEAN;
+			ToStr(session_id_str, proc->SessionId);
+
+			MS_THINFW_ENTRY_RDP *rdp = SearchKvListData(rdp_session_kv_list, session_id_str, 0);
+
+			if (rdp != NULL)
+			{
+				Copy(&data.Rdp, rdp, sizeof(MS_THINFW_ENTRY_RDP));
+
+				//if (EndWith(proc->ExeFilename, "\\ca.exe"))
+				//{
+				//	Print("%s: %u  %r\n", proc->ExeFilename, rdp->SessionId, &rdp->ClientIp);
+				//}
+			}
 
 			UniFormat(key, sizeof(key), L"PROC:%u:%s", data.ProcessId, data.ExeFilenameW);
+
+			//if (UniInStr(data.ExeFilenameW, L"vpnclient_x64.exe"))
+			//{
+			//	Print("(A) %u %S %u %S  %S\n", data.ProcessId, data.ExeFilenameW,
+			//		data.Rdp.SessionId, data.Rdp.WinStationName, key);
+			//}
 
 			Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_PROCESS, tick));
 		}
@@ -933,14 +977,24 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 					if (proc != NULL)
 					{
-						MsProcessToThinFwEntryProcess(sid_cache, &data.Process, proc);
+						MsProcessToThinFwEntryProcess(sid_cache, &data.Process, proc, (flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE));
 
 						data.HasProcessInfo = true;
+
+						char session_id_str[16] = CLEAN;
+						ToStr(session_id_str, proc->SessionId);
+
+						MS_THINFW_ENTRY_RDP *rdp = SearchKvListData(rdp_session_kv_list, session_id_str, 0);
+
+						if (rdp != NULL)
+						{
+							Copy(&data.Process.Rdp, rdp, sizeof(MS_THINFW_ENTRY_RDP));
+						}
 					}
 				}
 
-				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u",
-					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort);
+				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u,%u",
+					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort, t->Status == TCP_STATE_LISTEN);
 				//UniPrint(L"%s\n", key);
 
 				bool is_server_session = false;
@@ -968,15 +1022,15 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 				if (t->Status == TCP_STATE_LISTEN)
 				{
-					StrCpy(data.Type, sizeof(data.Type), "TCP_ServerListening");
+					StrCpy(data.Type, sizeof(data.Type), "TCP_LISTEN");
 				}
 				else if (is_server_session)
 				{
-					StrCpy(data.Type, sizeof(data.Type), "TCP_ServerConnection");
+					StrCpy(data.Type, sizeof(data.Type), "TCP_SERVER");
 				}
 				else
 				{
-					StrCpy(data.Type, sizeof(data.Type), "TCP_ClientConnection");
+					StrCpy(data.Type, sizeof(data.Type), "TCP_CLIENT");
 				}
 
 				if (IsZeroIP(&data.Tcp.RemoteIP) == false)
@@ -1002,6 +1056,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 	MsFreeDnsCacheList(dns_cache);
 
 	FreeSingleMemoryList(a_list);
+
+	FreeKvList(rdp_session_kv_list);
 
 	return ret;
 }
@@ -7322,6 +7378,8 @@ bool MsIs64bitProcess(void *handle)
 	}
 }
 
+static bool ms_proc_get_other_users_proc_inited = false;
+
 // Get the Process List (for WinNT)
 LIST *MsGetProcessListNt(UINT flags)
 {
@@ -7331,6 +7389,19 @@ LIST *MsGetProcessListNt(UINT flags)
 	UINT needed, num;
 	UINT i;
 	bool is_64bit_windows = MsIs64BitWindows();
+
+	if (MsIsAdmin())
+	{
+		if (flags & MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS)
+		{
+			if (ms_proc_get_other_users_proc_inited == false)
+			{
+				ms_proc_get_other_users_proc_inited = true;
+
+				MsEnablePrivilege(SE_DEBUG_NAME, true);
+			}
+		}
+	}
 
 	o = NewListFast(MsCompareProcessList);
 
@@ -7349,11 +7420,21 @@ LIST *MsGetProcessListNt(UINT flags)
 
 	num = needed / sizeof(DWORD);
 
+	//Print("procnum = %u\n", num);
+
 	for (i = 0;i < num;i++)
 	{
 		UINT id = processes[i];
 		HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
 			false, id);
+
+		if (id == 2308)
+		{
+			if (h == NULL)
+			{
+				Debug("prochandle: %u  %u\n", (UINT)(UINT64)h, GetLastError());
+			}
+		}
 
 		if (h != NULL)
 		{
@@ -7436,7 +7517,7 @@ LIST *MsGetProcessListNt(UINT flags)
 						DWORD token_size_new = 0;
 						UINT session_id = 0;
 
-						if (ms->nt->GetTokenInformation(token, MaxTokenInfoClass, &session_id, token_size, &token_size_new) && token_size == token_size_new)
+						if (ms->nt->GetTokenInformation(token, TokenSessionId, &session_id, token_size, &token_size_new) && token_size == token_size_new)
 						{
 							p->SessionId = session_id;
 						}
@@ -7454,6 +7535,11 @@ LIST *MsGetProcessListNt(UINT flags)
 					UniStrCpy(p->CommandLineW, sizeof(p->CommandLineW), p->ExeFilenameW);
 				}
 				Free(cmdline);
+
+				//if (InStr(p->ExeFilename, "vpnclient_x64.exe") && InStr(p->ExeFilename, "softether"))
+				//{
+				//	Print("%u %s\n", p->ProcessId, p->ExeFilename);
+				//}
 
 				Add(o, p);
 			}
@@ -15615,7 +15701,7 @@ NT_API *MsLoadNtApiFunctions()
 		GetProcAddress(nt->hWinSta, "WinStationQueryInformationW");
 
 	nt->GetLastInputInfo =
-		(BOOL(__cdecl *)(PLASTINPUTINFO))
+		(BOOL(__stdcall *)(PLASTINPUTINFO))
 		GetProcAddress(nt->hUser32, "GetLastInputInfo");
 
 	// Determine WoW64

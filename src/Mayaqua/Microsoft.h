@@ -803,6 +803,7 @@ typedef struct MS_PROCESS_WATCHER
 #define MS_GET_PROCESS_LIST_FLAG_NONE				0
 #define MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE	1
 #define	MS_GET_PROCESS_LIST_FLAG_GET_SID			2
+#define	MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS	4
 
 
 typedef struct MS_SID_INFO
@@ -821,6 +822,19 @@ typedef struct MS_SID_INFO
 #define	MS_THINFW_ENTRY_FLAG_NONE			0
 #define	MS_THINFW_ENTRY_FLAG_LOCKED			1
 
+typedef struct MS_THINFW_ENTRY_RDP
+{
+	UINT SessionId;
+	wchar_t WinStationName[64];
+	char SessionState[16];
+	wchar_t Username[128];
+	wchar_t Domain[64];
+	wchar_t ClientLocalMachineName[64];  // Unused?
+	IP ClientIp;
+	IP ClientLocalIp;
+	UINT ClientLocalBuild;
+	char ClientHostname_Resolved[256];
+} MS_THINFW_ENTRY_RDP;
 
 typedef struct MS_THINFW_ENTRY_PROCESS
 {
@@ -831,6 +845,7 @@ typedef struct MS_THINFW_ENTRY_PROCESS
 	bool Is64BitProcess;			// Is 64bit Process
 	wchar_t Username[MAX_PATH];
 	wchar_t Domain[MAX_PATH];
+	MS_THINFW_ENTRY_RDP Rdp;
 } MS_THINFW_ENTRY_PROCESS;
 
 typedef struct MS_THINFW_ENTRY_TCP
@@ -841,20 +856,6 @@ typedef struct MS_THINFW_ENTRY_TCP
 	char Type[32];
 	char RemoteIPHostname_Resolved[256];
 } MS_THINFW_ENTRY_TCP;
-
-typedef struct MS_THINFW_ENTRY_RDP
-{
-	UINT SessionId;
-	wchar_t WinStationName[64];
-	char SessionState[16];
-	wchar_t Username[128];
-	wchar_t Domain[64];
-	wchar_t ClientLocalMachineName[64];
-	IP ClientIp;
-	IP ClientLocalIp;
-	UINT ClientLocalBuild;
-	char ClientHostname_Resolved[256];
-} MS_THINFW_ENTRY_RDP;
 
 typedef struct MS_THINFW_ENTRY_DNS
 {
@@ -1491,7 +1492,7 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 
 
 LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
-void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();
 

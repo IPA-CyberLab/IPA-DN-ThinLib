@@ -2551,6 +2551,110 @@ int CompareInt64(void *p1, void *p2)
 	return COMPARE_RET(*v1, *v2);
 }
 
+int CmpKvList(void *p1, void *p2)
+{
+	if (p1 == NULL || p2 == NULL)
+	{
+		return 0;
+	}
+
+	KV_LIST *k1 = *((KV_LIST **)p1);
+	KV_LIST *k2 = *((KV_LIST **)p2);
+	if (k1 == NULL || k2 == NULL)
+	{
+		return 0;
+	}
+
+	return StrCmpi(k1->Key, k2->Key);
+}
+
+void *SearchKvListData(LIST *o, char *key, UINT type)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = "";
+
+	KV_LIST *k = SearchKvList(o, key);
+	if (k == NULL)
+	{
+		return NULL;
+	}
+
+	if (k->Type != type)
+	{
+		return NULL;
+	}
+
+	return k->Data;
+}
+
+KV_LIST *SearchKvList(LIST *o, char *key)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = "";
+
+	KV_LIST t = CLEAN;
+	StrCpy(t.Key, sizeof(t.Key), key);
+
+	return Search(o, &t);
+}
+
+void AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1)
+{
+	if (o == NULL)
+	{
+		return;
+	}
+	if (size > KV_LIST_DATA_SIZE)
+	{
+		return;
+	}
+
+	if (key == NULL) key = "";
+
+	KV_LIST *k = Malloc(sizeof(KV_LIST));
+
+	StrCpy(k->Key, sizeof(k->Key), key);
+	Copy(k->Data, data, size);
+	k->Data[size] = 0;
+
+	k->DataSize = size;
+	k->Type = type;
+	k->Param1 = param1;
+
+	Add(o, k);
+}
+
+void FreeKvList(LIST *o)
+{
+	if (o == NULL)
+	{
+		return;
+	}
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		KV_LIST *k = (KV_LIST *)LIST_DATA(o, i);
+
+		Free(k);
+	}
+
+	ReleaseList(o);
+}
+
+LIST *NewKvList()
+{
+	return NewList(CmpKvList);
+}
+
 // Randomize the contents of the list
 void RandomizeList(LIST *o)
 {
@@ -5276,6 +5380,27 @@ void FreeDiffList(LIST *list)
 	ReleaseList(list);
 }
 
+DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e)
+{
+	if (e == NULL)
+	{
+		return NULL;
+	}
+
+	DIFF_ENTRY *ret = Malloc(sizeof(DIFF_ENTRY));
+	UniStrCpy(ret->Key, sizeof(ret->Key), e->Key);
+	ret->Tick = e->Tick;
+	ret->IsAdded = e->IsAdded;
+	ret->IsRemoved = e->IsRemoved;
+	Copy(ret->Data, e->Data, e->DataSize);
+	ret->DataSize = e->DataSize;
+	ret->Data[ret->DataSize] = 0;
+	ret->Param = e->Param;
+	ret->Flags = e->Flags;
+
+	return ret;
+}
+
 LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
 {
 	if (base_list == NULL || new_items == NULL)
@@ -5294,12 +5419,13 @@ LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
 
 		if (exist == NULL)
 		{
-			DIFF_ENTRY *e_clone = Clone(e, sizeof(DIFF_ENTRY));
+			DIFF_ENTRY *e_clone = CloneDiffEntry(e);
 
 			Insert(base_list, e_clone);
 
-			DIFF_ENTRY *e_clone2 = Clone(e, sizeof(DIFF_ENTRY));
+			DIFF_ENTRY *e_clone2 = CloneDiffEntry(e);
 			e_clone2->IsAdded = true;
+			e_clone2->IsRemoved = false;
 
 			Insert(ret, e_clone2);
 		}
@@ -5317,7 +5443,8 @@ LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
 		{
 			Add(delete_list, e);
 
-			DIFF_ENTRY *e_clone2 = Clone(e, sizeof(DIFF_ENTRY));
+			DIFF_ENTRY *e_clone2 = CloneDiffEntry(e);
+			e_clone2->IsAdded = false;
 			e_clone2->IsRemoved = true;
 
 			Insert(ret, e_clone2);
@@ -5343,13 +5470,18 @@ DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param,
 	if (key == NULL) key = L"";
 	if (tick == 0) tick = Tick64();
 
-	DIFF_ENTRY *e = ZeroMalloc(sizeof(DIFF_ENTRY));
+	DIFF_ENTRY *e = Malloc(sizeof(DIFF_ENTRY));
 
 	Copy(e->Data, data, MIN(data_size, DIFF_ENTRY_DATASIZE));
+	e->Data[data_size] = 0;
+
 	e->DataSize = data_size;
 
 	e->Param = param;
 	e->Tick = tick;
+
+	e->IsAdded = false;
+	e->IsRemoved = false;
 
 	UniStrCpy(e->Key, sizeof(e->Key), key);
 

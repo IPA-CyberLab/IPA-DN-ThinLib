@@ -4664,39 +4664,118 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 	{
 		return;
 	}
-	MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
-	MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
 
 	wchar_t ep_info[768] = CLEAN;
 	char ep_hostname[270] = CLEAN;
 	wchar_t proc_info[MAX_SIZE * 2] = CLEAN;
 	wchar_t tmpw[MAX_SIZE] = CLEAN;
+	wchar_t rdp_session_info[MAX_SIZE] = CLEAN;
 
 	switch (e->Param)
 	{
 	case MS_THINFW_ENTRY_TYPE_DNS:
 		DoNothing();
-		UniFormat(dst, dst_size, L"[DNS] Hostname: %S --> %r",
-			dns->Hostname, &dns->Ip);
+		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
+		UniFormat(dst, dst_size, L"[DNS] (Hostname: %S, IPv%u_Address: %r)",
+			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_PROCESS:
+		DoNothing();
+		MS_THINFW_ENTRY_PROCESS *proc = (MS_THINFW_ENTRY_PROCESS *)&e->Data;
+
+		//Print("%u %S\n", e->IsAdded, proc->ExeFilenameW);
+
+		if (UniIsFilledStr(proc->CommandLineW))
+		{
+			UniFormat(tmpw, sizeof(tmpw), L", Args: %s", proc->CommandLineW);
+		}
+
+		if (UniIsFilledStr(proc->Rdp.WinStationName))
+		{
+			char rdp_client_info[MAX_PATH] = CLEAN;
+
+			if (IsZeroIP(&proc->Rdp.ClientIp) == false)
+			{
+				if (IsFilledStr(proc->Rdp.ClientHostname_Resolved))
+				{
+					Format(ep_hostname, sizeof(ep_hostname), "RdpClientHost: %s, ",
+						proc->Rdp.ClientHostname_Resolved);
+				}
+
+				Format(rdp_client_info, sizeof(rdp_client_info), ", %sRdpClientIP: %r, RdpClientLocalIP: %r",
+					ep_hostname,
+					&proc->Rdp.ClientIp, &proc->Rdp.ClientLocalIp);
+			}
+
+			UniFormat(rdp_session_info, sizeof(rdp_session_info),
+				L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+				proc->Domain,
+				proc->Username,
+				proc->Rdp.WinStationName,
+				rdp_client_info);
+		}
+
+		UniFormat(dst, dst_size, L"[PROCESS_%S] (PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
+			e->IsAdded ? "START" : "STOP",
+			proc->ProcessId,
+			proc->Is64BitProcess ? 64 : 32,
+			proc->ExeFilenameW,
+			proc->Domain,
+			proc->Username,
+			proc->SessionId,
+			tmpw,
+			rdp_session_info);
+
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_RDP:
+		DoNothing();
+		MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
+
+		if (IsFilledStr(rdp->ClientHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "ClientHost: %s, ",
+				rdp->ClientHostname_Resolved);
+		}
+		if (UniIsFilledStr(rdp->Username))
+		{
+			UniFormat(tmpw, sizeof(tmpw), L"%s\\%s", UniIsFilledStr(rdp->Domain) ? rdp->Domain : L".", rdp->Username);
+		}
+		else
+		{
+			UniStrCpy(tmpw, sizeof(tmpw), L"<try_login>");
+		}
+
+		UniFormat(dst, dst_size, L"[RDP] (RdpSessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
+			rdp->SessionId, rdp->WinStationName, rdp->SessionState,
+			ep_hostname, &rdp->ClientIp, &rdp->ClientLocalIp, rdp->ClientLocalBuild, tmpw);
 		break;
 
 	case MS_THINFW_ENTRY_TYPE_TCP:
 		DoNothing();
+		MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
 
 		char local_ip[128] = CLEAN;
 		char remote_ip[128] = CLEAN;
 
-		//if (IsIP6(&tcp->Tcp.LocalIP))
-		//{
-		//	Format(local_ip, sizeof(local_ip), "[%r]", &tcp->Tcp.LocalIP);
-		//	Format(remote_ip, sizeof(remote_ip), "[%r]", &tcp->Tcp.RemoteIP);
-		//}
-		//else
-		//{
-			IPToStr(local_ip, sizeof(local_ip), &tcp->Tcp.LocalIP);
-			IPToStr(remote_ip, sizeof(remote_ip), &tcp->Tcp.RemoteIP);
-		//}
+		IPToStr(local_ip, sizeof(local_ip), &tcp->Tcp.LocalIP);
+		IPToStr(remote_ip, sizeof(remote_ip), &tcp->Tcp.RemoteIP);
 
+		if (tcp->Tcp.Status == TCP_STATE_LISTEN)
+		{
+			if (IsZeroIP(&tcp->Tcp.LocalIP))
+			{
+				if (IsIP4(&tcp->Tcp.LocalIP))
+				{
+					StrCpy(local_ip, sizeof(local_ip), "IPv4_Any");
+				}
+				else
+				{
+					StrCpy(local_ip, sizeof(local_ip), "IPv6_Any");
+				}
+			}
+		}
 
 		if (IsFilledStr(tcp->RemoteIPHostname_Resolved))
 		{
@@ -4707,7 +4786,7 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 		if (IsZeroIP(&tcp->Tcp.RemoteIP))
 		{
 			UniFormat(ep_info, sizeof(ep_info),
-				L"(Local: %S:%u)",
+				L"(LocalIP: %S, LocalPort: %u)",
 				local_ip, tcp->Tcp.LocalPort);
 		}
 		else
@@ -4721,14 +4800,43 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 
 		if (tcp->HasProcessInfo)
 		{
+			MS_THINFW_ENTRY_PROCESS *proc = &tcp->Process;
+
+			if (UniIsFilledStr(proc->Rdp.WinStationName))
+			{
+				char rdp_client_info[MAX_PATH] = CLEAN;
+
+				if (IsZeroIP(&proc->Rdp.ClientIp) == false)
+				{
+					if (IsFilledStr(proc->Rdp.ClientHostname_Resolved))
+					{
+						Format(ep_hostname, sizeof(ep_hostname), "RdpClientHost: %s, ",
+							proc->Rdp.ClientHostname_Resolved);
+					}
+
+					Format(rdp_client_info, sizeof(rdp_client_info), ", %sRdpClientIP: %r, RdpClientLocalIP: %r",
+						ep_hostname,
+						&proc->Rdp.ClientIp, &proc->Rdp.ClientLocalIp);
+				}
+
+				UniFormat(rdp_session_info, sizeof(rdp_session_info),
+					L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+					proc->Domain,
+					proc->Username,
+					proc->Rdp.WinStationName,
+					rdp_client_info);
+
+			}
+
 			UniFormat(proc_info, sizeof(proc_info),
-				L" ProcessInfo=(PID: %u, %ubit, EXE: %s, User: %s\\%s, TerminalSessionId: %u)",
+				L" ProcessInfo=(PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u)%s",
 				tcp->Process.ProcessId,
 				tcp->Process.Is64BitProcess ? 64 : 32,
 				tcp->Process.ExeFilenameW,
 				tcp->Process.Domain,
 				tcp->Process.Username,
-				tcp->Process.SessionId);
+				tcp->Process.SessionId,
+				rdp_session_info);
 		}
 
 		StrToUni(tmpw, sizeof(tmpw), tcp->Type);
@@ -5001,6 +5109,15 @@ void TfMain(TF_SERVICE *svc)
 								switch (e->Param)
 								{
 								case MS_THINFW_ENTRY_TYPE_PROCESS:
+									DoNothing();
+									MS_THINFW_ENTRY_PROCESS *proc = (MS_THINFW_ENTRY_PROCESS *)e->Data;
+
+									//if (UniInStr(proc->ExeFilenameW, L"vpnclient_x64.exe"))
+									//{
+									//	Print("(B) %u %S %u %S\n", proc->ProcessId, proc->ExeFilenameW,
+									//		proc->Rdp.SessionId, proc->Rdp.WinStationName);
+									//}
+
 									ok = true;
 									break;
 
@@ -5016,8 +5133,9 @@ void TfMain(TF_SERVICE *svc)
 									{
 										MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)e->Data;
 
-										if (IsLocalHostIP(&tcp->Tcp.RemoteIP) || IsLocalHostIP(&tcp->Tcp.LocalIP) ||
-											IsIPLocalHostOrMySelf(&tcp->Tcp.RemoteIP))
+										if (tcp->Tcp.Status != TCP_STATE_LISTEN &&
+											(IsLocalHostIP(&tcp->Tcp.RemoteIP) || IsLocalHostIP(&tcp->Tcp.LocalIP) ||
+											IsIPLocalHostOrMySelf(&tcp->Tcp.RemoteIP)))
 										{
 											// localhost: Do not report
 										}
@@ -5049,7 +5167,7 @@ void TfMain(TF_SERVICE *svc)
 
 								if (ok)
 								{
-									DIFF_ENTRY *e2 = Clone(e, sizeof(DIFF_ENTRY));
+									DIFF_ENTRY *e2 = CloneDiffEntry(e);
 
 									e2->Flags = 0;
 									if (is_locked)
