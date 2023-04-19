@@ -1964,6 +1964,24 @@ bool ReplaceListPointer(LIST *o, void *oldptr, void *newptr)
 	return false;
 }
 
+void FreeSingleMemoryList(LIST *o)
+{
+	UINT i;
+	// Validate arguments
+	if (o == NULL)
+	{
+		return;
+	}
+
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		void *s = LIST_DATA(o, i);
+		Free(s);
+	}
+
+	ReleaseList(o);
+}
+
 // New string list
 LIST *NewStrList()
 {

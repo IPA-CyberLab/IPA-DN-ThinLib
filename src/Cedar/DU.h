@@ -86,6 +86,7 @@ struct TF_REPORT_SETTINGS
 
 	UINT HostnameLookupTimeoutMsec;
 
+	bool ReportMailOnlyWhenLocked;
 	UINT ReportMailIntervalMsec;
 	char ReportMailHost[MAX_PATH];
 	UINT ReportMailPort;
@@ -97,6 +98,7 @@ struct TF_REPORT_SETTINGS
 	char ReportMailTo[1500];
 	char ReportMailSubjectPrefix[MAX_PATH];
 
+	bool ReportSyslogOnlyWhenLocked;
 	char ReportSyslogHost[MAX_PATH];
 	UINT ReportSyslogPort;
 	char ReportSyslogPrefix[MAX_PATH];

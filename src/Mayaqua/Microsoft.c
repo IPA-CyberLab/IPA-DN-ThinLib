@@ -188,6 +188,10 @@ static volatile BOOL vlan_card_should_stop_flag = false;
 static volatile BOOL vlan_is_in_suspend_mode = false;
 static volatile UINT64 vlan_suspend_mode_begin_tick = 0;
 
+// dnsapi.dll
+// https://github.com/FRex/muhdnscache/tree/443318e50fe327135b04d5589cfd396a6111c9ae
+int WINAPI DnsGetCacheDataTable(PDNS_RECORDW *);
+
 // msi.dll
 static HINSTANCE hMsi = NULL;
 static UINT(WINAPI *_MsiGetProductInfoW)(LPCWSTR, LPCWSTR, LPWSTR, LPDWORD) = NULL;
@@ -362,6 +366,225 @@ void MsTestFunc1(HWND hWnd)
 	}
 }
 
+MS_DNS_CACHE_ENTRY_A *MsSearchDnsCacheList_A(LIST *o, IP *ip)
+{
+	if (o == NULL || ip == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsLocalHostIP(ip))
+	{
+		return NULL;
+	}
+
+	MS_DNS_CACHE_ENTRY_A t = CLEAN;
+	CopyIP(&t.Ip, ip);
+
+	return Search(o, &t);
+}
+
+MS_DNS_CACHE_ENTRY_CNAME *MsSearchDnsCacheList_CNAME(LIST *o, char *realname)
+{
+	if (o == NULL || realname == NULL)
+	{
+		return NULL;
+	}
+
+	MS_DNS_CACHE_ENTRY_CNAME t = CLEAN;
+	StrCpy(t.Realname, sizeof(t.Realname), realname);
+
+	return Search(o, &t);
+}
+
+int MsCmpDnsCache_A(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 == NULL)
+	{
+		return 0;
+	}
+	if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+
+	MS_DNS_CACHE_ENTRY_A *e1 = *((MS_DNS_CACHE_ENTRY_A **)p1);
+	MS_DNS_CACHE_ENTRY_A *e2 = *((MS_DNS_CACHE_ENTRY_A **)p2);
+
+	return CmpIpAddr(&e1->Ip, &e2->Ip);
+}
+
+int MsCmpDnsCache_CNAME(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 == NULL)
+	{
+		return 0;
+	}
+	if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+
+	MS_DNS_CACHE_ENTRY_CNAME *e1 = *((MS_DNS_CACHE_ENTRY_CNAME **)p1);
+	MS_DNS_CACHE_ENTRY_CNAME *e2 = *((MS_DNS_CACHE_ENTRY_CNAME **)p2);
+
+	return StrCmpi(e1->Realname, e2->Realname);
+}
+
+MS_DNS_CACHE *MsGetDnsCacheList()
+{
+	LIST *a_list = NewList(MsCmpDnsCache_A);
+	LIST *cname_list = NewList(MsCmpDnsCache_CNAME);
+	DNS_RECORDW *first = NULL;
+
+	if (DnsGetCacheDataTable(&first))
+	{
+		DNS_RECORDW *cur = first;
+
+		//Print("----\n");
+		while (cur != NULL)
+		{
+			//if (UniStrCmpi(cur->pName, L"cname1.test.sehosts.com") == 0)
+			//{
+			//	DoNothing();
+			//}
+
+			if (cur->wType == DNS_TYPE_A)
+			{
+				DNS_RECORDW *answer_first = NULL;
+
+				if (DnsQuery_W(cur->pName, DNS_TYPE_A, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
+				{
+					DNS_RECORDW *answer_cur = answer_first;
+
+					while (answer_cur != NULL)
+					{
+						if (answer_cur->wType == DNS_TYPE_A)
+						{
+							MS_DNS_CACHE_ENTRY_A t = CLEAN;
+
+							UINTToIP(&t.Ip, answer_cur->Data.A.IpAddress);
+							UniToStr(t.Hostname, sizeof(t.Hostname), answer_cur->pName);
+
+							if (IsFilledStr(t.Hostname) && IsZeroIP(&t.Ip) == false)
+							{
+								Add(a_list, Clone(&t, sizeof(MS_DNS_CACHE_ENTRY_A)));
+							}
+						}
+						else if (answer_cur->wType == DNS_TYPE_CNAME)
+						{
+							MS_DNS_CACHE_ENTRY_CNAME t = CLEAN;
+
+							UniToStr(t.Realname, sizeof(t.Realname), answer_cur->Data.CNAME.pNameHost);
+							UniToStr(t.Alias, sizeof(t.Alias), answer_cur->pName);
+
+							if (IsFilledStr(t.Realname) && IsFilledStr(t.Alias))
+							{
+								Add(cname_list, Clone(&t, sizeof(MS_DNS_CACHE_ENTRY_CNAME)));
+							}
+						}
+
+						answer_cur = answer_cur->pNext;
+					}
+
+					DnsRecordListFree(answer_first, DnsFreeRecordList);
+				}
+			}
+
+			if (cur->wType == DNS_TYPE_AAAA)
+			{
+				DNS_RECORDW *answer_first = NULL;
+
+				if (DnsQuery_W(cur->pName, DNS_TYPE_AAAA, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
+				{
+					DNS_RECORDW *answer_cur = answer_first;
+
+					while (answer_cur != NULL)
+					{
+						if (answer_cur->wType == DNS_TYPE_AAAA)
+						{
+							MS_DNS_CACHE_ENTRY_A t = CLEAN;
+
+							InAddrToIP6(&t.Ip, (struct in6_addr *)&answer_cur->Data.AAAA.Ip6Address);
+							UniToStr(t.Hostname, sizeof(t.Hostname), answer_cur->pName);
+
+							if (IsFilledStr(t.Hostname) && IsZeroIP(&t.Ip) == false)
+							{
+								Add(a_list, Clone(&t, sizeof(MS_DNS_CACHE_ENTRY_A)));
+							}
+						}
+						else if (answer_cur->wType == DNS_TYPE_CNAME)
+						{
+							MS_DNS_CACHE_ENTRY_CNAME t = CLEAN;
+
+							UniToStr(t.Realname, sizeof(t.Realname), answer_cur->Data.CNAME.pNameHost);
+							UniToStr(t.Alias, sizeof(t.Alias), answer_cur->pName);
+
+							if (IsFilledStr(t.Realname) && IsFilledStr(t.Alias))
+							{
+								Add(cname_list, Clone(&t, sizeof(MS_DNS_CACHE_ENTRY_CNAME)));
+							}
+						}
+
+						answer_cur = answer_cur->pNext;
+					}
+
+					DnsRecordListFree(answer_first, DnsFreeRecordList);
+				}
+			}
+
+			if (cur->wType == DNS_TYPE_CNAME)
+			{
+				DNS_RECORDW *answer_first = NULL;
+			}
+
+			cur = cur->pNext;
+		}
+
+		DnsRecordListFree(first, DnsFreeRecordList);
+	}
+
+	MS_DNS_CACHE *ret = ZeroMalloc(sizeof(MS_DNS_CACHE));
+
+	ret->AList = a_list;
+	ret->CNameList = cname_list;
+
+	return ret;
+}
+
+void MsFreeDnsCacheList(MS_DNS_CACHE *c)
+{
+	UINT i;
+	if (c == NULL)
+	{
+		return;
+	}
+
+	for (i = 0;i < LIST_NUM(c->AList);i++)
+	{
+		MS_DNS_CACHE_ENTRY_A *s = LIST_DATA(c->AList, i);
+		Free(s);
+	}
+	ReleaseList(c->AList);
+
+	for (i = 0;i < LIST_NUM(c->CNameList);i++)
+	{
+		MS_DNS_CACHE_ENTRY_CNAME *s = LIST_DATA(c->CNameList, i);
+		Free(s);
+	}
+	ReleaseList(c->CNameList);
+
+	Free(c);
+}
+
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc)
 {
 	if (data == NULL || proc == NULL || sid_cache == NULL)
@@ -426,17 +649,82 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 	UINT64 tick = Tick64();
 
-	LIST *process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | ((flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE) ? 0 : MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE));
+	LIST *process_list = NULL;
 
 	LIST *tcp_list = NULL;
-	
-	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == false)
+
+	MS_DNS_CACHE *dns_cache = NULL;
+
+	LIST *a_list = NewListFast(MsCmpDnsCache_A);
+
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_PROCESS) == 0)
+	{
+		process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | ((flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE) ? 0 : MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE));
+	}
+
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == 0)
 	{
 		tcp_list = Win32GetTcpTableList_v4v6();
 	}
 
+	// DNS cache
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_DNS_CACHE) == 0)
+	{
+		dns_cache = MsGetDnsCacheList();
+	}
+
+	// DNS cache list
+	if (dns_cache != NULL)
+	{
+		UINT i;
+		for (i = 0;i < LIST_NUM(dns_cache->AList);i++)
+		{
+			MS_DNS_CACHE_ENTRY_A *e = LIST_DATA(dns_cache->AList, i);
+			MS_THINFW_ENTRY_DNS data = CLEAN;
+
+			if (IsLocalHostIP(&e->Ip) == false)
+			{
+				// Try CNAME reverse search
+				MS_DNS_CACHE_ENTRY_CNAME *origin_cname = NULL;
+				UINT j;
+				char cname_search_target_realname[MAX_PATH] = CLEAN;
+
+				StrCpy(cname_search_target_realname, sizeof(cname_search_target_realname), e->Hostname);
+
+				for (j = 0;j < 4;j++)
+				{
+					MS_DNS_CACHE_ENTRY_CNAME *cname = MsSearchDnsCacheList_CNAME(dns_cache->CNameList, cname_search_target_realname);
+
+					if (cname == NULL)
+					{
+						break;
+					}
+
+					origin_cname = cname;
+					StrCpy(cname_search_target_realname, sizeof(cname_search_target_realname),
+						cname->Alias);
+				}
+
+				StrCpy(data.Hostname, sizeof(data.Hostname), origin_cname == NULL ? e->Hostname : origin_cname->Alias);
+				CopyIP(&data.Ip, &e->Ip);
+
+				UniFormat(key, sizeof(key),
+					L"DNS:%r:%s",
+					&data.Ip,
+					data.Hostname);
+
+				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_DNS, tick));
+
+				MS_DNS_CACHE_ENTRY_A *a = ZeroMalloc(sizeof(MS_DNS_CACHE_ENTRY_A));
+				CopyIP(&a->Ip, &data.Ip);
+				StrCpy(a->Hostname, sizeof(a->Hostname), data.Hostname);
+				Add(a_list, a);
+			}
+		}
+	}
+
 	// Terminal Sessions List
-	if (true)
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_RDP) == 0)
 	{
 		WTS_SESSION_INFOA *info = CLEAN;
 		UINT count = 0;
@@ -562,6 +850,17 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 
 						ms->nt->WTSFreeMemory(ex);
 
+						if (IsZeroIP(&data.ClientIp) == false)
+						{
+							MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
+
+							if (found_a != NULL)
+							{
+								StrCpy(data.ClientHostname_Resolved, sizeof(data.ClientHostname_Resolved),
+									found_a->Hostname);
+							}
+						}
+
 						UniFormat(key, sizeof(key), L"RDP:%u:%s:%S:%s:%s:%s:[%r]:%u:[%r]",
 							data.SessionId, data.WinStationName, data.SessionState,
 							data.Username, data.Domain, data.ClientLocalMachineName,
@@ -680,6 +979,17 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 					StrCpy(data.Type, sizeof(data.Type), "TCP_ClientConnection");
 				}
 
+				if (IsZeroIP(&data.Tcp.RemoteIP) == false)
+				{
+					MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.Tcp.RemoteIP);
+
+					if (found_a != NULL)
+					{
+						StrCpy(data.RemoteIPHostname_Resolved, sizeof(data.RemoteIPHostname_Resolved),
+							found_a->Hostname);
+					}
+				}
+
 				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
 			}
 		}
@@ -688,6 +998,10 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 	FreeTcpTableList(tcp_list);
 
 	MsFreeProcessList(process_list);
+
+	MsFreeDnsCacheList(dns_cache);
+
+	FreeSingleMemoryList(a_list);
 
 	return ret;
 }
@@ -716,6 +1030,43 @@ void MsFreeSidToUsernameCache(LIST *cache_list)
 	}
 
 	ReleaseList(cache_list);
+}
+
+bool MsIsIpInDnsServerList(LIST *o, IP *ip)
+{
+	UINT i;
+	if (o == NULL)
+	{
+		return false;
+	}
+
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		IP *ip2 = LIST_DATA(o, i);
+		if (CmpIpAddr(ip, ip2) == 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void MsFreeDnsServersList(LIST *o)
+{
+	UINT i;
+	if (o == NULL)
+	{
+		return;
+	}
+
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		IP *ip = LIST_DATA(o, i);
+		Free(ip);
+	}
+
+	ReleaseList(o);
 }
 
 LIST *MsGetCurrentDnsServersList()

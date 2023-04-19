@@ -243,6 +243,7 @@ struct DIFF_ENTRY
 	UCHAR Data[DIFF_ENTRY_DATASIZE];
 	UINT DataSize;
 	UINT64 Param;
+	UINT Flags;
 };
 
 // Function prototype
@@ -515,6 +516,8 @@ bool AddStrToStrListDistinct(LIST *o, char *str);
 
 void AddStrToStrList(LIST* o, char* str);
 void AddUniStrToUniStrList(LIST* o, wchar_t* str);
+
+void FreeSingleMemoryList(LIST *o);
 
 bool Vars_ActivePatch_AddStr(char* name, char* str_value);
 bool Vars_ActivePatch_AddInt(char* name, UINT int_value);
