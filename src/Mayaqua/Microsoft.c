@@ -188,9 +188,20 @@ static volatile BOOL vlan_card_should_stop_flag = false;
 static volatile BOOL vlan_is_in_suspend_mode = false;
 static volatile UINT64 vlan_suspend_mode_begin_tick = 0;
 
+
+// https://stackoverflow.com/questions/31889957/memory-leak-when-using-dnsgetcachedatatable
+typedef struct _MS_DNS_CACHE_ENTRY {
+	struct _MS_DNS_CACHE_ENTRY *pNext; // Pointer to next entry
+	PWSTR pszName; // DNS Record Name
+	unsigned short wType; // DNS Record Type
+	unsigned short wDataLength; // Not referenced
+	unsigned long dwFlags; // DNS Record FlagsB
+} MS_DNSCACHEENTRY, *MS_PDNSCACHEENTRY;
+
+
 // dnsapi.dll
 // https://github.com/FRex/muhdnscache/tree/443318e50fe327135b04d5589cfd396a6111c9ae
-int WINAPI DnsGetCacheDataTable(PDNS_RECORDW *);
+int WINAPI DnsGetCacheDataTable(MS_DNSCACHEENTRY **);
 
 // msi.dll
 static HINSTANCE hMsi = NULL;
@@ -443,11 +454,11 @@ MS_DNS_CACHE *MsGetDnsCacheList()
 {
 	LIST *a_list = NewList(MsCmpDnsCache_A);
 	LIST *cname_list = NewList(MsCmpDnsCache_CNAME);
-	DNS_RECORDW *first = NULL;
+	MS_DNSCACHEENTRY *first = NULL;
 
 	if (DnsGetCacheDataTable(&first))
 	{
-		DNS_RECORDW *cur = first;
+		MS_DNSCACHEENTRY *cur = first;
 
 		//Print("----\n");
 		while (cur != NULL)
@@ -461,7 +472,7 @@ MS_DNS_CACHE *MsGetDnsCacheList()
 			{
 				DNS_RECORDW *answer_first = NULL;
 
-				if (DnsQuery_W(cur->pName, DNS_TYPE_A, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
+				if (DnsQuery_W(cur->pszName, DNS_TYPE_A, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
 				{
 					DNS_RECORDW *answer_cur = answer_first;
 
@@ -503,7 +514,7 @@ MS_DNS_CACHE *MsGetDnsCacheList()
 			{
 				DNS_RECORDW *answer_first = NULL;
 
-				if (DnsQuery_W(cur->pName, DNS_TYPE_AAAA, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
+				if (DnsQuery_W(cur->pszName, DNS_TYPE_AAAA, 0x8010, NULL, (void *)&answer_first, NULL) == 0)
 				{
 					DNS_RECORDW *answer_cur = answer_first;
 
@@ -541,15 +552,13 @@ MS_DNS_CACHE *MsGetDnsCacheList()
 				}
 			}
 
-			if (cur->wType == DNS_TYPE_CNAME)
-			{
-				DNS_RECORDW *answer_first = NULL;
-			}
+			MS_DNSCACHEENTRY *to_free = cur;
 
 			cur = cur->pNext;
-		}
 
-		DnsRecordListFree(first, DnsFreeRecordList);
+			DnsFree(to_free->pszName, DnsFreeFlat);
+			DnsFree(to_free, DnsFreeFlat);
+		}
 	}
 
 	MS_DNS_CACHE *ret = ZeroMalloc(sizeof(MS_DNS_CACHE));
