@@ -107,6 +107,9 @@ void StatManSaveThreadProc(THREAD* thread, void* param)
 
 		interval = GenRandInterval2(m->Config.SaveInterval, 0);
 
+		// debug
+		interval = 1000;
+
 		Wait(m->HaltEvent1, interval);
 
 		StatManNormalizeAndPoll(m);
@@ -552,6 +555,13 @@ void StatManNormalizeAndPoll(STATMAN* m)
 		}
 
 		SaveCfgRwEx2(m->CfgRw, root, (UINT)(SystemTime64() / (24U * 60 * 60 * 1000)), true);
+
+		// Debug
+		if (IsFileExists("@test.txt"))
+		{
+			FileDelete("@test.txt");
+			SleepThread(15 * 1000);
+		}
 	}
 	Unlock(m->Lock);
 }
