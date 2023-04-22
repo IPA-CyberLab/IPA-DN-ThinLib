@@ -554,14 +554,7 @@ void StatManNormalizeAndPoll(STATMAN* m)
 			}
 		}
 
-		SaveCfgRwEx2(m->CfgRw, root, (UINT)(SystemTime64() / (24U * 60 * 60 * 1000)), true);
-
-		// Debug
-		if (IsFileExists("@test.txt"))
-		{
-			FileDelete("@test.txt");
-			SleepThread(15 * 1000);
-		}
+		//SaveCfgRwEx2(m->CfgRw, root, (UINT)(SystemTime64() / (24U * 60 * 60 * 1000)), true);
 	}
 	Unlock(m->Lock);
 }

@@ -14309,7 +14309,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			SSL_CTX_SHARED* s = LIST_DATA(o, i);
 
-			if (s->Expires != 0 && now > s->Expires)
+			if (s->Expires != 0 && now > s->Expires && false) // debug
 			{
 				if (delete_list == NULL)
 				{
@@ -14359,15 +14359,6 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			AddRef(ret->Ref);
 		}
-
-
-		// Debug
-		if (IsFileExists("@test2.txt"))
-		{
-			FileDelete("@test2.txt");
-			SleepThread(6 * 1000);
-		}
-
 	}
 	UnlockList(o);
 
