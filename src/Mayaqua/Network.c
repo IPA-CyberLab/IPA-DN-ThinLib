@@ -14359,6 +14359,15 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			AddRef(ret->Ref);
 		}
+
+
+		// Debug
+		if (IsFileExists("@test2.txt"))
+		{
+			FileDelete("@test2.txt");
+			SleepThread(15 * 1000);
+		}
+
 	}
 	UnlockList(o);
 
