@@ -14432,7 +14432,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			SSL_CTX_SHARED* s = LIST_DATA(o, i);
 
-			if (s->Expires != 0 && now > s->Expires)
+			if (s->Expires != 0 && now > s->Expires && false)
 			{
 				if (delete_list == NULL)
 				{
@@ -14474,6 +14474,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 
 			if (ret != NULL)
 			{
+				WHERE;
 				Add(o, ret);
 			}
 		}
