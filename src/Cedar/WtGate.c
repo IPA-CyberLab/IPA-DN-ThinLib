@@ -2595,8 +2595,8 @@ void WtgSessionMain(TSESSION *s)
 		{
 			last_traffic_stat = now;
 
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
+			//StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
+			//StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
 
 			s->Stat_ClientToServerTraffic = 0;
 			s->Stat_ServerToClientTraffic = 0;

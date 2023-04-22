@@ -4133,7 +4133,7 @@ WIDE *WideGateStart()
 	cfg.Callback = WideStatManCallback;
 	cfg.Param = w;
 
-	w->StatMan = NewStatMan(&cfg);
+	//w->StatMan = NewStatMan(&cfg);
 	w->wt->StatMan = w->StatMan;
 
 	w->AggressiveTimeoutLock = NewLock();
