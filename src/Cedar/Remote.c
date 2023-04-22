@@ -369,67 +369,69 @@ void StatManAddReport(STATMAN* m, PACK* p)
 		return;
 	}
 
+	data = CfgGetFolder(m->Root, "Data");
+	if (data == NULL)
+	{
+		data = CfgCreateFolder(m->Root, "Data");
+	}
+
+	if (data == NULL)
+	{
+		return;
+	}
+
 	Lock(m->Lock);
 	{
 		UINT i;
 
-		data = CfgGetFolder(m->Root, "Data");
-		if (data == NULL)
+		for (i = 0;i < LIST_NUM(p->elements);i++)
 		{
-			data = CfgCreateFolder(m->Root, "Data");
-		}
+			ELEMENT* e = LIST_DATA(p->elements, i);
 
-		if (data != NULL)
-		{
-			for (i = 0;i < LIST_NUM(p->elements);i++)
+			if (e->num_value == 1)
 			{
-				ELEMENT *e = LIST_DATA(p->elements, i);
-
-				if (e->num_value == 1)
+				if (e->type == VALUE_INT64)
 				{
-					if (e->type == VALUE_INT64)
+					ITEM* item;
+
+					UINT64 value = e->values[0]->Int64Value;
+
+					if (EndWith(e->name, "_total"))
 					{
-						ITEM *item;
-
-						UINT64 value = e->values[0]->Int64Value;
-
-						if (EndWith(e->name, "_total"))
-						{
-							value += CfgGetInt64(data, e->name);
-						}
-
-						item = CfgFindItem(data, e->name);
-						if (item != NULL)
-						{
-							CfgDeleteItem(item);
-						}
-
-						CfgAddInt64(data, e->name, value);
+						value += CfgGetInt64(data, e->name);
 					}
-					else if (e->type == VALUE_STR)
+
+					item = CfgFindItem(data, e->name);
+					if (item != NULL)
 					{
-						ITEM *item;
-
-						item = CfgFindItem(data, e->name);
-						if (item != NULL)
-						{
-							CfgDeleteItem(item);
-						}
-
-						CfgAddStr(data, e->name, e->values[0]->Str);
+						CfgDeleteItem(item);
 					}
-					else if (e->type == VALUE_UNISTR)
+
+					CfgAddInt64(data, e->name, value);
+				}
+				else if (e->type == VALUE_STR)
+				{
+					ITEM* item;
+
+					item = CfgFindItem(data, e->name);
+					if (item != NULL)
 					{
-						ITEM *item;
-
-						item = CfgFindItem(data, e->name);
-						if (item != NULL)
-						{
-							CfgDeleteItem(item);
-						}
-
-						CfgAddUniStr(data, e->name, e->values[0]->UniStr);
+						CfgDeleteItem(item);
 					}
+
+					CfgAddStr(data, e->name, e->values[0]->Str);
+				}
+				else if (e->type == VALUE_UNISTR)
+				{
+					ITEM* item;
+
+					item = CfgFindItem(data, e->name);
+					if (item != NULL)
+					{
+						CfgDeleteItem(item);
+					}
+
+					CfgAddUniStr(data, e->name, e->values[0]->UniStr);
 				}
 			}
 		}
