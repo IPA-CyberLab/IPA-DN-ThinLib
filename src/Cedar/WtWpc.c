@@ -590,7 +590,8 @@ bool WtIsCommunicationError(UINT error, bool include_ssl_errors)
 	return false;
 }
 
-PACK *WtWpcCallWithCertAndKey(WT *wt, char *function_name, PACK *pack, X *cert, K *key, bool global_ip_only, bool try_secondary, UINT timeout, bool parallel_skip_last_error_controller)
+PACK *WtWpcCallWithCertAndKey(WT *wt, char *function_name, PACK *pack, X *cert, K *key, bool global_ip_only, bool try_secondary, UINT timeout, bool parallel_skip_last_error_controller,
+	UCHAR *alternative_host_key, UCHAR *alternative_host_secret)
 {
 	BUF *k_buf;
 	if (wt == NULL || function_name == NULL || pack == NULL)
@@ -598,21 +599,29 @@ PACK *WtWpcCallWithCertAndKey(WT *wt, char *function_name, PACK *pack, X *cert, 
 		return PackError(ERR_INTERNAL_ERROR);
 	}
 
-	if (cert != NULL && key != NULL)
+	if ((cert != NULL && key != NULL) || (alternative_host_key != NULL && alternative_host_secret != NULL))
 	{
 		UCHAR host_key[SHA1_SIZE] = {0};
 		UCHAR host_secret[SHA1_SIZE] = {0};
 
-		GetXDigest(cert, host_key, true);
-
-		k_buf = KToBuf(key, false, NULL);
-
-		if (k_buf != NULL)
+		if (cert != NULL && key != NULL)
 		{
-			HashSha1(host_secret, k_buf->Buf, k_buf->Size);
-		}
+			GetXDigest(cert, host_key, true);
 
-		FreeBuf(k_buf);
+			k_buf = KToBuf(key, false, NULL);
+
+			if (k_buf != NULL)
+			{
+				HashSha1(host_secret, k_buf->Buf, k_buf->Size);
+			}
+
+			FreeBuf(k_buf);
+		}
+		else
+		{
+			Copy(host_key, alternative_host_key, SHA1_SIZE);
+			Copy(host_secret, alternative_host_secret, SHA1_SIZE);
+		}
 
 		return WtWpcCall(wt, function_name, pack, host_key, host_secret, global_ip_only, try_secondary, timeout, parallel_skip_last_error_controller);
 	}
