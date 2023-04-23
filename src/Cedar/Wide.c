@@ -872,40 +872,46 @@ LABEL_RETRY:
 			UINT level = WideGetErrorLevel(w->ServerErrorCode);
 			UINT interval = WT_GATE_CONNECT_RETRY * MIN((i + 1), 24);
 
-			if (level == DESK_ERRORLEVEL_SERVER_SIDE)
+			if ((w->Flags & WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST) == 0)
 			{
-				// サーバー側問題の場合は 15 秒 × 再試行回数 くらい待つ
-				interval *= 10;
-			}
-			else if (level == DESK_ERRORLEVEL_CLIENT_SIDE)
-			{
-				// クライアント側問題の場合は 75 秒 × 再試行回数 くらい待つ
-				interval *= 50;
+				if (level == DESK_ERRORLEVEL_SERVER_SIDE)
+				{
+					// サーバー側問題の場合は 15 秒 × 再試行回数 くらい待つ
+					interval *= 10;
+				}
+				else if (level == DESK_ERRORLEVEL_CLIENT_SIDE)
+				{
+					// クライアント側問題の場合は 75 秒 × 再試行回数 くらい待つ
+					interval *= 50;
+				}
 			}
 
 			WideLog(w, "Retry level = %u (ServerErrorCode = %u)", level, w->ServerErrorCode);
 
-			switch (w->ServerErrorCode)
+			if ((w->Flags & WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST) == 0)
 			{
-			case ERR_RETRY_AFTER_15_MINS:
-				// 15 分後に再試行してください
-				interval = 15 * 60 * 1000;
-				break;
+				switch (w->ServerErrorCode)
+				{
+				case ERR_RETRY_AFTER_15_MINS:
+					// 15 分後に再試行してください
+					interval = 15 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_1_HOURS:
-				// 1 時間後に再試行してください
-				interval = 1 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_1_HOURS:
+					// 1 時間後に再試行してください
+					interval = 1 * 60 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_8_HOURS:
-				// 8 時間後に再試行してください
-				interval = 8 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_8_HOURS:
+					// 8 時間後に再試行してください
+					interval = 8 * 60 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_24_HOURS:
-				// 24 時間後に再試行してください
-				interval = 24 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_24_HOURS:
+					// 24 時間後に再試行してください
+					interval = 24 * 60 * 60 * 1000;
+					break;
+				}
 			}
 
 			WideLog(w, "Retry interval base = %u", interval);
@@ -1922,14 +1928,17 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 
 	w->Flags = flags;
 
-	if (IsEmptyStr(debug_log_dir_name))
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
 	{
-		w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
-		w->WideLog->Flush = true;
-	}
-	else
-	{
-		w->WideLog = NewLogEx(debug_log_dir_name, "tunnel", LOG_SWITCH_DAY, true);
+		if (IsEmptyStr(debug_log_dir_name))
+		{
+			w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
+			w->WideLog->Flush = true;
+		}
+		else
+		{
+			w->WideLog = NewLogEx(debug_log_dir_name, "tunnel", LOG_SWITCH_DAY, true);
+		}
 	}
 
 	WideLog(w, "-------------------- Start Tunnel System (Server) --------------------");
@@ -2275,7 +2284,10 @@ void WideLogMain(WIDE* w, char *format, va_list args)
 		InsertUnicodeRecord(w->WideLog, buf);
 	}
 
-	Debug("WIDE_LOG: %S\n", buf);
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		Debug("WIDE_LOG: %S\n", buf);
+	}
 
 	Free(buf3);
 	Free(buf);

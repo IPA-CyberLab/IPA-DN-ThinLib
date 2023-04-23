@@ -231,6 +231,8 @@ struct ACCEPT_QUEUE
 
 #define WIDE_FLAG_NONE							0
 #define WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST		1
+#define WIDE_FLAG_NO_LOG						2
+
 
 
 // WIDE オブジェクト
