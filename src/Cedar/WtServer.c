@@ -757,7 +757,11 @@ void WtsConnectInner(TSESSION *session, SOCK *s, char *sni, bool *should_retry_p
 
 	session->WasConnected = true;
 
+	if (wt->Wide != NULL) wt->Wide->Server_NumEstablishedToGate++;
+
 	WtsSessionMain(session);
+
+	if (wt->Wide != NULL) wt->Wide->Server_NumDisconnectedFromGate++;
 }
 
 // シグネチャをアップロードする
