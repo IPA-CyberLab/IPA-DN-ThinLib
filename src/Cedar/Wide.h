@@ -335,6 +335,7 @@ struct WIDE
 	bool SendMacList;
 	ACCEPT_QUEUE *AcceptQueue;
 	char PreferredPcid[WT_PCID_SIZE + 1];
+	LOCK *RegistMachineLock_Danger;
 
 	bool MsgForServerArrived;			// 新しいメッセージが WideController から届いている
 	wchar_t MsgForServer[MAX_SIZE];		// 届いているメッセージ

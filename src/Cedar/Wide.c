@@ -1468,7 +1468,12 @@ UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key, UCHAR *altern
 	PackAddStr(r, "RegistrationPassword", w->RegistrationPassword);
 	PackAddStr(r, "RegistrationEmail", w->RegistrationEmail);
 
-	p = WtWpcCallWithCertAndKey(wt, "RegistMachine", r, cert, key, false, true, 0, false, alternative_host_key, alternative_host_secret);
+	Lock(w->RegistMachineLock_Danger); // For stress test debug purpuse
+	{
+		p = WtWpcCallWithCertAndKey(wt, "RegistMachine", r, cert, key, false, true, 0, false, alternative_host_key, alternative_host_secret);
+	}
+	Unlock(w->RegistMachineLock_Danger);
+
 	FreePack(r);
 
 	ret = GetErrorFromPack(p);
