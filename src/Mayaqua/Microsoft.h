@@ -606,6 +606,7 @@ typedef struct NT_API
 	int(WSAAPI *GetAddrInfoExCancel)(LPHANDLE);
 	BOOLEAN(WINAPI *WinStationQueryInformationW)(
 		HANDLE, ULONG, UINT, PVOID, ULONG, PULONG);
+	BOOL(WINAPI *GetLastInputInfo)(PLASTINPUTINFO);
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -754,6 +755,24 @@ typedef struct MS_SUSPEND_HANDLER
 	volatile bool AboutToClose;
 } MS_SUSPEND_HANDLER;
 
+// DNS cache list
+typedef struct MS_DNS_CACHE_ENTRY_A
+{
+	IP Ip;
+	char Hostname[MAX_PATH];
+} MS_DNS_CACHE_ENTRY_A;
+
+typedef struct MS_DNS_CACHE_ENTRY_CNAME
+{
+	char Realname[MAX_PATH];
+	char Alias[MAX_PATH];
+} MS_DNS_CACHE_ENTRY_CNAME;
+
+typedef struct MS_DNS_CACHE
+{
+	LIST *AList;
+	LIST *CNameList;
+} MS_DNS_CACHE;
 
 // プロセス Diff
 typedef struct MS_PROCESS_DIFF
@@ -784,6 +803,8 @@ typedef struct MS_PROCESS_WATCHER
 #define MS_GET_PROCESS_LIST_FLAG_NONE				0
 #define MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE	1
 #define	MS_GET_PROCESS_LIST_FLAG_GET_SID			2
+#define	MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS	4
+
 
 typedef struct MS_SID_INFO
 {
@@ -796,6 +817,24 @@ typedef struct MS_SID_INFO
 #define	MS_THINFW_ENTRY_TYPE_PROCESS		0
 #define	MS_THINFW_ENTRY_TYPE_TCP			1
 #define	MS_THINFW_ENTRY_TYPE_RDP			2
+#define	MS_THINFW_ENTRY_TYPE_DNS			3
+
+#define	MS_THINFW_ENTRY_FLAG_NONE			0
+#define	MS_THINFW_ENTRY_FLAG_LOCKED			1
+
+typedef struct MS_THINFW_ENTRY_RDP
+{
+	UINT SessionId;
+	wchar_t WinStationName[64];
+	char SessionState[16];
+	wchar_t Username[128];
+	wchar_t Domain[64];
+	wchar_t ClientLocalMachineName[64];  // Unused?
+	IP ClientIp;
+	IP ClientLocalIp;
+	UINT ClientLocalBuild;
+	char ClientHostname_Resolved[256];
+} MS_THINFW_ENTRY_RDP;
 
 typedef struct MS_THINFW_ENTRY_PROCESS
 {
@@ -806,6 +845,7 @@ typedef struct MS_THINFW_ENTRY_PROCESS
 	bool Is64BitProcess;			// Is 64bit Process
 	wchar_t Username[MAX_PATH];
 	wchar_t Domain[MAX_PATH];
+	MS_THINFW_ENTRY_RDP Rdp;
 } MS_THINFW_ENTRY_PROCESS;
 
 typedef struct MS_THINFW_ENTRY_TCP
@@ -813,21 +853,15 @@ typedef struct MS_THINFW_ENTRY_TCP
 	TCPTABLE Tcp;
 	bool HasProcessInfo;
 	MS_THINFW_ENTRY_PROCESS Process;
+	char Type[32];
+	char RemoteIPHostname_Resolved[256];
 } MS_THINFW_ENTRY_TCP;
 
-typedef struct MS_THINFW_ENTRY_RDP
+typedef struct MS_THINFW_ENTRY_DNS
 {
-	UINT SessionId;
-	wchar_t WinStationName[64];
-	char SessionState[16];
-	wchar_t Username[128];
-	wchar_t Domain[64];
-	wchar_t ClientLocalMachineName[64];
-	IP ClientIp;
-	IP ClientLocalIp;
-	UINT ClientLocalBuild;
-} MS_THINFW_ENTRY_RDP;
-
+	char Hostname[MAX_PATH];
+	IP Ip;
+} MS_THINFW_ENTRY_DNS;
 
 // Function prototype
 void MsInit();
@@ -1426,6 +1460,12 @@ void MsFreeProcessDiff(MS_PROCESS_DIFF* d);
 void MsTestFunc1(HWND hWnd);
 void MsTestFunc2();
 
+int MsCmpDnsCache_A(void *p1, void *p2);
+MS_DNS_CACHE *MsGetDnsCacheList();
+void MsFreeDnsCacheList(MS_DNS_CACHE *c);
+MS_DNS_CACHE_ENTRY_A *MsSearchDnsCacheList_A(LIST *o, IP *ip);
+MS_DNS_CACHE_ENTRY_CNAME *MsSearchDnsCacheList_CNAME(LIST *o, char *realname);
+
 int MsGetAddrInfoExW(wchar_t *pName, wchar_t *pServiceName, DWORD dwNameSpace, void *lpNspId,
 	NT_ADDRINFOEXW *hints, NT_PADDRINFOEXW *ppResult, struct timeval *timeout,
 	void *lpOverlapped, void *lpCompletionRoutine, void **lpNameHandle);
@@ -1438,12 +1478,23 @@ bool MsIsFastStartupEnabled();
 LIST *MsNewSidToUsernameCache();
 MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
 void MsFreeSidToUsernameCache(LIST *cache_list);
+LIST *MsGetCurrentDnsServersList();
+void MsFreeDnsServersList(LIST *o);
+bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 
 #define	MS_GET_THINFW_LIST_FLAGS_NONE				0
 #define	MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP	1
+#define	MS_GET_THINFW_LIST_FLAGS_NO_TCP				2
+#define	MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE	4
+#define	MS_GET_THINFW_LIST_FLAGS_NO_DNS_CACHE		8
+#define	MS_GET_THINFW_LIST_FLAGS_NO_RDP				16
+#define	MS_GET_THINFW_LIST_FLAGS_NO_PROCESS			32
+
 
 LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
-void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc);
+void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
+
+UINT64 MsGetIdleTick();
 
 // Inner functions
 #ifdef	MICROSOFT_C

@@ -1065,6 +1065,12 @@ struct SSL_CTX_SHARED_SETTINGS
 	SSL_CTX_SHARED_SETTINGS2 Settings2;
 };
 
+#define	GETHOSTNAME_FLAG_NONE							0
+#define	GETHOSTNAME_FLAG_NO_NETBIOS_NAME				1
+#define	GETHOSTNAME_FLAG_NETBIOS_ONLY_PRIVATE_IP		2
+#define	GETHOSTNAME_USE_DNS_API							4
+
+
 
 UINT64 CalcSslCtlSharedSettingsHash(SSL_CTX_SHARED_SETTINGS* s);
 LIST* NewSslCtxSharedList();
@@ -1252,7 +1258,9 @@ void Win32ReleaseDhcp9x(UINT if_id, bool wait);
 void Win32FlushDnsCache();
 int CompareIpAdapterIndexMap(void *p1, void *p2);
 LIST *Win32GetTcpTableList();
+LIST *Win32GetTcpTableList_v4v6();
 LIST *Win32GetTcpTableListByGetExtendedTcpTable();
+LIST *Win32GetTcpTableListByGetExtendedTcpTable_IPv6();
 LIST *Win32GetTcpTableListByAllocateAndGetTcpExTableFromStack();
 LIST *Win32GetTcpTableListByGetTcpTable();
 ROUTE_CHANGE *Win32NewRouteChange();
@@ -1355,10 +1363,11 @@ bool GetIP4Inner(IP *ip, char *hostname);
 bool GetIP6Inner(IP *ip, char *hostname);
 bool GetIP4InnerWithNoCache(IP *ip, char *hostname, bool only_if_address_configured, UINT timeout);
 bool GetIP6InnerWithNoCache(IP* ip, char* hostname, bool only_if_address_configured, UINT timeout);
-bool GetHostNameInner(char *hostname, UINT size, IP *ip);
-bool GetHostNameInner6(char *hostname, UINT size, IP *ip);
+bool GetHostNameInner(char *hostname, UINT size, IP *ip, UINT flags);
+bool GetHostNameInner6(char *hostname, UINT size, IP *ip, UINT flags);
 bool GetHostName(char *hostname, UINT size, IP *ip);
-bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name);
+bool GetHostNameEx(char *hostname, UINT size, IP *ip, UINT timeout, UINT flags);
+void IPAddressToPtrFqdn(char *dst, UINT size, IP *ip);
 void GetHostNameThread(THREAD *t, void *p);
 void GetMachineName(char *name, UINT size);
 void GetMachineNameEx(char *name, UINT size, bool no_load_hosts);

@@ -94,6 +94,7 @@
 #include <ws2ipdef.h>
 #include <netioapi.h>
 #include <Icmpapi.h>
+#include <Windns.h>
 #endif	// _WIN32
 
 #include <stdio.h>
@@ -8882,6 +8883,37 @@ bool TryListen4(UINT port)
 // Get the TCP table list (Win32)
 #ifdef	OS_WIN32
 
+LIST *Win32GetTcpTableList_v4v6()
+{
+	LIST *ret = NewListFast(NULL);
+	LIST *v4 = Win32GetTcpTableListByGetExtendedTcpTable();
+	LIST *v6 = Win32GetTcpTableListByGetExtendedTcpTable_IPv6();
+
+	UINT i;
+
+	if (v4 != NULL)
+	{
+		for (i = 0;i < LIST_NUM(v4);i++)
+		{
+			TCPTABLE *t = LIST_DATA(v4, i);
+			Add(ret, t);
+		}
+	}
+
+	if (v6 != NULL)
+	{
+		for (i = 0;i < LIST_NUM(v6);i++)
+		{
+			TCPTABLE *t = LIST_DATA(v6, i);
+			Add(ret, t);
+		}
+	}
+
+	ReleaseList(v4);
+	ReleaseList(v6);
+	return ret;
+}
+
 LIST *Win32GetTcpTableList()
 {
 	LIST *o;
@@ -8974,6 +9006,92 @@ LIST *Win32GetTcpTableListByGetExtendedTcpTable()
 		if (r->dwState != TCP_STATE_LISTEN)
 		{
 			UINTToIP(&t->RemoteIP, r->dwRemoteAddr);
+			t->RemotePort = Endian16((USHORT)r->dwRemotePort);
+		}
+
+		t->Status = r->dwState;
+		t->ProcessId = r->dwOwningPid;
+
+		Add(o, t);
+	}
+
+	Free(table);
+
+	return o;
+}
+LIST *Win32GetTcpTableListByGetExtendedTcpTable_IPv6()
+{
+	UINT need_size;
+	UINT i;
+	MIB_TCP6TABLE_OWNER_PID *table;
+	bool ok = false;
+	LIST *o;
+	if (w32net->GetExtendedTcpTable == NULL)
+	{
+		return NULL;
+	}
+
+	for (i = 0;i < 128;i++)
+	{
+		UINT ret;
+		table = MallocFast(sizeof(MIB_TCP6TABLE_OWNER_PID));
+		need_size = sizeof(MIB_TCP6TABLE_OWNER_PID);
+		ret = w32net->GetExtendedTcpTable(table, &need_size, true, AF_INET6, _TCP_TABLE_OWNER_PID_ALL, 0);
+		if (ret == NO_ERROR)
+		{
+			ok = true;
+			break;
+		}
+		else
+		{
+			Free(table);
+			if (ret != ERROR_INSUFFICIENT_BUFFER)
+			{
+				return NULL;
+			}
+		}
+
+		table = MallocFast(need_size);
+
+		ret = w32net->GetExtendedTcpTable(table, &need_size, true, AF_INET6, _TCP_TABLE_OWNER_PID_ALL, 0);
+		if (ret == NO_ERROR)
+		{
+			ok = true;
+			break;
+		}
+		else
+		{
+			Free(table);
+
+			if (ret != ERROR_INSUFFICIENT_BUFFER)
+			{
+				return NULL;
+			}
+		}
+	}
+
+	if (ok == false)
+	{
+		return NULL;
+	}
+
+	o = NewListEx(NULL, true);
+
+	for (i = 0;i < table->dwNumEntries;i++)
+	{
+		MIB_TCP6ROW_OWNER_PID *r = &table->table[i];
+		TCPTABLE *t = ZeroMallocFast(sizeof(TCPTABLE));
+
+		InAddrToIP6(&t->LocalIP, (struct in6_addr *)&r->ucLocalAddr);
+		t->LocalIP.ipv6_scope_id = Endian16((USHORT)r->dwLocalScopeId);
+
+		t->LocalPort = Endian16((USHORT)r->dwLocalPort);
+
+		if (r->dwState != TCP_STATE_LISTEN)
+		{
+			InAddrToIP6(&t->RemoteIP, (struct in6_addr *)&r->ucRemoteAddr);
+			t->RemoteIP.ipv6_scope_id = Endian16((USHORT)r->dwRemoteScopeId);
+
 			t->RemotePort = Endian16((USHORT)r->dwRemotePort);
 		}
 
@@ -12951,17 +13069,17 @@ UINT RecvFrom6(SOCK *sock, IP *src_addr, UINT *src_port, void *data, UINT size)
 // Lock the OpenSSL
 void LockOpenSSL()
 {
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+//#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	Lock(openssl_lock);
-#endif
+//#endif
 }
 
 // Unlock the OpenSSL
 void UnlockOpenSSL()
 {
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+//#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	Unlock(openssl_lock);
-#endif
+//#endif
 }
 
 // UDP transmission
@@ -14314,7 +14432,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			SSL_CTX_SHARED* s = LIST_DATA(o, i);
 
-			if (s->Expires != 0 && now > s->Expires)
+			if (s->Expires != 0 && now > s->Expires && false)
 			{
 				if (delete_list == NULL)
 				{
@@ -14356,6 +14474,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 
 			if (ret != NULL)
 			{
+				WHERE;
 				Add(o, ret);
 			}
 		}
@@ -18277,10 +18396,16 @@ void GetMachineNameEx(char *name, UINT size, bool no_load_hosts)
 	Unlock(machine_name_lock);
 }
 
+typedef struct GETHOSTNAME_THREAD_CTX
+{
+	IP Ip;
+	UINT Flags;
+} GETHOSTNAME_THREAD_CTX;
+
 // Host name acquisition thread
 void GetHostNameThread(THREAD *t, void *p)
 {
-	IP *ip;
+	GETHOSTNAME_THREAD_CTX *ctx = (GETHOSTNAME_THREAD_CTX *)p;
 	char hostname[256];
 	// Validate arguments
 	if (t == NULL || p == NULL)
@@ -18288,13 +18413,13 @@ void GetHostNameThread(THREAD *t, void *p)
 		return;
 	}
 
-	ip = (IP *)p;
+	IP *ip = &ctx->Ip;
 
 	AddWaitThread(t);
 
 	NoticeThreadInit(t);
 
-	if (GetHostNameInner(hostname, sizeof(hostname), ip))
+	if (GetHostNameInner(hostname, sizeof(hostname), ip, ctx->Flags))
 	{
 		AddHostCache(ip, hostname);
 	}
@@ -18307,17 +18432,21 @@ void GetHostNameThread(THREAD *t, void *p)
 // Get the host name
 bool GetHostName(char *hostname, UINT size, IP *ip)
 {
-	return GetHostNameEx(hostname, size, ip, false);
+	return GetHostNameEx(hostname, size, ip, TIMEOUT_HOSTNAME, GETHOSTNAME_FLAG_NO_NETBIOS_NAME | GETHOSTNAME_USE_DNS_API);
 }
-bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name) 
+bool GetHostNameEx(char *hostname, UINT size, IP *ip, UINT timeout, UINT flags)
 {
 	THREAD *t;
-	IP *p_ip;
+	GETHOSTNAME_THREAD_CTX *ctx;
 	bool ret;
 	// Validate arguments
 	if (hostname == NULL || ip == NULL)
 	{
 		return false;
+	}
+	if (timeout == 0)
+	{
+		timeout = TIMEOUT_HOSTNAME;
 	}
 
 	if (GetHostCache(hostname, size, ip))
@@ -18332,21 +18461,23 @@ bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name)
 		}
 	}
 
-	p_ip = ZeroMalloc(sizeof(IP));
-	Copy(p_ip, ip, sizeof(IP));
+	ctx = ZeroMalloc(sizeof(GETHOSTNAME_THREAD_CTX));
 
-	t = NewThread(GetHostNameThread, p_ip);
+	ctx->Flags = flags;
+	Copy(&ctx->Ip, ip, sizeof(IP));
+
+	t = NewThread(GetHostNameThread, ctx);
 
 	WaitThreadInit(t);
 
-	WaitThread(t, TIMEOUT_HOSTNAME);
+	WaitThread(t, timeout);
 
 	ReleaseThread(t);
 
 	ret = GetHostCache(hostname, size, ip);
 	if (ret == false)
 	{
-		if (IsIP4(ip) && no_netbios_name == false)
+		if (IsIP4(ip) && (flags & GETHOSTNAME_FLAG_NO_NETBIOS_NAME) == 0 && ((flags & GETHOSTNAME_FLAG_NETBIOS_ONLY_PRIVATE_IP) == 0 || IsIPPrivate(ip)))
 		{
 			ret = GetNetBiosName(hostname, size, ip);
 			if (ret)
@@ -18371,8 +18502,48 @@ bool GetHostNameEx(char *hostname, UINT size, IP *ip, bool no_netbios_name)
 	return ret;
 }
 
+void IPAddressToPtrFqdn(char *dst, UINT size, IP *ip)
+{
+	ClearStr(dst, size);
+	if (dst == NULL || ip == NULL)
+	{
+		return;
+	}
+
+	if (IsIP4(ip))
+	{
+		Format(dst, size, "%u.%u.%u.%u.in-addr.arpa",
+			ip->addr[3], ip->addr[2], ip->addr[1], ip->addr[0]);
+	}
+	else
+	{
+		UINT i;
+		for (i = 0;i < 16;i++)
+		{
+			UINT k = 16 - i - 1;
+			UCHAR c = ip->ipv6_addr[k];
+			char tmp[16] = CLEAN;
+			Format(tmp, sizeof(tmp), "%02x", c);
+
+			char c1[2] = CLEAN;
+			char c2[2] = CLEAN;
+
+			c1[0] = tmp[0];
+			c2[0] = tmp[1];
+
+			StrCat(dst, size, c2);
+			StrCat(dst, size, ".");
+
+			StrCat(dst, size, c1);
+			StrCat(dst, size, ".");
+		}
+
+		StrCat(dst, size, "ip6.arpa");
+	}
+}
+
 // Perform a DNS reverse query
-bool GetHostNameInner(char *hostname, UINT size, IP *ip)
+bool GetHostNameInner(char *hostname, UINT size, IP *ip, UINT flags)
 {
 	struct in_addr addr;
 	struct sockaddr_in sa;
@@ -18386,8 +18557,56 @@ bool GetHostNameInner(char *hostname, UINT size, IP *ip)
 
 	if (IsIP6(ip))
 	{
-		return GetHostNameInner6(hostname, size, ip);
+		return GetHostNameInner6(hostname, size, ip, flags);
 	}
+
+#ifdef OS_WIN32
+	if (flags & GETHOSTNAME_USE_DNS_API)
+	{
+		ClearStr(hostname, size);
+
+		if (IsZeroIP(ip))
+		{
+			return false;
+		}
+
+		char fqdn[128] = CLEAN;
+		IPAddressToPtrFqdn(fqdn, sizeof(fqdn), ip);
+		if (EndWith(fqdn, ".") == false)
+		{
+			StrCat(fqdn, sizeof(fqdn), ".");
+		}
+
+		DNS_RECORDA *record = NULL;
+
+		if (DnsQuery_A(fqdn, DNS_TYPE_PTR, DNS_QUERY_STANDARD, NULL, &record, NULL) != 0)
+		{
+			return false;
+		}
+
+		bool ret = false;
+
+		DNS_RECORDA *r = record;
+
+		while (r != NULL)
+		{
+			if (r->wType == DNS_TYPE_PTR)
+			{
+				StrCpy(hostname, size, r->Data.PTR.pNameHost);
+
+				ret = true;
+
+				break;
+			}
+
+			r = r->pNext;
+		}
+
+		DnsRecordListFree(record, DnsFreeRecordList);
+
+		return ret;
+	}
+#endif // OS_WIN32
 
 	// Reverse resolution
 	IPToInAddr(&addr, ip);
@@ -18401,7 +18620,7 @@ bool GetHostNameInner(char *hostname, UINT size, IP *ip)
 	Copy(&sa.sin_addr, &addr, sizeof(struct in_addr));
 	sa.sin_port = 0;
 
-	if (getnameinfo((struct sockaddr *)&sa, sizeof(sa), tmp, sizeof(tmp), NULL, 0, 0) != 0)
+	if (getnameinfo((struct sockaddr *)&sa, sizeof(sa), tmp, sizeof(tmp), NULL, 0, NI_NAMEREQD) != 0)
 	{
 		return false;
 	}
@@ -18422,7 +18641,7 @@ bool GetHostNameInner(char *hostname, UINT size, IP *ip)
 
 	return true;
 }
-bool GetHostNameInner6(char *hostname, UINT size, IP *ip)
+bool GetHostNameInner6(char *hostname, UINT size, IP *ip, UINT flags)
 {
 	struct in6_addr addr;
 	struct sockaddr_in6 sa;
@@ -18433,6 +18652,52 @@ bool GetHostNameInner6(char *hostname, UINT size, IP *ip)
 	{
 		return false;
 	}
+
+#ifdef OS_WIN32
+	if (flags & GETHOSTNAME_USE_DNS_API)
+	{
+		ClearStr(hostname, size);
+
+		if (IsZeroIP(ip))
+		{
+			return false;
+		}
+
+		char fqdn[128] = CLEAN;
+		IPAddressToPtrFqdn(fqdn, sizeof(fqdn), ip);
+		if (EndWith(fqdn, ".") == false)
+		{
+			StrCat(fqdn, sizeof(fqdn), ".");
+		}
+
+		DNS_RECORDA *record = NULL;
+
+		if (DnsQuery_A(fqdn, DNS_TYPE_PTR, DNS_QUERY_STANDARD, NULL, &record, NULL) != 0)
+		{
+			return false;
+		}
+
+		bool ret = false;
+
+		DNS_RECORDA *r = record;
+
+		while (r != NULL)
+		{
+			if (r->wType == DNS_TYPE_PTR)
+			{
+				StrCpy(hostname, size, r->Data.PTR.pNameHost);
+
+				ret = true;
+
+				break;
+			}
+
+			r = r->pNext;
+		}
+
+		return ret;
+	}
+#endif // OS_WIN32
 
 	// Reverse resolution
 	IPToInAddr6(&addr, ip);
