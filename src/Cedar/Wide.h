@@ -232,6 +232,7 @@ struct ACCEPT_QUEUE
 #define WIDE_FLAG_NONE							0
 #define WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST		1
 #define WIDE_FLAG_NO_LOG						2
+#define WIDE_FLAG_NO_SET_PROCESS_PRIORITY		4
 
 
 
@@ -409,9 +410,9 @@ bool WideTryUpdateNewEntryPointModestStandard(WT *wt, bool *cancel);
 
 // WideClient
 WIDE *WideClientStart(char *svc_name, UINT se_lang);
-WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url);
+WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name);
 void WideClientStop(WIDE *w);
-UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache);
+UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache, char *websocket_url, UINT websocket_url_size);
 UINT WideClientConnectInner(WIDE *w, WT_CONNECT *c, char *pcid, UINT ver, UINT build, UINT client_options, bool no_cache);
 void WideClientGenerateClientId(UCHAR *id);
 UINT WideClientGetWoLMacList(WIDE *w, char *pcid, UINT ver, UINT build, char *mac_list, UINT mac_list_size);

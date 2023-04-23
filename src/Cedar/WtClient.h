@@ -78,7 +78,7 @@
 #define WTCLIENT_H
 
 UINT WtcConnect(WT *wt, WT_CONNECT *connect, SOCKIO **sockio);
-UINT WtcConnectEx(WT *wt, WT_CONNECT *connect, SOCKIO **sockio, UINT ver, UINT build);
+UINT WtcConnectEx(WT *wt, WT_CONNECT *connect, SOCKIO **sockio, UINT ver, UINT build, char *websocket_url, UINT websocket_url_size);
 TSESSION *WtcNewSession(WT *wt, SOCK *s);
 void WtcSessionMain(TSESSION *s);
 void WtcWaitForSocket(TSESSION *s);

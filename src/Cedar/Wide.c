@@ -389,12 +389,13 @@ UINT WideGetErrorLevel(UINT code)
 }
 
 // WideClient 接続
-UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache)
+UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache, char *websocket_url, UINT websocket_url_size)
 {
 	WT *wt;
 	UINT ret;
 	WT_CONNECT c;
 	char pcid[MAX_PATH];
+	ClearStr(websocket_url, websocket_url_size);
 	// 引数チェック
 	if (w == NULL || sockio == NULL)
 	{
@@ -415,7 +416,9 @@ LABEL_RETRY:
 	{
 		Debug("Redirect Host: %s (for proxy: %s):%u\n", c.HostName, c.HostNameForProxy, c.Port);
 
-		ret = WtcConnectEx(wt, &c, sockio, CEDAR_VER, CEDAR_BUILD);
+		char websocket_urlpath[MAX_PATH] = CLEAN;
+
+		ret = WtcConnectEx(wt, &c, sockio, CEDAR_VER, CEDAR_BUILD, websocket_urlpath, sizeof(websocket_urlpath));
 
 		if (ret != ERR_NO_ERROR)
 		{
@@ -430,6 +433,11 @@ LABEL_RETRY:
 				goto LABEL_RETRY;
 			}
 		}
+		else
+		{
+			Format(websocket_url, websocket_url_size, "https://%s:%u%s",
+				c.HostName, c.Port, websocket_urlpath);
+		}
 	}
 	else
 	{
@@ -442,9 +450,9 @@ LABEL_RETRY:
 // WideClient の開始
 WIDE *WideClientStart(char *svc_name, UINT se_lang)
 {
-	return WideClientStartEx(svc_name, se_lang, NULL, NULL);
+	return WideClientStartEx(svc_name, se_lang, NULL, NULL, 0, NULL);
 }
-WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url)
+WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name)
 {
 	WIDE *w;
 	if (svc_name == NULL)
@@ -457,8 +465,20 @@ WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixe
 
 	w = ZeroMalloc(sizeof(WIDE));
 
-	w->WideLog = NewLogEx(WIDE_LOG_CLIENT, "client", LOG_SWITCH_DAY, true);
-	w->WideLog->Flush = true;
+	w->Flags = flags;
+
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		if (IsEmptyStr(debug_log_dir_name))
+		{
+			w->WideLog = NewLogEx(WIDE_LOG_CLIENT, "client", LOG_SWITCH_DAY, true);
+			w->WideLog->Flush = true;
+		}
+		else
+		{
+			w->WideLog = NewLogEx(debug_log_dir_name, "client", LOG_SWITCH_DAY, true);
+		}
+	}
 
 	WideLog(w, "-------------------- Start Tunnel System (Client) --------------------");
 	WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
@@ -498,11 +518,11 @@ WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixe
 	w->SettingLock = NewLock();
 	if (master_cert == NULL)
 	{
-		w->wt = NewWtFromHamcore();
+		w->wt = NewWtFromHamcore(w->Flags);
 	}
 	else
 	{
-		w->wt = NewWt(master_cert);
+		w->wt = NewWt(master_cert, w->Flags);
 	}
 
 	w->wt->EnableUpdateEntryPoint = true; // EntryPoint.dat 自動更新有効
@@ -580,6 +600,14 @@ bool WideServerIsConnected(WIDE *w)
 		return false;
 	}
 
+	if (w->wt != NULL)
+	{
+		// こちらのほうが正確
+		//Debug("w->wt->Server_IsInWtsSessionMainLoop: %u\n", w->wt->Server_IsInWtsSessionMainLoop);
+		return w->wt->Server_IsInWtsSessionMainLoop;
+	}
+
+	//Debug("w->IsConnected: %u\n", w->IsConnected);
 	return w->IsConnected;
 }
 
@@ -809,7 +837,7 @@ LABEL_RETRY:
 			WideLog(w, "Redirecting to %s:%u... (for proxy: %s)", c.HostName, c.Port, c.HostNameForProxy);
 
 			// 接続
-			w->ServerErrorCode = ERR_NO_ERROR;
+			w->ServerErrorCode = ERR_PLEASE_WAIT;
 
 			WideLog(w, "Start WtsStart()");
 			s = WtsStart(w->wt, &c, w->ServerAcceptProc, w->ServerAcceptParam);
@@ -819,6 +847,14 @@ LABEL_RETRY:
 			// 一定時間ごとに状態をポーリング
 			while (true)
 			{
+				if (s->WasConnected)
+				{
+					if (w->ServerErrorCode == ERR_PLEASE_WAIT)
+					{
+						w->ServerErrorCode = ERR_NO_ERROR;
+					}
+				}
+
 				if (p->Halt)
 				{
 					WideLog(w, "WideServerConnectMainThread: p->Halt == true");
@@ -846,7 +882,7 @@ LABEL_RETRY:
 					break;
 				}
 				
-				Wait(p->HaltEvent, 256);
+				Wait(p->HaltEvent, 32);
 			}
 
 			if (s->WasConnected || last_wide_controller_connect_ok == false)
@@ -1981,11 +2017,11 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 	w->SeLang = se_lang;
 	if (master_cert == NULL)
 	{
-		w->wt = NewWtFromHamcore();
+		w->wt = NewWtFromHamcore(w->Flags);
 	}
 	else
 	{
-		w->wt = NewWt(master_cert);
+		w->wt = NewWt(master_cert, w->Flags);
 	}
 	w->wt->Wide = w;
 	w->Type = WIDE_TYPE_SERVER;
@@ -4049,7 +4085,7 @@ WIDE *WideGateStart()
 	w->Type = WIDE_TYPE_GATE;
 	w->NextRebootTimeLock = NewLock();
 	w->SessionAddDelCriticalCounter = NewCounter();
-	w->wt = NewWtFromHamcore();
+	w->wt = NewWtFromHamcore(0);
 	w->wt->Wide = w;
 	w->GateHalt = false;
 	w->LockReport = NewLock();

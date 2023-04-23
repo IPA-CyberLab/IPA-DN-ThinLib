@@ -298,7 +298,7 @@ void DcBlueConnectIfNotConnected(DC_BLUE *b)
 			UINT ret;
 
 			Debug("Bluetooth: Connecting Socket...\n");
-			ret = WideClientConnect(b->Wide, b->Session->Pcid, DESK_VERSION, DESK_BUILD, &b->sockio, 0, false);
+			ret = WideClientConnect(b->Wide, b->Session->Pcid, DESK_VERSION, DESK_BUILD, &b->sockio, 0, false, NULL, 0);
 
 			if (ret == ERR_NO_ERROR)
 			{
@@ -3487,7 +3487,7 @@ UINT DcTriggerWoL(DC *dc, char *target_pcid, char *trigger_pcid)
 	else
 	{
 		// 指定されたトリガー PC の PCID に接続
-		ret = WideClientConnect(dc->Wide, trigger_pcid, DESK_VERSION, DESK_BUILD, &sock, WT_CLIENT_OPTIONS_WOL, true);
+		ret = WideClientConnect(dc->Wide, trigger_pcid, DESK_VERSION, DESK_BUILD, &sock, WT_CLIENT_OPTIONS_WOL, true, NULL, 0);
 
 		if (ret == ERR_NO_ERROR)
 		{
@@ -3546,7 +3546,7 @@ UINT DcConnectEx(DC *dc, DC_SESSION *dcs, char *pcid, DC_AUTH_CALLBACK *auth_cal
 	StrCpy(ret_url, ret_url_size, "");
 
 	// 指定された PCID に接続
-	ret = WideClientConnect(dc->Wide, pcid, DESK_VERSION, DESK_BUILD, &sock, 0, false);
+	ret = WideClientConnect(dc->Wide, pcid, DESK_VERSION, DESK_BUILD, &sock, 0, false, NULL, 0);
 	if (ret != ERR_NO_ERROR)
 	{
 		if (ret == ERR_RECV_URL)

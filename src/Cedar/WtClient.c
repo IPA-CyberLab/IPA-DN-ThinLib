@@ -97,7 +97,10 @@ void WtcSessionMain(TSESSION *s)
 	}
 
 #ifdef	OS_WIN32
-	MsSetThreadPriorityRealtime();
+	if ((s->wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	{
+		MsSetThreadPriorityRealtime();
+	}
 #endif  // OS_WIN32
 
 	SetSockEvent(s->SockEvent);
@@ -232,6 +235,13 @@ void WtcInsertSockIosToSendQueue(TSESSION *s)
 	{
 		// s->StateChangedFlag = true;
 	}
+
+	if (sockio->ClientDebugFlag_Special_SwitchToWebSocketRequest)
+	{
+		sockio->ClientDebugFlag_Special_SwitchToWebSocketRequest = false;
+
+		s->ClientDebugFlag_Special_SwitchToWebSocketRequest = true;
+	}
 }
 
 // Gate からのデータを受信して処理
@@ -250,6 +260,17 @@ void WtcRecvFromGate(TSESSION *s)
 
 	// TTCP からデータを受信
 	WtRecvTTcp(s, ttcp);
+
+	if (s->ClientDebugFlag_Special_SwitchToWebSocketAcked)
+	{
+		s->ClientDebugFlag_Special_SwitchToWebSocketAcked = false;
+		TUNNEL *t = s->ClientTunnel;
+
+		SOCKIO *sockio = t->SockIo;
+		sockio->ClientDebugFlag_Special_SwitchToWebSocketAcked = true;
+
+		t->SetSockIoEventFlag = true;
+	}
 
 	// 受信データを解釈
 	q = WtParseRecvTTcp(s, ttcp, NULL);
@@ -333,9 +354,9 @@ TSESSION *WtcNewSession(WT *wt, SOCK *s)
 // 接続
 UINT WtcConnect(WT *wt, WT_CONNECT *connect, SOCKIO **sockio)
 {
-	return WtcConnectEx(wt, connect, sockio, 0, 0);
+	return WtcConnectEx(wt, connect, sockio, 0, 0, NULL, 0);
 }
-UINT WtcConnectEx(WT *wt, WT_CONNECT *connect, SOCKIO **sockio, UINT ver, UINT build)
+UINT WtcConnectEx(WT *wt, WT_CONNECT *connect, SOCKIO **sockio, UINT ver, UINT build, char *websocket_url, UINT websocket_url_size)
 {
 	TSESSION *session;
 	SOCK *s;
@@ -566,6 +587,11 @@ L_PROXY_RETRY_WITH_ALTERNATIVE_FQDN:
 			tunnel_timeout = tunnel_timeout2;
 			tunnel_keepalive = tunnel_keepalive2;
 			tunnel_use_aggressive_timeout = tunnel_use_aggressive_timeout2;
+		}
+
+		if (websocket_url != NULL)
+		{
+			PackGetStr(p, "websocket_url", websocket_url, websocket_url_size);
 		}
 	}
 

@@ -117,8 +117,13 @@ void WtsSessionMain(TSESSION *s)
 	}
 
 #ifdef	OS_WIN32
-	MsSetThreadPriorityRealtime();
+	if ((s->wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	{
+		MsSetThreadPriorityRealtime();
+	}
 #endif  // OS_WIN32
+
+	s->wt->Server_IsInWtsSessionMainLoop = true;
 
 	SetSockEvent(s->SockEvent);
 
@@ -191,6 +196,8 @@ void WtsSessionMain(TSESSION *s)
 			break;
 		}
 	}
+
+	s->wt->Server_IsInWtsSessionMainLoop = false;
 
 	WtSessionLog(s, "WtsSessionMain: Exit main loop");
 

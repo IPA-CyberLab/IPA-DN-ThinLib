@@ -190,6 +190,8 @@ struct TSESSION
 	// Client 用
 	TUNNEL *ClientTunnel;				// トンネル
 	THREAD *ClientThread;				// クライアントスレッド
+	bool ClientDebugFlag_Special_SwitchToWebSocketRequest;
+	bool ClientDebugFlag_Special_SwitchToWebSocketAcked;
 
 	// Gate / Server 共通
 	LIST *TunnelList;					// トンネルリスト
