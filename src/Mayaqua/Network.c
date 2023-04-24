@@ -15114,6 +15114,10 @@ UINT SecureRecv(SOCK *sock, void *data, UINT size)
 				return 0;
 			}
 			ret = SSL_peek(ssl, &c, sizeof(c));
+			if (ret <= 0)
+			{
+				e = SSL_get_error(ssl, ret);
+			}
 		}
 		Unlock(sock->ssl_lock);
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
@@ -15132,7 +15136,6 @@ UINT SecureRecv(SOCK *sock, void *data, UINT size)
 		if (ret <= 0)
 		{
 			// An error has occurred
-			e = SSL_get_error(ssl, ret);
 			if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE || e == SSL_ERROR_SSL)
 			{
 				if (e == SSL_ERROR_SSL
