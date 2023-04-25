@@ -968,6 +968,11 @@ void InitThreading()
 	thread_count = NewCounter();
 }
 
+UINT GetRunningThreadCount()
+{
+	return Count(thread_count);
+}
+
 // Release of thread pool
 void FreeThreading()
 {

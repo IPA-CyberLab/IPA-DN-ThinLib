@@ -256,6 +256,398 @@ bool Vars_ActivePatch_Exists(char* name)
 	return false;
 }
 
+static PC_TABLE *_GlobalPc = NULL;
+
+void InitGlobalPc()
+{
+	_GlobalPc = NewPcTable();
+}
+
+void FreeGlobalPc()
+{
+	FreePcTable(_GlobalPc);
+	_GlobalPc = NULL;
+}
+
+PC_PRINT_THREAD *GpcStartPrintStat(UINT interval_msec)
+{
+	return PcTableStartPrintThread(_GlobalPc, interval_msec);
+}
+
+void GpcStopPrintStat(PC_PRINT_THREAD *a)
+{
+	PcTableStopPrintThread(a);
+}
+
+void GpcTableEnter(char *name)
+{
+	PcTableEnter(_GlobalPc, name);
+}
+
+void GpcTableExit(char *name)
+{
+	PcTableExit(_GlobalPc, name);
+}
+
+void GpcTableSum(char *name, INT64 value)
+{
+	PcTableSum(_GlobalPc, name, value);
+}
+
+void GpcTableAverage(char *name, INT64 value)
+{
+	PcTableAverage(_GlobalPc, name, value);
+}
+
+void GpcTableGetStatStr(char *dst, UINT size)
+{
+	PcTableGetStatStr(_GlobalPc, dst, size);
+}
+
+void GpcTablePrintStat()
+{
+	PcTablePrintStat(_GlobalPc);
+}
+
+void PcTablePrintThreadProc(THREAD *thread, void *param)
+{
+	PC_PRINT_THREAD *a = param;
+
+#ifdef OS_WIN32
+	MsSetThreadPriorityRealtime();
+#else
+	UnixSetThreadPriorityRealtime();
+#endif // OS_WIN32
+
+	while (a->HaltFlag == false)
+	{
+		PcTablePrintStat(a->PcTable);
+
+		Wait(a->HaltEvent, a->IntervalMsec);
+	}
+
+#ifdef OS_WIN32
+	MsRestoreThreadPriority();
+#else
+	UnixRestoreThreadPriority();
+#endif // OS_WIN32
+}
+
+void PcTableStopPrintThread(PC_PRINT_THREAD *a)
+{
+	if (a == NULL)
+	{
+		return;
+	}
+
+	a->HaltFlag = true;
+	Set(a->HaltEvent);
+
+	WaitThread(a->Thread, INFINITE);
+	ReleaseThread(a->Thread);
+	ReleaseEvent(a->HaltEvent);
+
+	Free(a);
+}
+
+PC_PRINT_THREAD *PcTableStartPrintThread(PC_TABLE *t, UINT interval_msec)
+{
+	if (t == NULL)
+	{
+		return NULL;
+	}
+
+	if (interval_msec == 0)
+	{
+		interval_msec = 500;
+	}
+
+	PC_PRINT_THREAD *a = ZeroMalloc(sizeof(PC_PRINT_THREAD));
+
+	a->PcTable = t;
+	a->IntervalMsec = interval_msec;
+	a->HaltEvent = NewEvent();
+
+	a->Thread = NewThread(PcTablePrintThreadProc, a);
+
+	return a;
+}
+
+void PcTablePrintStat(PC_TABLE *t)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+
+	UINT size = 65536;
+	char *tmp = ZeroMalloc(size);
+
+	PcTableGetStatStr(t, tmp, size);
+
+	StrCat(tmp, size, "\n");
+
+	PrintStr(tmp);
+
+	Free(tmp);
+}
+
+void PcTableGetStatStr(PC_TABLE *t, char *dst, UINT size)
+{
+	char tmp[MAX_PATH] = CLEAN;
+	ClearStr(dst, size);
+	if (t == NULL || dst == NULL)
+	{
+		return;
+	}
+
+	Format(tmp, sizeof(tmp), "---------- PERFORMANCE COUNTER ----------\n");
+	StrCat(dst, size, tmp);
+
+	char current_time[128] = CLEAN;
+	char wakeup_time[128] = CLEAN;
+
+	SYSTEMTIME st = CLEAN;
+	LocalTime(&st);
+
+	Format(current_time, sizeof(tmp), "%04u-%02u-%02u %02u:%02u:%02u.%u", st.wYear, st.wMonth, st.wDay,
+		st.wHour, st.wMinute, st.wSecond, st.wMilliseconds / 100);
+
+	Format(tmp, sizeof(tmp), "Current time: %s\n", current_time);
+	StrCat(dst, size, tmp);
+
+	Format(tmp, sizeof(tmp), "Running threads: %u\n", GetRunningThreadCount());
+	StrCat(dst, size, tmp);
+
+	UINT i;
+	for (i = 0;i < PC_MAX_ENTRY;i++)
+	{
+		char tmp2[MAX_PATH] = CLEAN;
+
+		PC_ENTRY *e = &t->Entry[i];
+
+		Lock(e->Lock);
+		{
+			if (e->Type != PC_TYPE_NONE)
+			{
+				char name[MAX_PATH] = CLEAN;
+				StrCpy(name, sizeof(name), e->Name);
+				if (name[0] == 0)
+				{
+					Format(name, sizeof(name), "Unnamed %u", i);
+				}
+
+				if (e->Type == PC_TYPE_SECTION)
+				{
+					Format(tmp2, sizeof(tmp2), "%02u (ENTER): %s: %I64i", i, e->Name, e->Value);
+				}
+				else if (e->Type == PC_TYPE_SUM)
+				{
+					Format(tmp2, sizeof(tmp2), "%02u (SUM): %s: %I64i", i, e->Name, e->Value);
+				}
+				else if (e->Type == PC_TYPE_AVERAGE)
+				{
+					double average = 0.0;
+					if (e->CountForAverage != 0)
+					{
+						average = (double)e->Value / (double)e->CountForAverage;
+					}
+					Format(tmp2, sizeof(tmp2), "%02u (AVERAGE): %s: %0.1f", i, e->Name, average);
+				}
+			}
+		}
+		Unlock(e->Lock);
+
+		if (tmp2[0] != 0)
+		{
+			StrCat(dst, size, tmp2);
+			StrCat(dst, size, "\n");
+		}
+	}
+
+	Format(tmp, sizeof(tmp), "-----------------------------------------\n");
+	StrCat(dst, size, tmp);
+}
+
+void PcTableAverage(PC_TABLE *t, char *name, INT64 value)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+
+	UINT id = PcTableGetIdFromName(t, name);
+	if (id == INFINITE)
+	{
+		return;
+	}
+
+	PC_ENTRY *e = &t->Entry[id];
+
+	Lock(e->Lock);
+	{
+		if (e->Type == PC_TYPE_NONE || e->Type == PC_TYPE_AVERAGE)
+		{
+			e->Type = PC_TYPE_AVERAGE;
+			e->Value += value;
+			e->CountForAverage++;
+
+			if (e->Name[0] == 0)
+			{
+				StrCpy(e->Name, sizeof(e->Name), name);
+			}
+		}
+	}
+	Unlock(e->Lock);
+}
+
+void PcTableSum(PC_TABLE *t, char *name, INT64 value)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+
+	UINT id = PcTableGetIdFromName(t, name);
+	if (id == INFINITE)
+	{
+		return;
+	}
+
+	PC_ENTRY *e = &t->Entry[id];
+
+	Lock(e->Lock);
+	{
+		if (e->Type == PC_TYPE_NONE || e->Type == PC_TYPE_SUM)
+		{
+			e->Type = PC_TYPE_SUM;
+			e->Value += value;
+
+			if (e->Name[0] == 0)
+			{
+				StrCpy(e->Name, sizeof(e->Name), name);
+			}
+		}
+	}
+	Unlock(e->Lock);
+}
+
+void PcTableExit(PC_TABLE *t, char *name)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+
+	UINT id = PcTableGetIdFromName(t, name);
+	if (id == INFINITE)
+	{
+		return;
+	}
+
+	PC_ENTRY *e = &t->Entry[id];
+
+	Lock(e->Lock);
+	{
+		if (e->Type == PC_TYPE_SECTION)
+		{
+			e->Value--;
+		}
+	}
+	Unlock(e->Lock);
+}
+
+void PcTableEnter(PC_TABLE *t, char *name)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+
+	UINT id = PcTableGetIdFromName(t, name);
+	if (id == INFINITE)
+	{
+		return;
+	}
+
+	PC_ENTRY *e = &t->Entry[id];
+
+	Lock(e->Lock);
+	{
+		if (e->Type == PC_TYPE_NONE || e->Type == PC_TYPE_SECTION)
+		{
+			e->Type = PC_TYPE_SECTION;
+			e->Value++;
+
+			if (e->Name[0] == 0)
+			{
+				StrCpy(e->Name, sizeof(e->Name), name);
+			}
+		}
+	}
+	Unlock(e->Lock);
+}
+
+UINT PcTableGetIdFromName(PC_TABLE *t, char *name)
+{
+	if (t == NULL || name == NULL)
+	{
+		return INFINITE;
+	}
+
+	UINT ret = INFINITE;
+
+	Lock(t->NameToIdLock);
+	{
+		UINT i;
+		for (i = 0;i < PC_MAX_ENTRY;i++)
+		{
+			if (strcmp(t->NameToId[i].Name, name) == 0)
+			{
+				ret = i;
+				break;
+			}
+
+			if (t->NameToId[i].Name[0] == 0)
+			{
+				StrCpy(t->NameToId[i].Name, sizeof(t->NameToId[i].Name), name);
+				ret = i;
+				break;
+			}
+		}
+	}
+	Unlock(t->NameToIdLock);
+
+	return ret;
+}
+
+void FreePcTable(PC_TABLE *t)
+{
+	if (t == NULL)
+	{
+		return;
+	}
+	UINT i;
+	for (i = 0; i < PC_MAX_ENTRY;i++)
+	{
+		DeleteLock(t->Entry[i].Lock);
+	}
+	DeleteLock(t->NameToIdLock);
+	Free(t);
+}
+
+PC_TABLE *NewPcTable()
+{
+	PC_TABLE *t = ZeroMalloc(sizeof(PC_TABLE));
+	UINT i;
+	for (i = 0;i < PC_MAX_ENTRY;i++)
+	{
+		t->Entry[i].Lock = NewLock();
+	}
+	t->NameToIdLock = NewLock();
+	return t;
+}
+
 // Lockout GC
 void LockoutGcNoLock(LOCKOUT* o, UINT64 expires_span)
 {

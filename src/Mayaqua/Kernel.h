@@ -154,6 +154,7 @@ void WaitThreadInit(THREAD *t);
 bool WaitThread(THREAD *t, UINT timeout);
 void InitThreading();
 void FreeThreading();
+UINT GetRunningThreadCount();
 void ThreadPoolProc(THREAD *t, void *param);
 void SetThreadName(UINT thread_id, char *name, void *param);
 

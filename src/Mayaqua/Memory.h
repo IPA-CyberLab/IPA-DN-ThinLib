@@ -245,6 +245,43 @@ struct DIFF_ENTRY
 	UINT64 Param;
 };
 
+#define PC_TYPE_NONE					0
+#define PC_TYPE_SECTION					1
+#define PC_TYPE_SUM						2
+#define PC_TYPE_AVERAGE					3
+
+#define PC_MAX_ENTRY					100
+
+struct PC_ENTRY
+{
+	char Name[48];
+	UINT Type;
+	INT64 Value;
+	INT64 CountForAverage;
+	LOCK *Lock;
+};
+
+struct PC_NAME_TO_ID
+{
+	char Name[48];
+};
+
+struct PC_TABLE
+{
+	PC_ENTRY Entry[PC_MAX_ENTRY];
+	PC_NAME_TO_ID NameToId[PC_MAX_ENTRY];
+	LOCK *NameToIdLock;
+};
+
+struct PC_PRINT_THREAD
+{
+	PC_TABLE *PcTable;
+	UINT IntervalMsec;
+	THREAD *Thread;
+	EVENT *HaltEvent;
+	bool HaltFlag;
+};
+
 // Function prototype
 HASH_LIST *NewHashList(GET_HASH *get_hash_proc, COMPARE *compare_proc, UINT bits, bool make_list);
 void ReleaseHashList(HASH_LIST *h);
@@ -541,6 +578,33 @@ LIST *NewDiffList();
 void FreeDiffList(LIST *list);
 LIST *UpdateDiffList(LIST *base_list, LIST *new_items);
 DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
+
+PC_TABLE *NewPcTable();
+void FreePcTable(PC_TABLE *t);
+
+void PcTableEnter(PC_TABLE *t, char *name);
+void PcTableExit(PC_TABLE *t, char *name);
+void PcTableSum(PC_TABLE *t, char *name, INT64 value);
+void PcTableAverage(PC_TABLE *t, char *name, INT64 value);
+void PcTableGetStatStr(PC_TABLE *t, char *dst, UINT size);
+void PcTablePrintStat(PC_TABLE *t);
+
+UINT PcTableGetIdFromName(PC_TABLE *t, char *name);
+
+PC_PRINT_THREAD *PcTableStartPrintThread(PC_TABLE *t, UINT interval_msec);
+void PcTableStopPrintThread(PC_PRINT_THREAD *a);
+
+void InitGlobalPc();
+void FreeGlobalPc();
+
+void GpcTableEnter(char *name);
+void GpcTableExit(char *name);
+void GpcTableSum(char *name, INT64 value);
+void GpcTableAverage(char *name, INT64 value);
+void GpcTableGetStatStr(char *dst, UINT size);
+void GpcTablePrintStat();
+PC_PRINT_THREAD *GpcStartPrintStat(UINT interval_msec);
+void GpcStopPrintStat(PC_PRINT_THREAD *a);
 
 
 

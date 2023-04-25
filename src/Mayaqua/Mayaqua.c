@@ -616,6 +616,9 @@ void InitMayaqua(bool memcheck, bool debug, int argc, char **argv)
 
 	// Reading Private IP file
 	LoadPrivateIPFile();
+
+	// Initialization of Global Performance Counter
+	InitGlobalPc();
 }
 
 // Release of Mayaqua library
@@ -625,6 +628,9 @@ void FreeMayaqua()
 	{
 		return;
 	}
+
+	// Release of Global Performance Counter
+	FreeGlobalPc();
 
 	// Release of Private IP File
 	FreePrivateIPFile();

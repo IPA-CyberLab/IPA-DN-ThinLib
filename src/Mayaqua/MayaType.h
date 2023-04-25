@@ -387,6 +387,10 @@ typedef struct ACTIVE_PATCH_ENTRY ACTIVE_PATCH_ENTRY;
 typedef struct LOCKOUT LOCKOUT;
 typedef struct LOCKOUT_ENTRY LOCKOUT_ENTRY;
 typedef struct DIFF_ENTRY DIFF_ENTRY;
+typedef struct PC_ENTRY PC_ENTRY;
+typedef struct PC_TABLE PC_TABLE;
+typedef struct PC_PRINT_THREAD PC_PRINT_THREAD;
+typedef struct PC_NAME_TO_ID PC_NAME_TO_ID;
 
 // Str.h
 typedef struct TOKEN_LIST TOKEN_LIST;
