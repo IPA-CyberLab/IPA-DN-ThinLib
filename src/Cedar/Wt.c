@@ -1412,7 +1412,7 @@ bool WtIsTrustedCert(WT *wt, X *cert)
 }
 
 // WideTunnel の初期化
-WT *NewWtFromHamcore()
+WT *NewWtFromHamcore(UINT wide_flags)
 {
 	WT *wt;
 	X *master_cert;
@@ -1421,7 +1421,7 @@ WT *NewWtFromHamcore()
 
 	WideLoadEntryPoint(&master_cert, NULL, 0, NULL, mode, sizeof(mode), system, sizeof(system));
 
-	wt = NewWt(master_cert);
+	wt = NewWt(master_cert, wide_flags);
 
 	StrCpy(wt->EntranceMode, sizeof(wt->EntranceMode), mode);
 	StrCpy(wt->System, sizeof(wt->System), system);
@@ -1430,7 +1430,7 @@ WT *NewWtFromHamcore()
 
 	return wt;
 }
-WT *NewWt(X *master_cert)
+WT *NewWt(X *master_cert, UINT wide_flags)
 {
 	WT *wt;
 	// 引数チェック
@@ -1440,9 +1440,14 @@ WT *NewWt(X *master_cert)
 	}
 
 	// プロセス優先度を上げる
-	OSSetHighPriority();
+	if ((wide_flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	{
+		OSSetHighPriority();
+	}
 
 	wt = ZeroMalloc(sizeof(WT));
+
+	wt->Flags = wide_flags;
 
 	wt->SslCounter = NewCounter();
 

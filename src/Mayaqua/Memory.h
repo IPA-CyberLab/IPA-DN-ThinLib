@@ -141,6 +141,17 @@ struct LIST
 	UINT64 Param1;
 };
 
+#define	KV_LIST_DATA_SIZE	4096
+
+struct KV_LIST
+{
+	char Key[MAX_PATH];
+	UCHAR Data[KV_LIST_DATA_SIZE + 4];
+	UINT DataSize;
+	UINT Type;
+	UINT64 Param1;
+};
+
 // Queue
 struct QUEUE
 {
@@ -240,9 +251,10 @@ struct DIFF_ENTRY
 	wchar_t Key[MAX_SIZE];
 	UINT64 Tick;
 	bool IsAdded, IsRemoved;
-	UCHAR Data[DIFF_ENTRY_DATASIZE];
+	UCHAR Data[DIFF_ENTRY_DATASIZE + 4];
 	UINT DataSize;
 	UINT64 Param;
+	UINT Flags;
 };
 
 #define PC_TYPE_NONE					0
@@ -553,6 +565,8 @@ bool AddStrToStrListDistinct(LIST *o, char *str);
 void AddStrToStrList(LIST* o, char* str);
 void AddUniStrToUniStrList(LIST* o, wchar_t* str);
 
+void FreeSingleMemoryList(LIST *o);
+
 bool Vars_ActivePatch_AddStr(char* name, char* str_value);
 bool Vars_ActivePatch_AddInt(char* name, UINT int_value);
 bool Vars_ActivePatch_AddBool(char* name, bool bool_value);
@@ -578,6 +592,14 @@ LIST *NewDiffList();
 void FreeDiffList(LIST *list);
 LIST *UpdateDiffList(LIST *base_list, LIST *new_items);
 DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
+DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e);
+
+int CmpKvList(void *p1, void *p2);
+KV_LIST *SearchKvList(LIST *o, char *key);
+void *SearchKvListData(LIST *o, char *key, UINT type);
+void AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1);
+void FreeKvList(LIST *o);
+LIST *NewKvList();
 
 PC_TABLE *NewPcTable();
 void FreePcTable(PC_TABLE *t);

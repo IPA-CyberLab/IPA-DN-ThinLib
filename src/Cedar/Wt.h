@@ -263,6 +263,7 @@ struct WT
 	UINT64 BootTime;
 	UINT64 BootTick;
 	UINT ServerSessionNameSeed;
+	UINT Flags;
 
 	// Gate 用
 	LISTENER *Listener;				// リスナー
@@ -309,6 +310,7 @@ struct WT
 	char CurrentGateIp[256];				// 現在の接続先 Gate の IP アドレス
 
 	COUNTER *SslCounter;
+	bool Server_IsInWtsSessionMainLoop;			// Server がセッションのメインループを回っているか
 };
 
 // スレッドとセッションの組み合わせ
@@ -336,6 +338,8 @@ struct SOCKIO
 	PACK *InitialPack;					// Initial Pack
 	IP ClientLocalIP;					// クライアント側で見たローカル IP
 	IP ServerLocalIP;					// サーバー側で見たローカル IP
+	bool ClientDebugFlag_Special_SwitchToWebSocketRequest;
+	bool ClientDebugFlag_Special_SwitchToWebSocketAcked;
 };
 
 // 以前使用されたトンネル ID の一覧
@@ -410,8 +414,8 @@ struct MIKAKA_DDNS
 // 
 //////////////////////////////////////////////////////////////////////
 
-WT *NewWt(X *master_cert);
-WT *NewWtFromHamcore();
+WT *NewWt(X *master_cert, UINT wide_flags);
+WT *NewWtFromHamcore(UINT wide_flags);
 void ReleaseWt(WT *wt);
 void CleanupWt(WT *wt);
 bool WtIsTrustedCert(WT *wt, X *cert);
