@@ -307,6 +307,8 @@ struct WT
 	char LastTimeOkUrlMulti[MAX_PATH];	// 前回 OK だった URL (複数 URL 指定の場合)
 
 	char CurrentGateIp[256];				// 現在の接続先 Gate の IP アドレス
+
+	COUNTER *SslCounter;
 };
 
 // スレッドとセッションの組み合わせ

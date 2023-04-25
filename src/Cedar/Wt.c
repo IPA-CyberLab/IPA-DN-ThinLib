@@ -1444,6 +1444,8 @@ WT *NewWt(X *master_cert)
 
 	wt = ZeroMalloc(sizeof(WT));
 
+	wt->SslCounter = NewCounter();
+
 	wt->ErrorControllersList = NewStrList();
 	wt->ErrorControllersListLock = NewLock();
 

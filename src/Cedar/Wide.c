@@ -3634,7 +3634,7 @@ void WideGateReportSessionAdd(WIDE *wide, TSESSION *s)
 
 	if (b)
 	{
-		Print("wide->SessionAddDelCriticalCounter = %u\n", Count(wide->SessionAddDelCriticalCounter));
+		//Print("wide->SessionAddDelCriticalCounter = %u\n", Count(wide->SessionAddDelCriticalCounter));
 		if (Inc(wide->SessionAddDelCriticalCounter) <= WIDE_MAX_CONCURRENT_SESSION_ADD_DEL_COUNT)
 		{
 			PACK* p = NewPack();

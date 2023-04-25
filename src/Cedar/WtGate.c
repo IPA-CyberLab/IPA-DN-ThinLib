@@ -2585,8 +2585,12 @@ void WtgSessionMain(TSESSION *s)
 
 	WtSessionLog(s, "WtgSessionMain() start.");
 
+	UINT loop1 = 0;
+	UINT loop2 = 0;
+
 	while (true)
 	{
+		loop1++;
 		bool disconnected = false;
 
 		UINT64 now = Tick64();
@@ -2609,6 +2613,7 @@ void WtgSessionMain(TSESSION *s)
 
 		Lock(s->Lock);
 		{
+			loop2++;
 			do
 			{
 				s->StateChangedFlag = false;
@@ -2649,6 +2654,8 @@ void WtgSessionMain(TSESSION *s)
 			break;
 		}
 	}
+
+	//printf("%p: loop 1 = %u, loop 2 = %u\n", s, loop1, loop2);
 
 	Debug("WtgSessionMain Cleanup...\n");
 
@@ -4011,6 +4018,17 @@ void WtgAccept(WT *wt, SOCK *s)
 		return;
 	}
 
+	UINT a = Inc(wt->SslCounter);
+
+	if (a >= 100 && false)
+	{
+		Dec(wt->SslCounter);
+
+		return;
+	}
+
+	// Print("counter = %u\n", a);
+
 	char log_prefix[MAX_PATH] = CLEAN;
 
 	Format(log_prefix, sizeof(log_prefix), "AcceptNewSession/ClientIP=%r/ClientPort=%u/ServerIP=%r/ServerPort=%u", &s->RemoteIP, s->RemotePort, &s->LocalIP, s->LocalPort);
@@ -4085,6 +4103,8 @@ void WtgAccept(WT *wt, SOCK *s)
 
 	if (StartSSLEx2(s, wt->GateCert, wt->GateKey, true, 0, NULL, ssl_additional_certs_array, num_certs_array_items, NULL, false) == false)
 	{
+		Dec(wt->SslCounter);
+
 		WtLogEx(wt, log_prefix, "StartSSLEx2() error. Connection will be disconnected.");
 		Debug("StartSSL Failed.\n");
 
@@ -4095,6 +4115,8 @@ void WtgAccept(WT *wt, SOCK *s)
 
 		return;
 	}
+
+	Dec(wt->SslCounter);
 
 	WtLogEx(wt, log_prefix, "SSL connection is established. SNI hostname: '%s', Cipher: '%s'.",
 		s->SniHostname, s->CipherName);
