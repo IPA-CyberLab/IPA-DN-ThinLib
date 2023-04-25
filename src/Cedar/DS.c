@@ -3952,16 +3952,18 @@ UINT DtGetStatus(DS *ds, RPC_DS_STATUS *t)
 // PCID の登録
 UINT DtRegistMachine(DS *ds, RPC_PCID *t)
 {
-	X *x;
-	K *k;
+	X *x = NULL;
+	K *k = NULL;
 	UINT ret;
+	UCHAR *alternative_host_key = NULL;
+	UCHAR *alternative_host_secret = NULL;
 
-	if (WideServerGetCertAndKey(ds->Wide, &x, &k) == false)
+	if (WideServerGetCertAndKey(ds->Wide, &x, &k, &alternative_host_key, &alternative_host_secret) == false)
 	{
 		return ERR_INTERNAL_ERROR;
 	}
 
-	ret = WideServerRegistMachine(ds->Wide, t->Pcid, x, k);
+	ret = WideServerRegistMachine(ds->Wide, t->Pcid, x, k, alternative_host_key, alternative_host_secret);
 
 	if (ret == ERR_NO_ERROR)
 	{
@@ -5333,7 +5335,7 @@ void DsResetCertProc(WIDE *wide, void *param)
 	DsWriteSecureCertAndKey(cert, key);
 
 	// WideServer に書き込んで再接続
-	WideServerSetCertAndKeyEx(wide, cert, key, true);
+	WideServerSetCertAndKeyEx(wide, cert, key, true, NULL, NULL);
 
 	FreeX(cert);
 	FreeK(key);

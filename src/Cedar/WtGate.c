@@ -2572,7 +2572,10 @@ void WtgSessionMain(TSESSION *s)
 	}
 
 #ifdef	OS_WIN32
-	MsSetThreadPriorityRealtime();
+	if ((s->wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	{
+		MsSetThreadPriorityRealtime();
+	}
 #endif  // OS_WIN32
 
 	WideGateReportSessionAdd(s->wt->Wide, s);
@@ -2599,8 +2602,8 @@ void WtgSessionMain(TSESSION *s)
 		{
 			last_traffic_stat = now;
 
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
+			//StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
+			//StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
 
 			s->Stat_ClientToServerTraffic = 0;
 			s->Stat_ServerToClientTraffic = 0;
@@ -2967,6 +2970,16 @@ void WtMakeSendDataTTcp(TSESSION* s, TTCP* ttcp, QUEUE* blockqueue, TUNNEL* tunn
 
 	if (only_keepalive == false)
 	{
+		if (s->ClientDebugFlag_Special_SwitchToWebSocketRequest)
+		{
+			s->ClientDebugFlag_Special_SwitchToWebSocketRequest = false;
+
+			// Client debug flag: send special code
+			i = Endian32(WT_SPECIALOPCODE_C2S_SWITCHTOWEBSOCKET_REQUEST_GUACD);
+
+			WriteFifo(fifo, &i, sizeof(UINT));
+		}
+
 		while ((block = GetNext(blockqueue)) != NULL)
 		{
 			if (ttcp->MultiplexMode)
@@ -3569,7 +3582,7 @@ READ_DATA_SIZE:
 
 					switch (i)
 					{
-					case WT_SPECIALOPCODE_C2S_SWITCHTOWEBSOCKET_REQUEST_GUACD:
+					case WT_SPECIALOPCODE_C2S_SWITCHTOWEBSOCKET_REQUEST_GUACD: // For gate
 						// WebSocket への切替え要求を受信したので、切替え処理を いたします。
 						if (tunnel != NULL)
 						{
@@ -3580,6 +3593,10 @@ READ_DATA_SIZE:
 								tunnel->Gate_ClientSession_SwitchToWebSocketRequested = true;
 							}
 						}
+						break;
+
+					case WT_SPECIALOPCODE_S2C_SWITCHTOWEBSOCKET_ACK: // For client
+						s->ClientDebugFlag_Special_SwitchToWebSocketAcked = true;
 						break;
 					}
 				}

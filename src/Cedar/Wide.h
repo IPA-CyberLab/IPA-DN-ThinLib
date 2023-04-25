@@ -229,6 +229,13 @@ struct ACCEPT_QUEUE
 	EVENT *Event;
 };
 
+#define WIDE_FLAG_NONE							0
+#define WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST		1
+#define WIDE_FLAG_NO_LOG						2
+#define WIDE_FLAG_NO_SET_PROCESS_PRIORITY		4
+
+
+
 // WIDE オブジェクト
 struct WIDE
 {
@@ -240,6 +247,7 @@ struct WIDE
 	char SvcName[32];
 	UINT SeLang;
 	UCHAR ClientId[SHA1_SIZE];
+	UINT Flags;
 
 	LOG* WideLog;
 
@@ -308,6 +316,9 @@ struct WIDE
 	LOCK *ReconnectLock;
 	X *ServerX;
 	K *ServerK;
+	bool HasAlternativeServerKeyAndSecret;
+	UCHAR AlternativeServerHostKey[SHA1_SIZE];
+	UCHAR AlternativeServerHostSecret[SHA1_SIZE];
 	THREAD *ConnectThread;
 	bool HaltReconnectThread;
 	EVENT *HaltReconnectThreadEvent;
@@ -324,6 +335,10 @@ struct WIDE
 	UINT64 ServerMask64;
 	bool SendMacList;
 	ACCEPT_QUEUE *AcceptQueue;
+	char PreferredPcid[WT_PCID_SIZE + 1];
+	LOCK *RegistMachineLock_Danger;
+	UINT Server_NumEstablishedToGate;
+	UINT Server_NumDisconnectedFromGate;
 
 	bool MsgForServerArrived;			// 新しいメッセージが WideController から届いている
 	wchar_t MsgForServer[MAX_SIZE];		// 届いているメッセージ
@@ -397,9 +412,9 @@ bool WideTryUpdateNewEntryPointModestStandard(WT *wt, bool *cancel);
 
 // WideClient
 WIDE *WideClientStart(char *svc_name, UINT se_lang);
-WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url);
+WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name);
 void WideClientStop(WIDE *w);
-UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache);
+UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache, char *websocket_url, UINT websocket_url_size);
 UINT WideClientConnectInner(WIDE *w, WT_CONNECT *c, char *pcid, UINT ver, UINT build, UINT client_options, bool no_cache);
 void WideClientGenerateClientId(UCHAR *id);
 UINT WideClientGetWoLMacList(WIDE *w, char *pcid, UINT ver, UINT build, char *mac_list, UINT mac_list_size);
@@ -410,7 +425,7 @@ WIDE *WideServerStartEx(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *accep
 					    WIDE_RESET_CERT_PROC *reset_cert_proc, void *reset_cert_proc_param);
 WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *accept_param, UINT se_lang,
 						WIDE_RESET_CERT_PROC *reset_cert_proc, void *reset_cert_proc_param,
-						X *master_cert, char *fixed_entrance_url);
+						X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name);
 void WideServerStop(WIDE *w);
 void WideServerReconnect(WIDE *w);
 void WideServerReconnectEx(WIDE *w, bool stop);
@@ -418,13 +433,13 @@ void WideServerConnectThread(THREAD *thread, void *param);
 void WideServerStartConnectThread(WIDE *w);
 void WideServerStopConnectThread(WIDE *w);
 void WideServerSetCertAndKey(WIDE *w, X *cert, K *key);
-void WideServerSetCertAndKeyEx(WIDE *w, X *cert, K *key, bool no_reconnect);
-bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key);
+void WideServerSetCertAndKeyEx(WIDE *w, X *cert, K *key, bool no_reconnect, UCHAR *alternative_host_key, UCHAR *alternative_host_secret);
+bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key, UCHAR **alternative_host_key, UCHAR **alternative_host_secret);
 UINT WideServerGetErrorCode(WIDE *w);
 void WideServerGenerateCertAndKey(X **cert, K **key);
 UINT WideServerGetLoginInfo(WIDE *w, WIDE_LOGIN_INFO *info);
 UINT WideServerGetPcidCandidate(WIDE *w, char *name, UINT size, char *current_username);
-UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key);
+UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key, UCHAR *alternative_host_key, UCHAR *alternative_host_secret);
 UINT WideServerRenameMachine(WIDE *w, char *new_name);
 UINT WideServerSendOtpEmail(WIDE *w, char *otp, char *email, char *ip, char *fqdn);
 UINT WideServerConnect(WIDE *w, WT_CONNECT *c);

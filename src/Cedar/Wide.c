@@ -389,12 +389,13 @@ UINT WideGetErrorLevel(UINT code)
 }
 
 // WideClient 接続
-UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache)
+UINT WideClientConnect(WIDE *w, char *pc_id, UINT ver, UINT build, SOCKIO **sockio, UINT client_options, bool no_cache, char *websocket_url, UINT websocket_url_size)
 {
 	WT *wt;
 	UINT ret;
 	WT_CONNECT c;
 	char pcid[MAX_PATH];
+	ClearStr(websocket_url, websocket_url_size);
 	// 引数チェック
 	if (w == NULL || sockio == NULL)
 	{
@@ -415,7 +416,9 @@ LABEL_RETRY:
 	{
 		Debug("Redirect Host: %s (for proxy: %s):%u\n", c.HostName, c.HostNameForProxy, c.Port);
 
-		ret = WtcConnectEx(wt, &c, sockio, CEDAR_VER, CEDAR_BUILD);
+		char websocket_urlpath[MAX_PATH] = CLEAN;
+
+		ret = WtcConnectEx(wt, &c, sockio, CEDAR_VER, CEDAR_BUILD, websocket_urlpath, sizeof(websocket_urlpath));
 
 		if (ret != ERR_NO_ERROR)
 		{
@@ -430,6 +433,11 @@ LABEL_RETRY:
 				goto LABEL_RETRY;
 			}
 		}
+		else
+		{
+			Format(websocket_url, websocket_url_size, "https://%s:%u%s",
+				c.HostName, c.Port, websocket_urlpath);
+		}
 	}
 	else
 	{
@@ -442,9 +450,9 @@ LABEL_RETRY:
 // WideClient の開始
 WIDE *WideClientStart(char *svc_name, UINT se_lang)
 {
-	return WideClientStartEx(svc_name, se_lang, NULL, NULL);
+	return WideClientStartEx(svc_name, se_lang, NULL, NULL, 0, NULL);
 }
-WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url)
+WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name)
 {
 	WIDE *w;
 	if (svc_name == NULL)
@@ -457,8 +465,20 @@ WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixe
 
 	w = ZeroMalloc(sizeof(WIDE));
 
-	w->WideLog = NewLogEx(WIDE_LOG_CLIENT, "client", LOG_SWITCH_DAY, true);
-	w->WideLog->Flush = true;
+	w->Flags = flags;
+
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		if (IsEmptyStr(debug_log_dir_name))
+		{
+			w->WideLog = NewLogEx(WIDE_LOG_CLIENT, "client", LOG_SWITCH_DAY, true);
+			w->WideLog->Flush = true;
+		}
+		else
+		{
+			w->WideLog = NewLogEx(debug_log_dir_name, "client", LOG_SWITCH_DAY, true);
+		}
+	}
 
 	WideLog(w, "-------------------- Start Tunnel System (Client) --------------------");
 	WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
@@ -498,11 +518,11 @@ WIDE *WideClientStartEx(char *svc_name, UINT se_lang, X *master_cert, char *fixe
 	w->SettingLock = NewLock();
 	if (master_cert == NULL)
 	{
-		w->wt = NewWtFromHamcore();
+		w->wt = NewWtFromHamcore(w->Flags);
 	}
 	else
 	{
-		w->wt = NewWt(master_cert);
+		w->wt = NewWt(master_cert, w->Flags);
 	}
 
 	w->wt->EnableUpdateEntryPoint = true; // EntryPoint.dat 自動更新有効
@@ -580,6 +600,14 @@ bool WideServerIsConnected(WIDE *w)
 		return false;
 	}
 
+	if (w->wt != NULL)
+	{
+		// こちらのほうが正確
+		//Debug("w->wt->Server_IsInWtsSessionMainLoop: %u\n", w->wt->Server_IsInWtsSessionMainLoop);
+		return w->wt->Server_IsInWtsSessionMainLoop;
+	}
+
+	//Debug("w->IsConnected: %u\n", w->IsConnected);
 	return w->IsConnected;
 }
 
@@ -724,19 +752,30 @@ LABEL_CONNECT_RETRY:
 				pcid_candidate_count = 0;
 
 LABEL_RETRY:
-				// pcid が指定されていない
-				ret = WideServerGetPcidCandidate(w, pcid, sizeof(pcid), MsGetUserName());
-				WideLog(w, "WideServerGetPcidCandidate: Error code = %u, pcid = \"%s\"", ret, pcid);
+				if (IsEmptyStr(w->PreferredPcid))
+				{
+					// pcid が指定されていない
+					ret = WideServerGetPcidCandidate(w, pcid, sizeof(pcid), MsGetUserName());
+					WideLog(w, "WideServerGetPcidCandidate: Error code = %u, pcid = \"%s\"", ret, pcid);
+				}
+				else
+				{
+					ret = ERR_NO_ERROR;
+					WideLog(w, "Trying to use the preferred PCID: '%s'\n", w->PreferredPcid);
+					StrCpy(pcid, sizeof(pcid), w->PreferredPcid);
+				}
 
 				if (ret == ERR_NO_ERROR)
 				{
-					X *x;
-					K *k;
+					X *x = NULL;
+					K *k = NULL;
+					UCHAR *alternative_host_key = NULL;
+					UCHAR *alternative_host_secret = NULL;
 
 					// とりあえず候補としてもらった PCID を登録する
-					if (WideServerGetCertAndKey(w, &x, &k))
+					if (WideServerGetCertAndKey(w, &x, &k, &alternative_host_key, &alternative_host_secret))
 					{
-						ret = WideServerRegistMachine(w, pcid, x, k);
+						ret = WideServerRegistMachine(w, pcid, x, k, alternative_host_key, alternative_host_secret);
 						FreeX(x);
 						FreeK(k);
 
@@ -752,7 +791,7 @@ LABEL_RETRY:
 							pcid_candidate_count++;
 							WideLog(w, "WideServerGetCertAndKey error. ERR_PCID_ALREADY_EXISTS. pcid_candidate_count = %u", pcid_candidate_count);
 
-							if (pcid_candidate_count < 10)
+							if (pcid_candidate_count < 10 && IsEmptyStr(w->PreferredPcid))
 							{
 								goto LABEL_RETRY;
 							}
@@ -798,7 +837,7 @@ LABEL_RETRY:
 			WideLog(w, "Redirecting to %s:%u... (for proxy: %s)", c.HostName, c.Port, c.HostNameForProxy);
 
 			// 接続
-			w->ServerErrorCode = ERR_NO_ERROR;
+			w->ServerErrorCode = ERR_PLEASE_WAIT;
 
 			WideLog(w, "Start WtsStart()");
 			s = WtsStart(w->wt, &c, w->ServerAcceptProc, w->ServerAcceptParam);
@@ -808,6 +847,14 @@ LABEL_RETRY:
 			// 一定時間ごとに状態をポーリング
 			while (true)
 			{
+				if (s->WasConnected)
+				{
+					if (w->ServerErrorCode == ERR_PLEASE_WAIT)
+					{
+						w->ServerErrorCode = ERR_NO_ERROR;
+					}
+				}
+
 				if (p->Halt)
 				{
 					WideLog(w, "WideServerConnectMainThread: p->Halt == true");
@@ -835,7 +882,7 @@ LABEL_RETRY:
 					break;
 				}
 				
-				Wait(p->HaltEvent, 256);
+				Wait(p->HaltEvent, 32);
 			}
 
 			if (s->WasConnected || last_wide_controller_connect_ok == false)
@@ -861,40 +908,46 @@ LABEL_RETRY:
 			UINT level = WideGetErrorLevel(w->ServerErrorCode);
 			UINT interval = WT_GATE_CONNECT_RETRY * MIN((i + 1), 24);
 
-			if (level == DESK_ERRORLEVEL_SERVER_SIDE)
+			if ((w->Flags & WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST) == 0)
 			{
-				// サーバー側問題の場合は 15 秒 × 再試行回数 くらい待つ
-				interval *= 10;
-			}
-			else if (level == DESK_ERRORLEVEL_CLIENT_SIDE)
-			{
-				// クライアント側問題の場合は 75 秒 × 再試行回数 くらい待つ
-				interval *= 50;
+				if (level == DESK_ERRORLEVEL_SERVER_SIDE)
+				{
+					// サーバー側問題の場合は 15 秒 × 再試行回数 くらい待つ
+					interval *= 10;
+				}
+				else if (level == DESK_ERRORLEVEL_CLIENT_SIDE)
+				{
+					// クライアント側問題の場合は 75 秒 × 再試行回数 くらい待つ
+					interval *= 50;
+				}
 			}
 
 			WideLog(w, "Retry level = %u (ServerErrorCode = %u)", level, w->ServerErrorCode);
 
-			switch (w->ServerErrorCode)
+			if ((w->Flags & WIDE_FLAG_DEBUG_ALWAYS_RETRY_FAST) == 0)
 			{
-			case ERR_RETRY_AFTER_15_MINS:
-				// 15 分後に再試行してください
-				interval = 15 * 60 * 1000;
-				break;
+				switch (w->ServerErrorCode)
+				{
+				case ERR_RETRY_AFTER_15_MINS:
+					// 15 分後に再試行してください
+					interval = 15 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_1_HOURS:
-				// 1 時間後に再試行してください
-				interval = 1 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_1_HOURS:
+					// 1 時間後に再試行してください
+					interval = 1 * 60 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_8_HOURS:
-				// 8 時間後に再試行してください
-				interval = 8 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_8_HOURS:
+					// 8 時間後に再試行してください
+					interval = 8 * 60 * 60 * 1000;
+					break;
 
-			case ERR_RETRY_AFTER_24_HOURS:
-				// 24 時間後に再試行してください
-				interval = 24 * 60 * 60 * 1000;
-				break;
+				case ERR_RETRY_AFTER_24_HOURS:
+					// 24 時間後に再試行してください
+					interval = 24 * 60 * 60 * 1000;
+					break;
+				}
 			}
 
 			WideLog(w, "Retry interval base = %u", interval);
@@ -921,6 +974,7 @@ void WideServerConnectThread(THREAD *thread, void *param)
 	INTERNET_SETTING setting;
 	X *server_x = NULL;
 	K *server_k = NULL;
+	bool has_alternative_hostkey = false;
 	// 引数チェック
 	if (thread == NULL || param == NULL)
 	{
@@ -941,6 +995,8 @@ void WideServerConnectThread(THREAD *thread, void *param)
 		// 証明書と秘密鍵の取得
 		server_x = CloneX(w->ServerX);
 		server_k = CloneK(w->ServerK);
+
+		has_alternative_hostkey = w->HasAlternativeServerKeyAndSecret;
 	}
 	Unlock(w->SettingLock);
 
@@ -950,7 +1006,7 @@ void WideServerConnectThread(THREAD *thread, void *param)
 	WideLog(w, "INTERNET_SETTING.ProxyUsername = %s", setting.ProxyUsername);
 	WideLog(w, "INTERNET_SETTING.ProxyUserAgent = %s", setting.ProxyUserAgent);
 
-	if (server_x == NULL || server_k == NULL)
+	if ((server_x == NULL || server_k == NULL) && has_alternative_hostkey == false)
 	{
 		// 証明書が登録されていない
 		if (w->FirstFlag == false)
@@ -1429,13 +1485,13 @@ UINT WideServerRenameMachine(WIDE *w, char *new_name)
 }
 
 // Gate に Machine を登録
-UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key)
+UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key, UCHAR *alternative_host_key, UCHAR *alternative_host_secret)
 {
 	UINT ret = ERR_NO_ERROR;
 	PACK *r, *p;
 	WT *wt;
 	// 引数チェック
-	if (w == NULL || pcid == NULL || cert == NULL || key == NULL)
+	if (w == NULL || pcid == NULL || ((cert == NULL || key == NULL) && (alternative_host_key == NULL || alternative_host_secret == NULL)))
 	{
 		return ERR_INTERNAL_ERROR;
 	}
@@ -1448,7 +1504,12 @@ UINT WideServerRegistMachine(WIDE *w, char *pcid, X *cert, K *key)
 	PackAddStr(r, "RegistrationPassword", w->RegistrationPassword);
 	PackAddStr(r, "RegistrationEmail", w->RegistrationEmail);
 
-	p = WtWpcCallWithCertAndKey(wt, "RegistMachine", r, cert, key, false, true, 0, false);
+	Lock(w->RegistMachineLock_Danger); // For stress test debug purpuse
+	{
+		p = WtWpcCallWithCertAndKey(wt, "RegistMachine", r, cert, key, false, true, 0, false, alternative_host_key, alternative_host_secret);
+	}
+	Unlock(w->RegistMachineLock_Danger);
+
 	FreePack(r);
 
 	ret = GetErrorFromPack(p);
@@ -1557,6 +1618,8 @@ PACK* WideCall(WIDE* wide, char* function_name, PACK* pack, bool global_ip_only,
 	WT *wt;
 	X *server_x = NULL;
 	K *server_k = NULL;
+	UCHAR *alternative_host_key = NULL;
+	UCHAR *alternative_host_secret = NULL;
 	PACK *ret;
 
 	// 引数チェック
@@ -1569,7 +1632,7 @@ PACK* WideCall(WIDE* wide, char* function_name, PACK* pack, bool global_ip_only,
 
 	PackAddInt(pack, "se_lang", wide->SeLang);
 
-	WideServerGetCertAndKey(wide, &server_x, &server_k);
+	WideServerGetCertAndKey(wide, &server_x, &server_k, &alternative_host_key, &alternative_host_secret);
 
 	if (server_x != NULL)
 	{
@@ -1583,7 +1646,7 @@ PACK* WideCall(WIDE* wide, char* function_name, PACK* pack, bool global_ip_only,
 		WideLog(wide, "This Server's Cert Hash: %s", hash_str);
 	}
 
-	ret = WtWpcCallWithCertAndKey(wt, function_name, pack, server_x, server_k, global_ip_only, try_secondary, timeout, parallel_skip_last_error_controller);
+	ret = WtWpcCallWithCertAndKey(wt, function_name, pack, server_x, server_k, global_ip_only, try_secondary, timeout, parallel_skip_last_error_controller, alternative_host_key, alternative_host_secret);
 
 	FreeX(server_x);
 	FreeK(server_k);
@@ -1793,29 +1856,44 @@ void WideSetInternetSetting(WIDE *w, INTERNET_SETTING *setting)
 // 証明書と秘密鍵を設定
 void WideServerSetCertAndKey(WIDE *w, X *cert, K *key)
 {
-	WideServerSetCertAndKeyEx(w, cert, key, false);
+	WideServerSetCertAndKeyEx(w, cert, key, false, NULL, NULL);
 }
-void WideServerSetCertAndKeyEx(WIDE *w, X *cert, K *key, bool no_reconnect)
+void WideServerSetCertAndKeyEx(WIDE *w, X *cert, K *key, bool no_reconnect, UCHAR *alternative_host_key, UCHAR *alternative_host_secret)
 {
 	// 引数チェック
-	if (w == NULL || cert == NULL || key == NULL)
+	if (w == NULL)
 	{
 		return;
 	}
 
 	Lock(w->SettingLock);
 	{
-		if (w->ServerX != NULL)
+		if (cert != NULL && key != NULL)
 		{
-			FreeX(w->ServerX);
-		}
-		w->ServerX = CloneX(cert);
+			if (w->ServerX != NULL)
+			{
+				FreeX(w->ServerX);
+			}
+			w->ServerX = CloneX(cert);
 
-		if (w->ServerK != NULL)
-		{
-			FreeK(w->ServerK);
+			if (w->ServerK != NULL)
+			{
+				FreeK(w->ServerK);
+			}
+			w->ServerK = CloneK(key);
 		}
-		w->ServerK = CloneK(key);
+
+		if (alternative_host_key != NULL && alternative_host_secret != NULL)
+		{
+			Copy(w->AlternativeServerHostKey, alternative_host_key, SHA1_SIZE);
+			Copy(w->AlternativeServerHostSecret, alternative_host_secret, SHA1_SIZE);
+
+			w->HasAlternativeServerKeyAndSecret = true;
+		}
+		else
+		{
+			w->HasAlternativeServerKeyAndSecret = false;
+		}
 	}
 	Unlock(w->SettingLock);
 
@@ -1829,7 +1907,7 @@ void WideServerSetCertAndKeyEx(WIDE *w, X *cert, K *key, bool no_reconnect)
 }
 
 // 証明書と秘密鍵を取得
-bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key)
+bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key, UCHAR **alternative_host_key, UCHAR **alternative_host_secret)
 {
 	bool ret = false;
 	// 引数チェック
@@ -1838,12 +1916,22 @@ bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key)
 		return false;
 	}
 
+	if (alternative_host_key != NULL) *alternative_host_key = NULL;
+	if (alternative_host_secret != NULL) *alternative_host_secret = NULL;
+
 	Lock(w->SettingLock);
 	{
 		if (w->ServerX != NULL && w->ServerK != NULL)
 		{
 			*cert = CloneX(w->ServerX);
 			*key = CloneK(w->ServerK);
+			ret = true;
+		}
+
+		if (w->HasAlternativeServerKeyAndSecret)
+		{
+			*alternative_host_key = w->AlternativeServerHostKey;
+			*alternative_host_secret = w->AlternativeServerHostSecret;
 			ret = true;
 		}
 	}
@@ -1861,11 +1949,11 @@ WIDE *WideServerStartEx(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *accep
 						WIDE_RESET_CERT_PROC *reset_cert_proc, void *reset_cert_proc_param)
 {
 	return WideServerStartEx2(svc_name, accept_proc, accept_param, se_lang,
-		reset_cert_proc, reset_cert_proc_param, NULL, NULL);
+		reset_cert_proc, reset_cert_proc_param, NULL, NULL, 0, NULL);
 }
 WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *accept_param, UINT se_lang,
-						WIDE_RESET_CERT_PROC *reset_cert_proc, void *reset_cert_proc_param,
-						X *master_cert, char *fixed_entrance_url)
+	WIDE_RESET_CERT_PROC *reset_cert_proc, void *reset_cert_proc_param,
+	X *master_cert, char *fixed_entrance_url, UINT flags, char *debug_log_dir_name)
 {
 	WIDE *w;
 	// 引数チェック
@@ -1879,8 +1967,20 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 
 	w = ZeroMalloc(sizeof(WIDE));
 
-	w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
-	w->WideLog->Flush = true;
+	w->Flags = flags;
+
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		if (IsEmptyStr(debug_log_dir_name))
+		{
+			w->WideLog = NewLog(WIDE_LOG_DIRNAME, "tunnel", LOG_SWITCH_DAY);
+			w->WideLog->Flush = true;
+		}
+		else
+		{
+			w->WideLog = NewLogEx(debug_log_dir_name, "tunnel", LOG_SWITCH_DAY, true);
+		}
+	}
 
 	WideLog(w, "-------------------- Start Tunnel System (Server) --------------------");
 	WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
@@ -1917,11 +2017,11 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 	w->SeLang = se_lang;
 	if (master_cert == NULL)
 	{
-		w->wt = NewWtFromHamcore();
+		w->wt = NewWtFromHamcore(w->Flags);
 	}
 	else
 	{
-		w->wt = NewWt(master_cert);
+		w->wt = NewWt(master_cert, w->Flags);
 	}
 	w->wt->Wide = w;
 	w->Type = WIDE_TYPE_SERVER;
@@ -1969,7 +2069,7 @@ WIDE *WideServerStartForAcceptQueue(char *svc_name, X *master_cert, char *entran
 	aq = NewAcceptQueue();
 
 	w = WideServerStartEx2(svc_name, AcceptQueueAcceptProc, aq, 0, NULL, NULL,
-		master_cert, entrance);
+		master_cert, entrance, 0, NULL);
 
 	w->AcceptQueue = aq;
 
@@ -2225,7 +2325,10 @@ void WideLogMain(WIDE* w, char *format, va_list args)
 		InsertUnicodeRecord(w->WideLog, buf);
 	}
 
-	Debug("WIDE_LOG: %S\n", buf);
+	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		Debug("WIDE_LOG: %S\n", buf);
+	}
 
 	Free(buf3);
 	Free(buf);
@@ -3316,7 +3419,7 @@ void WideGateReportSessionDel(WIDE *wide, UCHAR *session_id)
 			PackAddData(p, "SessionId", session_id, WT_SESSION_ID_SIZE);
 			WideGatePackGateInfo(p, wt);
 
-			ret = WtWpcCallWithCertAndKey(wt, "ReportSessionDel", p, wide->GateCert, wide->GateKey, global_ip_only, false, WIDE_SESSION_ADD_DEL_REPORT_COMM_TIMEOUT, true);
+			ret = WtWpcCallWithCertAndKey(wt, "ReportSessionDel", p, wide->GateCert, wide->GateKey, global_ip_only, false, WIDE_SESSION_ADD_DEL_REPORT_COMM_TIMEOUT, true, NULL, NULL);
 
 			if (ret != NULL)
 			{
@@ -3645,7 +3748,7 @@ void WideGateReportSessionAdd(WIDE *wide, TSESSION *s)
 			WideGatePackSession(p, s, 0, 1, NULL);
 			WideGatePackGateInfo(p, wt);
 
-			ret = WtWpcCallWithCertAndKey(wt, "ReportSessionAdd", p, wide->GateCert, wide->GateKey, global_ip_only, false, WIDE_SESSION_ADD_DEL_REPORT_COMM_TIMEOUT, true);
+			ret = WtWpcCallWithCertAndKey(wt, "ReportSessionAdd", p, wide->GateCert, wide->GateKey, global_ip_only, false, WIDE_SESSION_ADD_DEL_REPORT_COMM_TIMEOUT, true, NULL, NULL);
 
 			if (ret != NULL)
 			{
@@ -3717,7 +3820,7 @@ void WideGateReportSessionList(WIDE *wide)
 		}
 		ReleaseList(sc_list);
 		
-		ret = WtWpcCallWithCertAndKey(wt, "ReportSessionList", p, wide->GateCert, wide->GateKey, global_ip_only, false, 0, false);
+		ret = WtWpcCallWithCertAndKey(wt, "ReportSessionList", p, wide->GateCert, wide->GateKey, global_ip_only, false, 0, false, NULL, NULL);
 
 		if (ret != NULL)
 		{
@@ -3982,7 +4085,7 @@ WIDE *WideGateStart()
 	w->Type = WIDE_TYPE_GATE;
 	w->NextRebootTimeLock = NewLock();
 	w->SessionAddDelCriticalCounter = NewCounter();
-	w->wt = NewWtFromHamcore();
+	w->wt = NewWtFromHamcore(0);
 	w->wt->Wide = w;
 	w->GateHalt = false;
 	w->LockReport = NewLock();
@@ -4133,7 +4236,7 @@ WIDE *WideGateStart()
 	cfg.Callback = WideStatManCallback;
 	cfg.Param = w;
 
-	w->StatMan = NewStatMan(&cfg);
+	//w->StatMan = NewStatMan(&cfg);
 	w->wt->StatMan = w->StatMan;
 
 	w->AggressiveTimeoutLock = NewLock();

@@ -185,7 +185,8 @@ UINT WpcGetEntranceUrlEx(WT *wt, char *entrance, UINT entrance_size, UINT cache_
 UINT WpcCommCheck(WT *wt);
 void WtSetDefaultEntranceUrlCacheExpireSpan(WT *wt, UINT span);
 
-PACK *WtWpcCallWithCertAndKey(WT *wt, char *function_name, PACK *pack, X *cert, K *key, bool global_ip_only, bool try_secondary, UINT timeout, bool parallel_skip_last_error_controller);
+PACK *WtWpcCallWithCertAndKey(WT *wt, char *function_name, PACK *pack, X *cert, K *key, bool global_ip_only, bool try_secondary, UINT timeout, bool parallel_skip_last_error_controller,
+	UCHAR* alternative_host_key, UCHAR* alternative_host_secret);
 
 PACK *WtWpcCall(WT *wt, char *function_name, PACK *pack, UCHAR *host_key, UCHAR *host_secret, bool global_ip_only, bool try_secondary, UINT timeout, bool parallel_skip_last_error_controller);
 PACK *WtWpcCallInner(WT *wt, char *function_name, PACK *pack, UCHAR *host_key, UCHAR *host_secret, bool global_ip_only, char *url, UINT timeout);

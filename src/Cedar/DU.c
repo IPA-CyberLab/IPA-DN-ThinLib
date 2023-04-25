@@ -4568,6 +4568,288 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 	}
 }
 
+void TfReportThreadProc(THREAD *thread, void *param)
+{
+	TF_SERVICE *svc;
+	if (thread == NULL || param == NULL)
+	{
+		return;
+	}
+
+	svc = (TF_SERVICE *)param;
+
+	while (svc->ReportThreadHaltFlag == false)
+	{
+		while (true)
+		{
+			if (svc->ReportThreadHaltFlag)
+			{
+				break;
+			}
+
+			DIFF_ENTRY *e = NULL;
+			
+			LockQueue(svc->ReportQueue);
+			{
+				e = GetNext(svc->ReportQueue);
+			}
+			UnlockQueue(svc->ReportQueue);
+
+			if (e == NULL)
+			{
+				break;
+			}
+
+			TF_REPORT_SETTINGS st = CLEAN;
+			Lock(svc->CurrentReportSettingsLock);
+			{
+				Copy(&st, &svc->CurrentReportSettings, sizeof(TF_REPORT_SETTINGS));
+			}
+			Unlock(svc->CurrentReportSettingsLock);
+
+			UINT gethostname_flag = GETHOSTNAME_FLAG_NO_NETBIOS_NAME | GETHOSTNAME_USE_DNS_API;
+
+			if (st.EnableTcpHostnameLookup)
+			{
+				// Resolve hostname
+				if (e->Param == MS_THINFW_ENTRY_TYPE_TCP)
+				{
+					MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
+
+					if (IsEmptyStr(tcp->RemoteIPHostname_Resolved))
+					{
+						if (IsZeroIP(&tcp->Tcp.RemoteIP) == false && IsLocalHostIP(&tcp->Tcp.RemoteIP) == false)
+						{
+							GetHostNameEx(tcp->RemoteIPHostname_Resolved, sizeof(tcp->RemoteIPHostname_Resolved), &tcp->Tcp.RemoteIP, st.HostnameLookupTimeoutMsec, gethostname_flag);
+						}
+					}
+				}
+				else if (e->Param == MS_THINFW_ENTRY_TYPE_RDP)
+				{
+					MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
+
+					if (IsEmptyStr(rdp->ClientHostname_Resolved))
+					{
+						if (IsZeroIP(&rdp->ClientIp) == false && IsLocalHostIP(&rdp->ClientIp) == false)
+						{
+							GetHostNameEx(rdp->ClientHostname_Resolved, sizeof(rdp->ClientHostname_Resolved), &rdp->ClientIp, st.HostnameLookupTimeoutMsec, gethostname_flag);
+						}
+					}
+				}
+			}
+
+			wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
+			TfGetStr(tmp, sizeof(tmp), e);
+			if (UniIsFilledUniStr(tmp))
+			{
+				UniPrint(L"%s\n", tmp);
+			}
+
+			Free(e);
+		}
+
+		if (svc->ReportThreadHaltFlag)
+		{
+			break;
+		}
+
+		Wait(svc->ReportThreadHaltEvent, 256);
+	}
+}
+
+void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
+{
+	ClearUniStr(dst, 0);
+	if (dst == NULL || e == NULL)
+	{
+		return;
+	}
+
+	wchar_t ep_info[768] = CLEAN;
+	char ep_hostname[270] = CLEAN;
+	wchar_t proc_info[MAX_SIZE * 2] = CLEAN;
+	wchar_t tmpw[MAX_SIZE] = CLEAN;
+	wchar_t rdp_session_info[MAX_SIZE] = CLEAN;
+
+	switch (e->Param)
+	{
+	case MS_THINFW_ENTRY_TYPE_DNS:
+		DoNothing();
+		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
+		UniFormat(dst, dst_size, L"[DNS] (Hostname: %S, IPv%u_Address: %r)",
+			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_PROCESS:
+		DoNothing();
+		MS_THINFW_ENTRY_PROCESS *proc = (MS_THINFW_ENTRY_PROCESS *)&e->Data;
+
+		//Print("%u %S\n", e->IsAdded, proc->ExeFilenameW);
+
+		if (UniIsFilledStr(proc->CommandLineW))
+		{
+			UniFormat(tmpw, sizeof(tmpw), L", Args: %s", proc->CommandLineW);
+		}
+
+		if (UniIsFilledStr(proc->Rdp.WinStationName))
+		{
+			char rdp_client_info[MAX_PATH] = CLEAN;
+
+			if (IsZeroIP(&proc->Rdp.ClientIp) == false)
+			{
+				if (IsFilledStr(proc->Rdp.ClientHostname_Resolved))
+				{
+					Format(ep_hostname, sizeof(ep_hostname), "RdpClientHost: %s, ",
+						proc->Rdp.ClientHostname_Resolved);
+				}
+
+				Format(rdp_client_info, sizeof(rdp_client_info), ", %sRdpClientIP: %r, RdpClientLocalIP: %r",
+					ep_hostname,
+					&proc->Rdp.ClientIp, &proc->Rdp.ClientLocalIp);
+			}
+
+			UniFormat(rdp_session_info, sizeof(rdp_session_info),
+				L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+				proc->Domain,
+				proc->Username,
+				proc->Rdp.WinStationName,
+				rdp_client_info);
+		}
+
+		UniFormat(dst, dst_size, L"[PROCESS_%S] (PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
+			e->IsAdded ? "START" : "STOP",
+			proc->ProcessId,
+			proc->Is64BitProcess ? 64 : 32,
+			proc->ExeFilenameW,
+			proc->Domain,
+			proc->Username,
+			proc->SessionId,
+			tmpw,
+			rdp_session_info);
+
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_RDP:
+		DoNothing();
+		MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
+
+		if (IsFilledStr(rdp->ClientHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "ClientHost: %s, ",
+				rdp->ClientHostname_Resolved);
+		}
+		if (UniIsFilledStr(rdp->Username))
+		{
+			UniFormat(tmpw, sizeof(tmpw), L"%s\\%s", UniIsFilledStr(rdp->Domain) ? rdp->Domain : L".", rdp->Username);
+		}
+		else
+		{
+			UniStrCpy(tmpw, sizeof(tmpw), L"<try_login>");
+		}
+
+		UniFormat(dst, dst_size, L"[RDP] (RdpSessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
+			rdp->SessionId, rdp->WinStationName, rdp->SessionState,
+			ep_hostname, &rdp->ClientIp, &rdp->ClientLocalIp, rdp->ClientLocalBuild, tmpw);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_TCP:
+		DoNothing();
+		MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
+
+		char local_ip[128] = CLEAN;
+		char remote_ip[128] = CLEAN;
+
+		IPToStr(local_ip, sizeof(local_ip), &tcp->Tcp.LocalIP);
+		IPToStr(remote_ip, sizeof(remote_ip), &tcp->Tcp.RemoteIP);
+
+		if (tcp->Tcp.Status == TCP_STATE_LISTEN)
+		{
+			if (IsZeroIP(&tcp->Tcp.LocalIP))
+			{
+				if (IsIP4(&tcp->Tcp.LocalIP))
+				{
+					StrCpy(local_ip, sizeof(local_ip), "IPv4_Any");
+				}
+				else
+				{
+					StrCpy(local_ip, sizeof(local_ip), "IPv6_Any");
+				}
+			}
+		}
+
+		if (IsFilledStr(tcp->RemoteIPHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "RemoteHost: %s, ",
+				tcp->RemoteIPHostname_Resolved, tcp->Tcp.RemotePort);
+		}
+
+		if (IsZeroIP(&tcp->Tcp.RemoteIP))
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(LocalIP: %S, LocalPort: %u)",
+				local_ip, tcp->Tcp.LocalPort);
+		}
+		else
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(%SRemoteIP: %S, RemotePort: %u, LocalIP: %S, LocalPort: %u)",
+				ep_hostname,
+				remote_ip, tcp->Tcp.RemotePort,
+				local_ip, tcp->Tcp.LocalPort);
+		}
+
+		if (tcp->HasProcessInfo)
+		{
+			MS_THINFW_ENTRY_PROCESS *proc = &tcp->Process;
+
+			if (UniIsFilledStr(proc->Rdp.WinStationName))
+			{
+				char rdp_client_info[MAX_PATH] = CLEAN;
+
+				if (IsZeroIP(&proc->Rdp.ClientIp) == false)
+				{
+					if (IsFilledStr(proc->Rdp.ClientHostname_Resolved))
+					{
+						Format(ep_hostname, sizeof(ep_hostname), "RdpClientHost: %s, ",
+							proc->Rdp.ClientHostname_Resolved);
+					}
+
+					Format(rdp_client_info, sizeof(rdp_client_info), ", %sRdpClientIP: %r, RdpClientLocalIP: %r",
+						ep_hostname,
+						&proc->Rdp.ClientIp, &proc->Rdp.ClientLocalIp);
+				}
+
+				UniFormat(rdp_session_info, sizeof(rdp_session_info),
+					L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+					proc->Domain,
+					proc->Username,
+					proc->Rdp.WinStationName,
+					rdp_client_info);
+
+			}
+
+			UniFormat(proc_info, sizeof(proc_info),
+				L" ProcessInfo=(PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u)%s",
+				tcp->Process.ProcessId,
+				tcp->Process.Is64BitProcess ? 64 : 32,
+				tcp->Process.ExeFilenameW,
+				tcp->Process.Domain,
+				tcp->Process.Username,
+				tcp->Process.SessionId,
+				rdp_session_info);
+		}
+
+		StrToUni(tmpw, sizeof(tmpw), tcp->Type);
+		UniStrCat(dst, dst_size, L"[");
+		UniStrCat(dst, dst_size, tmpw);
+		UniStrCat(dst, dst_size, L"] ");
+		UniStrCat(dst, dst_size, ep_info);
+		UniStrCat(dst, dst_size, proc_info);
+
+		break;
+	}
+}
+
 void TfMain(TF_SERVICE *svc)
 {
 	if (svc == NULL)
@@ -4577,6 +4859,7 @@ void TfMain(TF_SERVICE *svc)
 
 	UINT64 last_cfg_read = 0;
 	UINT64 last_poll = 0;
+	UINT64 last_netinfo = 0;
 
 	BUF *cfg_file_content = NewBuf();
 
@@ -4590,12 +4873,24 @@ void TfMain(TF_SERVICE *svc)
 	UINT cfg_SettingReloadIntervalMsec = 10000;
 	UINT cfg_WatchPollingIntervalMsec = 250;
 	bool cfg_EnableWatchRdp = false;
+	bool cfg_EnableWatchDns = false;
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchTcp = false;
 	UINT cfg_ReportMailIntervalMsec = 5000;
-	bool cfg_OnlyWhenLocked = false;
+	bool cfg_WatchOnlyWhenLocked = false;
+	bool cfg_IncludeProcessCommandLine = false;
+	bool cfg_EnableFirewall = false;
+	UINT cfg_GetNetworkInfoIntervalMsec = 300000;
+	bool cfg_IgnoreDNSoverTCPSession = false;
 
 	LIST *current_list = NULL;
+
+	LIST *current_dns_servers_list = MsGetCurrentDnsServersList();
+
+	// Init report thread
+	svc->ReportQueue = NewQueue();
+	svc->ReportThreadHaltEvent = NewEvent();
+	svc->ReportThread = NewThread(TfReportThreadProc, svc);
 
 	while (svc->HaltFlag == false)
 	{
@@ -4623,6 +4918,7 @@ void TfMain(TF_SERVICE *svc)
 
 					// Interpret ini
 					cfg_Enable = IniBoolValue(ini, "Enable");
+					cfg_EnableFirewall = IniBoolValue(ini, "EnableFirewall");
 					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
 					if (cfg_SettingReloadIntervalMsec == 0)
 					{
@@ -4634,23 +4930,89 @@ void TfMain(TF_SERVICE *svc)
 						cfg_WatchPollingIntervalMsec = 250;
 					}
 					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
+					cfg_EnableWatchDns = IniBoolValue(ini, "EnableWatchDns");
 					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
-					cfg_OnlyWhenLocked = IniBoolValue(ini, "OnlyWhenLocked");
+					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
+					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
 					cfg_ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
 					if (cfg_ReportMailIntervalMsec == 0)
 					{
 						cfg_ReportMailIntervalMsec = 5000;
 					}
+
+					cfg_GetNetworkInfoIntervalMsec = IniIntValue(ini, "GetNetworkInfoIntervalMsec");
+					if (cfg_GetNetworkInfoIntervalMsec == 0)
+					{
+						cfg_GetNetworkInfoIntervalMsec = 300000;
+					}
+					cfg_IgnoreDNSoverTCPSession = IniBoolValue(ini, "IgnoreDNSoverTCPSession");
+
+					TF_REPORT_SETTINGS rep = CLEAN;
+					rep.EnableTcpHostnameLookup = IniBoolValue(ini, "EnableTcpHostnameLookup");
+
+					rep.ReportMailOnlyWhenLocked = IniBoolValue(ini, "ReportMailOnlyWhenLocked");
+					rep.ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
+					StrCpy(rep.ReportMailHost, sizeof(rep.ReportMailHost), IniStrValue(ini, "ReportMailHost"));
+					rep.ReportMailPort = IniIntValue(ini, "ReportMailPort");
+					StrCpy(rep.ReportMailUsername, sizeof(rep.ReportMailUsername), IniStrValue(ini, "ReportMailUsername"));
+					StrCpy(rep.ReportMailPassword, sizeof(rep.ReportMailPassword), IniStrValue(ini, "ReportMailPassword"));
+					rep.ReportMailSslType = IniIntValue(ini, "ReportMailSslType");
+					rep.ReportMailAuthType = IniIntValue(ini, "ReportMailAuthType");
+					StrCpy(rep.ReportMailFrom, sizeof(rep.ReportMailFrom), IniStrValue(ini, "ReportMailFrom"));
+					StrCpy(rep.ReportMailTo, sizeof(rep.ReportMailTo), IniStrValue(ini, "ReportMailTo"));
+					StrCpy(rep.ReportMailSubjectPrefix, sizeof(rep.ReportMailSubjectPrefix), IniStrValue(ini, "ReportMailSubjectPrefix"));
+
+					rep.ReportSyslogOnlyWhenLocked = IniBoolValue(ini, "ReportSyslogOnlyWhenLocked");
+					StrCpy(rep.ReportSyslogHost, sizeof(rep.ReportSyslogHost), IniStrValue(ini, "ReportSyslogHost"));
+					rep.ReportSyslogPort = IniIntValue(ini, "ReportSyslogPort");
+					StrCpy(rep.ReportSyslogPrefix, sizeof(rep.ReportSyslogPrefix), IniStrValue(ini, "ReportSyslogPrefix"));
+
+					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
+
+					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
+
+					if (rep.HostnameLookupTimeoutMsec == 0) rep.HostnameLookupTimeoutMsec = 1000;
+					if (rep.ReportMailIntervalMsec == 0) rep.ReportMailIntervalMsec = 5000;
+
+					Lock(svc->CurrentReportSettingsLock);
+					{
+						Copy(&svc->CurrentReportSettings, &rep, sizeof(TF_REPORT_SETTINGS));
+					}
+					Unlock(svc->CurrentReportSettingsLock);
 				}
 				else
 				{
 					FreeBuf(new_content);
 				}
 			}
+			else
+			{
+				cfg_Enable = false;
+				cfg_SettingReloadIntervalMsec = 10000;
+				cfg_WatchPollingIntervalMsec = 250;
+				cfg_EnableWatchRdp = false;
+				cfg_EnableWatchDns = false;
+				cfg_EnableWatchProcess = false;
+				cfg_EnableWatchTcp = false;
+				cfg_ReportMailIntervalMsec = 5000;
+				cfg_WatchOnlyWhenLocked = false;
+				cfg_IncludeProcessCommandLine = false;
+				cfg_EnableFirewall = false;
+			}
 
 			last_cfg_read = now;
 			AddInterrupt(im, now + (UINT64)cfg_SettingReloadIntervalMsec);
+		}
+
+		if (last_netinfo == 0 || now >= (last_netinfo + (UINT64)cfg_GetNetworkInfoIntervalMsec))
+		{
+			last_netinfo = now;
+			AddInterrupt(im, now + (UINT64)cfg_GetNetworkInfoIntervalMsec);
+
+			// Update current DNS servers list
+			MsFreeDnsServersList(current_dns_servers_list);
+			current_dns_servers_list = MsGetCurrentDnsServersList();
 		}
 
 		if (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec))
@@ -4662,27 +5024,64 @@ void TfMain(TF_SERVICE *svc)
 			{
 				// Determine whether run the watch procedures
 				bool is_locked = false;
+				bool is_watch_active = false;
 
-				if (cfg_OnlyWhenLocked)
+				if (svc->Mode == TF_SVC_MODE_SYSTEMMODE)
 				{
-					if (svc->Mode == TF_SVC_MODE_SYSTEMMODE)
-					{
-						// Use the terminal service API
-						is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
-					}
+					// Use the terminal service API
+					is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
 				}
 				else
 				{
-					is_locked = true;
+					// Use mouse pointer movement to detect inactivity
 				}
 
-				if (is_locked)
+
+				if (cfg_WatchOnlyWhenLocked)
 				{
-					LIST *now_list = MsGetThinFwList(sid_cache, MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP);
+					is_watch_active = is_locked;
+				}
+				else
+				{
+					is_watch_active = true;
+				}
+
+				if (is_watch_active)
+				{
+					UINT flags = 0;
+
+					if (cfg_IncludeProcessCommandLine == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE;
+					}
+
+					if (cfg_EnableWatchTcp == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_TCP;
+					}
+
+					if (cfg_EnableWatchRdp == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_RDP;
+					}
+
+					if (cfg_EnableWatchDns == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_DNS_CACHE;
+					}
+
+					if (cfg_EnableWatchProcess == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_PROCESS;
+					}
+
+					flags |= MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP;
+
+					LIST *now_list = MsGetThinFwList(sid_cache, flags);
 
 					if (current_list == NULL)
 					{
-						// Initialize
+						// Initialize watcher
 						current_list = NewDiffList();
 
 						LIST *diff = UpdateDiffList(current_list, now_list);
@@ -4692,10 +5091,95 @@ void TfMain(TF_SERVICE *svc)
 					}
 					else
 					{
-						// Update
+						// Update watcher
 						LIST *diff = UpdateDiffList(current_list, now_list);
 
-						Print("%u\n", LIST_NUM(diff));
+						//Print("%u\n", LIST_NUM(diff));
+
+						// Classifying each of diff entries and insert them to the queue
+						LockQueue(svc->ReportQueue);
+						{
+							UINT i;
+							for (i = 0;i < LIST_NUM(diff);i++)
+							{
+								DIFF_ENTRY *e = (DIFF_ENTRY *)LIST_DATA(diff, i);
+
+								bool ok = false;
+
+								switch (e->Param)
+								{
+								case MS_THINFW_ENTRY_TYPE_PROCESS:
+									DoNothing();
+									MS_THINFW_ENTRY_PROCESS *proc = (MS_THINFW_ENTRY_PROCESS *)e->Data;
+
+									//if (UniInStr(proc->ExeFilenameW, L"vpnclient_x64.exe"))
+									//{
+									//	Print("(B) %u %S %u %S\n", proc->ProcessId, proc->ExeFilenameW,
+									//		proc->Rdp.SessionId, proc->Rdp.WinStationName);
+									//}
+
+									ok = true;
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_DNS:
+									if (e->IsAdded) // DNS cache: only new entries shall be reported
+									{
+										ok = true;
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_TCP:
+									if (e->IsAdded) // TCP process: only new entries shall be reported
+									{
+										MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)e->Data;
+
+										if (tcp->Tcp.Status != TCP_STATE_LISTEN &&
+											(IsLocalHostIP(&tcp->Tcp.RemoteIP) || IsLocalHostIP(&tcp->Tcp.LocalIP) ||
+											IsIPLocalHostOrMySelf(&tcp->Tcp.RemoteIP)))
+										{
+											// localhost: Do not report
+										}
+										else if (cfg_IgnoreDNSoverTCPSession && tcp->Tcp.RemotePort == NAT_DNS_PROXY_PORT && MsIsIpInDnsServerList(current_dns_servers_list, &tcp->Tcp.RemoteIP))
+										{
+											// DNS over TCP: Do not report
+										}
+										else
+										{
+											ok = true;
+										}
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_RDP:
+									DoNothing();
+									MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)e->Data;
+
+									if (IsLocalHostIP(&rdp->ClientIp) || IsIPLocalHostOrMySelf(&rdp->ClientIp))
+									{
+										// localhost: Do not report
+									}
+									else
+									{
+										ok = true;
+									}
+									break;
+								}
+
+								if (ok)
+								{
+									DIFF_ENTRY *e2 = CloneDiffEntry(e);
+
+									e2->Flags = 0;
+									if (is_locked)
+									{
+										e2->Flags |= MS_THINFW_ENTRY_FLAG_LOCKED;
+									}
+
+									InsertQueue(svc->ReportQueue, e2);
+								}
+							}
+						}
+						UnlockQueue(svc->ReportQueue);
 
 						FreeDiffList(diff);
 					}
@@ -4706,7 +5190,7 @@ void TfMain(TF_SERVICE *svc)
 				{
 					if (current_list != NULL)
 					{
-						// Free
+						// Free watcher
 						FreeDiffList(current_list);
 						current_list = NULL;
 					}
@@ -4726,10 +5210,29 @@ void TfMain(TF_SERVICE *svc)
 
 	if (current_list != NULL)
 	{
-		// Free
+		// Free watcher
 		FreeDiffList(current_list);
 		current_list = NULL;
 	}
+
+	// Free report thread
+	svc->ReportThreadHaltFlag = true;
+	Set(svc->ReportThreadHaltEvent);
+	WaitThread(svc->ReportThread, INFINITE);
+	ReleaseThread(svc->ReportThread);
+	ReleaseEvent(svc->ReportThreadHaltEvent);
+
+	while (true)
+	{
+		DIFF_ENTRY *e = GetNext(svc->ReportQueue);
+		if (e == NULL)
+		{
+			break;
+		}
+
+		Free(e);
+	}
+	ReleaseQueue(svc->ReportQueue);
 
 	FreeInterruptManager(im);
 
@@ -4738,6 +5241,8 @@ void TfMain(TF_SERVICE *svc)
 	FreeIni(ini);
 
 	MsFreeSidToUsernameCache(sid_cache);
+
+	MsFreeDnsServersList(current_dns_servers_list);
 }
 
 void TfThreadProc(THREAD *thread, void *param)
@@ -4767,6 +5272,8 @@ void TfStopService(TF_SERVICE *svc)
 
 	ReleaseEvent(svc->HaltEvent);
 
+	DeleteLock(svc->CurrentReportSettingsLock);
+
 	Free(svc);
 }
 
@@ -4778,6 +5285,8 @@ TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename)
 	}
 
 	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
+
+	svc->CurrentReportSettingsLock = NewLock();
 
 	svc->Mode = mode;
 

@@ -117,8 +117,13 @@ void WtsSessionMain(TSESSION *s)
 	}
 
 #ifdef	OS_WIN32
-	MsSetThreadPriorityRealtime();
+	if ((s->wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	{
+		MsSetThreadPriorityRealtime();
+	}
 #endif  // OS_WIN32
+
+	s->wt->Server_IsInWtsSessionMainLoop = true;
 
 	SetSockEvent(s->SockEvent);
 
@@ -191,6 +196,8 @@ void WtsSessionMain(TSESSION *s)
 			break;
 		}
 	}
+
+	s->wt->Server_IsInWtsSessionMainLoop = false;
 
 	WtSessionLog(s, "WtsSessionMain: Exit main loop");
 
@@ -750,7 +757,11 @@ void WtsConnectInner(TSESSION *session, SOCK *s, char *sni, bool *should_retry_p
 
 	session->WasConnected = true;
 
+	if (wt->Wide != NULL) wt->Wide->Server_NumEstablishedToGate++;
+
 	WtsSessionMain(session);
+
+	if (wt->Wide != NULL) wt->Wide->Server_NumDisconnectedFromGate++;
 }
 
 // シグネチャをアップロードする
