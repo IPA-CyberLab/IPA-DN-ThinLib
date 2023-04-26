@@ -1515,6 +1515,29 @@ BUF *CfgFolderToBufEx(FOLDER *f, bool textmode, bool no_banner)
 	}
 }
 
+// Clone CFG
+FOLDER *CfgClone(FOLDER *src)
+{
+	if (src == NULL)
+	{
+		return NULL;
+	}
+
+	BUF *buf = CfgFolderToBufBin(src);
+	if (buf == NULL)
+	{
+		return NULL;
+	}
+
+	SeekBufToBegin(buf);
+
+	FOLDER *ret = CfgBufBinToFolder(buf);
+
+	FreeBuf(buf);
+
+	return ret;
+}
+
 // Escape restoration of the string
 char *CfgUnescape(char *str)
 {

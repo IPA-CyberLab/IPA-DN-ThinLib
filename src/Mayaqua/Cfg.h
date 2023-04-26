@@ -232,6 +232,8 @@ bool FileCopyExW(wchar_t *src, wchar_t *dst, bool read_lock);
 void BackupCfgWEx(CFG_RW *rw, FOLDER *f, wchar_t *original, UINT revision_number);
 void CfgDeleteItem(ITEM* t);
 
+FOLDER *CfgClone(FOLDER *src);
+
 #if	(!defined(CFG_C)) || (!defined(OS_UNIX))
 bool CfgGetIp(FOLDER *f, char *name, struct IP *ip);
 ITEM *CfgAddIp(FOLDER *f, char *name, struct IP *ip);
