@@ -13069,17 +13069,17 @@ UINT RecvFrom6(SOCK *sock, IP *src_addr, UINT *src_port, void *data, UINT size)
 // Lock the OpenSSL
 void LockOpenSSL()
 {
-//#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	Lock(openssl_lock);
-//#endif
+#endif
 }
 
 // Unlock the OpenSSL
 void UnlockOpenSSL()
 {
-//#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	Unlock(openssl_lock);
-//#endif
+#endif
 }
 
 // UDP transmission
@@ -14432,7 +14432,7 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 		{
 			SSL_CTX_SHARED* s = LIST_DATA(o, i);
 
-			if (s->Expires != 0 && now > s->Expires && false)
+			if (s->Expires != 0 && now > s->Expires)
 			{
 				if (delete_list == NULL)
 				{
@@ -14474,7 +14474,6 @@ SSL_CTX_SHARED* GetOrCreateSslCtxShared(LIST* o, SSL_CTX_SHARED_SETTINGS* settin
 
 			if (ret != NULL)
 			{
-				WHERE;
 				Add(o, ret);
 			}
 		}
