@@ -1930,8 +1930,8 @@ bool WideServerGetCertAndKey(WIDE *w, X **cert, K **key, UCHAR **alternative_hos
 
 		if (w->HasAlternativeServerKeyAndSecret)
 		{
-			*alternative_host_key = w->AlternativeServerHostKey;
-			*alternative_host_secret = w->AlternativeServerHostSecret;
+			if (alternative_host_key != NULL) *alternative_host_key = w->AlternativeServerHostKey;
+			if (alternative_host_secret != NULL) *alternative_host_secret = w->AlternativeServerHostSecret;
 			ret = true;
 		}
 	}
@@ -2325,7 +2325,7 @@ void WideLogMain(WIDE* w, char *format, va_list args)
 		InsertUnicodeRecord(w->WideLog, buf);
 	}
 
-	if ((w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	if (w == NULL || (w->Flags & WIDE_FLAG_NO_LOG) == 0)
 	{
 		Debug("WIDE_LOG: %S\n", buf);
 	}
