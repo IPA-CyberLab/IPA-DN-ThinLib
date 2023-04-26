@@ -1529,7 +1529,7 @@ FOLDER *CfgClone(FOLDER *src)
 		return NULL;
 	}
 
-	SeekBufToBegin(buf);
+	SeekBuf(buf, 8 + SHA1_SIZE, 0);
 
 	FOLDER *ret = CfgBufBinToFolder(buf);
 

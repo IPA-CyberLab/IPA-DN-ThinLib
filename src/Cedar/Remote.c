@@ -490,6 +490,8 @@ void StatManNormalizeAndPoll(STATMAN* m)
 		return;
 	}
 
+	FOLDER *cloned_root = NULL;
+
 	Lock(m->Lock);
 	{
 		root = m->Root;
@@ -549,9 +551,16 @@ void StatManNormalizeAndPoll(STATMAN* m)
 			}
 		}
 
-		SaveCfgRwEx2(m->CfgRw, root, (UINT)(SystemTime64() / (24U * 60 * 60 * 1000)), true);
+		cloned_root = CfgClone(root);
 	}
 	Unlock(m->Lock);
+
+	if (cloned_root != NULL)
+	{
+		SaveCfgRwEx2(m->CfgRw, cloned_root, (UINT)(SystemTime64() / (24U * 60 * 60 * 1000)), true);
+
+		CfgDeleteFolder(cloned_root);
+	}
 }
 
 // Stat manager の開始
