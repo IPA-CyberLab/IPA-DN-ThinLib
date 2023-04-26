@@ -15332,7 +15332,7 @@ UINT SecureSend(SOCK *sock, void *data, UINT size)
 	if (sock->AsyncMode)
 	{
 		// Confirmation of the error value
-		if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE || e == SSL_ERROR_SSL)
+		if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE)
 		{
 			sock->WriteBlocked = true;
 			return SOCK_LATER;
