@@ -309,7 +309,6 @@ struct WT
 
 	char CurrentGateIp[256];				// 現在の接続先 Gate の IP アドレス
 
-	COUNTER *SslCounter;
 	bool Server_IsInWtsSessionMainLoop;			// Server がセッションのメインループを回っているか
 };
 

@@ -1449,8 +1449,6 @@ WT *NewWt(X *master_cert, UINT wide_flags)
 
 	wt->Flags = wide_flags;
 
-	wt->SslCounter = NewCounter();
-
 	wt->ErrorControllersList = NewStrList();
 	wt->ErrorControllersListLock = NewLock();
 

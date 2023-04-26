@@ -4035,8 +4035,6 @@ void WtgAccept(WT *wt, SOCK *s)
 		return;
 	}
 
-	UINT a = Inc(wt->SslCounter);
-
 	// Print("counter = %u\n", a);
 
 	char log_prefix[MAX_PATH] = CLEAN;
@@ -4113,8 +4111,6 @@ void WtgAccept(WT *wt, SOCK *s)
 
 	if (StartSSLEx2(s, wt->GateCert, wt->GateKey, true, 0, NULL, ssl_additional_certs_array, num_certs_array_items, NULL, false) == false)
 	{
-		Dec(wt->SslCounter);
-
 		WtLogEx(wt, log_prefix, "StartSSLEx2() error. Connection will be disconnected.");
 		Debug("StartSSL Failed.\n");
 
@@ -4125,8 +4121,6 @@ void WtgAccept(WT *wt, SOCK *s)
 
 		return;
 	}
-
-	Dec(wt->SslCounter);
 
 	WtLogEx(wt, log_prefix, "SSL connection is established. SNI hostname: '%s', Cipher: '%s'.",
 		s->SniHostname, s->CipherName);
