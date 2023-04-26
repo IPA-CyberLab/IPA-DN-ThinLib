@@ -4037,13 +4037,6 @@ void WtgAccept(WT *wt, SOCK *s)
 
 	UINT a = Inc(wt->SslCounter);
 
-	if (a >= 100 && false)
-	{
-		Dec(wt->SslCounter);
-
-		return;
-	}
-
 	// Print("counter = %u\n", a);
 
 	char log_prefix[MAX_PATH] = CLEAN;
@@ -5035,7 +5028,7 @@ bool WtgDownloadSignature(WT* wt, SOCK* s, bool* check_ssl_ok, char* gate_secret
 
 			continue;
 		}
-		else if (wt->ZttpGw != NULL && StartWith(h->Target, "/tunnel_test/")) // Test
+		else if (wt->ZttpGw != NULL && StartWith(h->Target, "/tunnel_test/")) // ZTTP_Test
 		{
 			// Tunnel test mode
 			bool ws_ok = ZttpWebSocketGetHandler(wt, s, h, h->Target);

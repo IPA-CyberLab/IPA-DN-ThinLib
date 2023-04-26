@@ -7437,14 +7437,6 @@ LIST *MsGetProcessListNt(UINT flags)
 		HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
 			false, id);
 
-		if (id == 2308)
-		{
-			if (h == NULL)
-			{
-				Debug("prochandle: %u  %u\n", (UINT)(UINT64)h, GetLastError());
-			}
-		}
-
 		if (h != NULL)
 		{
 			HINSTANCE hInst = NULL;
