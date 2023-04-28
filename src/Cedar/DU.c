@@ -4798,6 +4798,8 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 				local_ip, tcp->Tcp.LocalPort);
 		}
 
+		ClearStr(ep_hostname, 0);
+
 		if (tcp->HasProcessInfo)
 		{
 			MS_THINFW_ENTRY_PROCESS *proc = &tcp->Process;
