@@ -80,6 +80,8 @@
 #define	TF_SVC_MODE_SYSTEMMODE		0
 #define	TF_SVC_MODE_USERNAME		1
 
+#define	TF_LOG_DIR_NAME				"@thinfirewall_log"
+
 struct TF_REPORT_SETTINGS
 {
 	bool EnableTcpHostnameLookup;
@@ -117,10 +119,14 @@ struct TF_SERVICE
 	LOCK *CurrentReportSettingsLock;
 	TF_REPORT_SETTINGS CurrentReportSettings;
 
+	UCHAR MacAddress[6];
+
 	QUEUE *ReportQueue;
 	THREAD *ReportThread;
 	EVENT *ReportThreadHaltEvent;
 	bool ReportThreadHaltFlag;
+
+	LOG *Log;
 };
 
 void DUExec();

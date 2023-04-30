@@ -103,6 +103,7 @@ static char *delete_targets[] =
 	"packet_log_archive",
 	"azure_log",
 	"tunnel_log",
+	"thinfirewall_log",
 };
 
 static UINT eraser_check_interval = DISK_FREE_CHECK_INTERVAL_DEFAULT;
@@ -134,7 +135,7 @@ void SendSysLog(SLOG *g, wchar_t *str)
 		{
 			IP ip;
 
-			if (GetIP(&ip, g->HostName))
+			if (IsFilledStr(g->HostName) && GetIP(&ip, g->HostName))
 			{
 				g->NextPollIp = Tick64() + SYSLOG_POLL_IP_INTERVAL;
 				Copy(&g->DestIp, &ip, sizeof(IP));
@@ -188,8 +189,17 @@ void SetSysLog(SLOG *g, char *hostname, UINT port)
 		hostname = "";
 	}
 
+	if (g->DestPort == port && StrCmpi(g->HostName, hostname) == 0)
+	{
+		// No change
+		return;
+	}
+
 	Zero(&ip, sizeof(IP));
-	GetIP(&ip, hostname);
+	if (IsFilledStr(hostname))
+	{
+		GetIP(&ip, hostname);
+	}
 
 	Lock(g->lock);
 	{

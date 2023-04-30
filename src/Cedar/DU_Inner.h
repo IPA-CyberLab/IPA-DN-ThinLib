@@ -285,7 +285,15 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 
 void TfMain(TF_SERVICE *svc);
 void TfReportThreadProc(THREAD *thread, void *param);
-void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e);
+void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e);
+
+void TfThreadProc(THREAD *thread, void *param);
+void TfLog(TF_SERVICE *w, char *format, ...);
+void TfLogEx(TF_SERVICE *w, char *prefix, char *format, ...);
+void TfLogMain(TF_SERVICE *w, char *format, va_list args);
+void TfStopService(TF_SERVICE *svc);
+
+bool TfGetCurrentMacAddress(UCHAR *mac);
 
 
 

@@ -90,6 +90,7 @@
 #define	_WIN32_WINNT		0x0502
 #define	WINVER				0x0502
 #include <winsock2.h>
+#include <Iphlpapi.h>
 #include <windows.h>
 #include <wincrypt.h>
 #include <wininet.h>
@@ -4570,6 +4571,7 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 
 void TfReportThreadProc(THREAD *thread, void *param)
 {
+	wchar_t computer_name[128] = CLEAN;
 	TF_SERVICE *svc;
 	if (thread == NULL || param == NULL)
 	{
@@ -4577,6 +4579,10 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	}
 
 	svc = (TF_SERVICE *)param;
+
+	SLOG *syslog = NULL;
+
+	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), false);
 
 	while (svc->ReportThreadHaltFlag == false)
 	{
@@ -4638,11 +4644,53 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				}
 			}
 
+			char category[64] = CLEAN;
 			wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
-			TfGetStr(tmp, sizeof(tmp), e);
+			wchar_t tmp2[THINFW_MAX_LINE_SIZE] = CLEAN;
+			wchar_t prefix_tmp[MAX_PATH] = CLEAN;
+			TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
 			if (UniIsFilledUniStr(tmp))
 			{
-				UniPrint(L"%s\n", tmp);
+				char mac_str[48] = CLEAN;
+				wchar_t mac_str_w[48] = CLEAN;
+				char date_str[64] = CLEAN;
+				char time_str[64] = CLEAN;
+
+				MacToStr(mac_str, sizeof(mac_str), svc->MacAddress);
+				StrToUni(mac_str_w, sizeof(mac_str_w), mac_str);
+
+				UINT64 time	= SystemToLocal64(TickToTime(e->Tick));
+				GetDateStr64(date_str, sizeof(date_str), time);
+				GetTimeStrMilli64(time_str, sizeof(time_str), time);
+
+				if (st.ReportSaveToDir)
+				{
+					TfLogEx(svc, category, "%s", tmp);
+				}
+
+				if (st.ReportSyslogOnlyWhenLocked == false || (e->Flags & MS_THINFW_ENTRY_FLAG_LOCKED))
+				{
+					if (IsFilledStr(st.ReportSyslogHost) && st.ReportSyslogPort != 0)
+					{
+						if (syslog == NULL)
+						{
+							syslog = NewSysLog(NULL, 0);
+						}
+
+						SetSysLog(syslog, st.ReportSyslogHost, st.ReportSyslogPort);
+
+						StrToUni(prefix_tmp, sizeof(prefix_tmp), st.ReportSyslogPrefix);
+						UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+							L"$hostname", computer_name, false);
+						UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+							L"$macaddress", mac_str_w, false);
+
+						UniFormat(tmp2, sizeof(tmp2), L"%S %S %s [%S] %s",
+							date_str, time_str, prefix_tmp, category, tmp);
+
+						SendSysLog(syslog, tmp2);
+					}
+				}
 			}
 
 			Free(e);
@@ -4655,12 +4703,236 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 		Wait(svc->ReportThreadHaltEvent, 256);
 	}
+
+	if (syslog != NULL)
+	{
+		FreeSysLog(syslog);
+	}
 }
 
-void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
+bool TfGetCurrentMacAddress(UCHAR *mac)
+{
+	bool ret = false;
+	Zero(mac, 6);
+	if (mac == NULL)
+	{
+		return false;
+	}
+
+	IP target = CLEAN;
+	SetIP(&target, 8, 8, 8, 8);
+
+	MS_ADAPTER_LIST *nic_list = MsCreateAdapterList();
+
+	UINT i;
+
+	if (nic_list != NULL)
+	{
+		ROUTE_ENTRY *rt = GetBestRouteEntry(&target);
+		if (rt != NULL)
+		{
+			// Get MAC address from the routing table
+			for (i = 0;i < nic_list->Num;i++)
+			{
+				MS_ADAPTER *a = nic_list->Adapters[i];
+
+				switch (a->Status)
+				{
+				case MIB_IF_OPER_STATUS_NON_OPERATIONAL:
+				case MIB_IF_OPER_STATUS_UNREACHABLE:
+				case MIB_IF_OPER_STATUS_DISCONNECTED:
+					break;
+
+				default:
+					DoNothing();
+					UINT j;
+					for (j = 0;j < a->NumGateway;j++)
+					{
+						if (CmpIpAddr(&a->Gateways[j], &rt->GatewayIP) == 0)
+						{
+							if (a->AddressSize == 6 && IsZero(a->Address, 6) == false)
+							{
+								Copy(mac, a->Address, 6);
+
+								ret = true;
+							}
+							break;
+						}
+					}
+					break;
+				}
+
+				if (ret)
+				{
+					break;
+				}
+			}
+
+			Free(rt);
+		}
+
+		// Get MAC address (inchiki #1)
+		if (ret == false)
+		{
+			for (i = 0;i < nic_list->Num;i++)
+			{
+				MS_ADAPTER *a = nic_list->Adapters[i];
+
+				switch (a->Status)
+				{
+				case MIB_IF_OPER_STATUS_NON_OPERATIONAL:
+				case MIB_IF_OPER_STATUS_UNREACHABLE:
+				case MIB_IF_OPER_STATUS_DISCONNECTED:
+				case MIB_IF_OPER_STATUS_CONNECTING:
+					break;
+
+				default:
+					DoNothing();
+					UINT j;
+					for (j = 0;j < a->NumGateway;j++)
+					{
+						if (IsZeroIp(&a->IpAddresses[0]) == false &&
+							IsZeroIP(&a->Gateways[0]) == false &&
+							(a->RecvBytes != 0 || a->SendBytes != 0)
+							)
+						{
+							if (a->AddressSize == 6 && IsZero(a->Address, 6) == false)
+							{
+								Copy(mac, a->Address, 6);
+
+								ret = true;
+							}
+							break;
+						}
+					}
+					break;
+				}
+
+				if (ret)
+				{
+					break;
+				}
+			}
+		}
+
+		// Get MAC address (inchiki #2)
+		if (ret == false)
+		{
+			for (i = 0;i < nic_list->Num;i++)
+			{
+				MS_ADAPTER *a = nic_list->Adapters[i];
+
+				switch (a->Status)
+				{
+				case MIB_IF_OPER_STATUS_NON_OPERATIONAL:
+				case MIB_IF_OPER_STATUS_UNREACHABLE:
+				case MIB_IF_OPER_STATUS_DISCONNECTED:
+				case MIB_IF_OPER_STATUS_CONNECTING:
+					break;
+
+				default:
+					DoNothing();
+					UINT j;
+					for (j = 0;j < a->NumGateway;j++)
+					{
+						if (IsZeroIp(&a->IpAddresses[0]) == false &&
+							(a->RecvBytes != 0 || a->SendBytes != 0)
+							)
+						{
+							if (a->AddressSize == 6 && IsZero(a->Address, 6) == false)
+							{
+								Copy(mac, a->Address, 6);
+
+								ret = true;
+							}
+							break;
+						}
+					}
+					break;
+				}
+
+				if (ret)
+				{
+					break;
+				}
+			}
+		}
+
+		// Get MAC address (inchiki #3)
+		if (ret == false)
+		{
+			for (i = 0;i < nic_list->Num;i++)
+			{
+				MS_ADAPTER *a = nic_list->Adapters[i];
+
+				switch (a->Status)
+				{
+				case MIB_IF_OPER_STATUS_NON_OPERATIONAL:
+				case MIB_IF_OPER_STATUS_UNREACHABLE:
+				case MIB_IF_OPER_STATUS_DISCONNECTED:
+				case MIB_IF_OPER_STATUS_CONNECTING:
+					break;
+
+				default:
+					DoNothing();
+					UINT j;
+					for (j = 0;j < a->NumGateway;j++)
+					{
+						if (a->AddressSize == 6 && IsZero(a->Address, 6) == false)
+						{
+							Copy(mac, a->Address, 6);
+
+							ret = true;
+						}
+						break;
+					}
+					break;
+				}
+
+				if (ret)
+				{
+					break;
+				}
+			}
+		}
+
+		// Get MAC address (inchiki #4)
+		if (ret == false)
+		{
+			for (i = 0;i < nic_list->Num;i++)
+			{
+				MS_ADAPTER *a = nic_list->Adapters[i];
+
+				UINT j;
+				for (j = 0;j < a->NumGateway;j++)
+				{
+					if (a->AddressSize == 6 && IsZero(a->Address, 6) == false)
+					{
+						Copy(mac, a->Address, 6);
+
+						ret = true;
+					}
+					break;
+				}
+
+				if (ret)
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	MsFreeAdapterList(nic_list);
+
+	return ret;
+}
+
+void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 {
 	ClearUniStr(dst, 0);
-	if (dst == NULL || e == NULL)
+	ClearStr(category, category_size);
+	if (dst == NULL || e == NULL || category == NULL)
 	{
 		return;
 	}
@@ -4674,9 +4946,9 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 	switch (e->Param)
 	{
 	case MS_THINFW_ENTRY_TYPE_DNS:
-		DoNothing();
+		StrCpy(category, category_size, "DNS");
 		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
-		UniFormat(dst, dst_size, L"[DNS] (Hostname: %S, IPv%u_Address: %r)",
+		UniFormat(dst, dst_size, L"(Hostname: %S, IPv%u_Address: %r)",
 			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
 		break;
 
@@ -4684,11 +4956,9 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 		DoNothing();
 		MS_THINFW_ENTRY_PROCESS *proc = (MS_THINFW_ENTRY_PROCESS *)&e->Data;
 
-		//Print("%u %S\n", e->IsAdded, proc->ExeFilenameW);
-
 		if (UniIsFilledStr(proc->CommandLineW))
 		{
-			UniFormat(tmpw, sizeof(tmpw), L", Args: %s", proc->CommandLineW);
+			UniFormat(tmpw, sizeof(tmpw), L", FullCommandLine: %s", proc->CommandLineW);
 		}
 
 		if (UniIsFilledStr(proc->Rdp.WinStationName))
@@ -4716,8 +4986,9 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 				rdp_client_info);
 		}
 
-		UniFormat(dst, dst_size, L"[PROCESS_%S] (PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
-			e->IsAdded ? "START" : "STOP",
+		Format(category, category_size, "PROCESS_%s", e->IsAdded ? "START" : "STOP");
+
+		UniFormat(dst, dst_size, L"(PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
 			proc->ProcessId,
 			proc->Is64BitProcess ? 64 : 32,
 			proc->ExeFilenameW,
@@ -4730,7 +5001,7 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 		break;
 
 	case MS_THINFW_ENTRY_TYPE_RDP:
-		DoNothing();
+		StrCpy(category, category_size,  e->IsAdded ? "RDP_START" : "RDP_STOP");
 		MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
 
 		if (IsFilledStr(rdp->ClientHostname_Resolved))
@@ -4744,10 +5015,10 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 		}
 		else
 		{
-			UniStrCpy(tmpw, sizeof(tmpw), L"<try_login>");
+			UniStrCpy(tmpw, sizeof(tmpw), L"<login_screen>");
 		}
 
-		UniFormat(dst, dst_size, L"[RDP] (RdpSessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
+		UniFormat(dst, dst_size, L"(RdpSessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
 			rdp->SessionId, rdp->WinStationName, rdp->SessionState,
 			ep_hostname, &rdp->ClientIp, &rdp->ClientLocalIp, rdp->ClientLocalBuild, tmpw);
 		break;
@@ -4841,10 +5112,8 @@ void TfGetStr(wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
 				rdp_session_info);
 		}
 
-		StrToUni(tmpw, sizeof(tmpw), tcp->Type);
-		UniStrCat(dst, dst_size, L"[");
-		UniStrCat(dst, dst_size, tmpw);
-		UniStrCat(dst, dst_size, L"] ");
+		StrCpy(category, category_size, tcp->Type);
+
 		UniStrCat(dst, dst_size, ep_info);
 		UniStrCat(dst, dst_size, proc_info);
 
@@ -4884,6 +5153,12 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableFirewall = false;
 	UINT cfg_GetNetworkInfoIntervalMsec = 300000;
 	bool cfg_IgnoreDNSoverTCPSession = false;
+
+	UCHAR lastState_mac[6] = CLEAN;
+	bool lastState_Enable = false;
+
+	UINT lastState_locked = INFINITE;
+	UINT lastState_watchActive = INFINITE;
 
 	LIST *current_list = NULL;
 
@@ -4964,11 +5239,13 @@ void TfMain(TF_SERVICE *svc)
 					StrCpy(rep.ReportMailFrom, sizeof(rep.ReportMailFrom), IniStrValue(ini, "ReportMailFrom"));
 					StrCpy(rep.ReportMailTo, sizeof(rep.ReportMailTo), IniStrValue(ini, "ReportMailTo"));
 					StrCpy(rep.ReportMailSubjectPrefix, sizeof(rep.ReportMailSubjectPrefix), IniStrValue(ini, "ReportMailSubjectPrefix"));
+					Trim(rep.ReportMailSubjectPrefix);
 
 					rep.ReportSyslogOnlyWhenLocked = IniBoolValue(ini, "ReportSyslogOnlyWhenLocked");
 					StrCpy(rep.ReportSyslogHost, sizeof(rep.ReportSyslogHost), IniStrValue(ini, "ReportSyslogHost"));
 					rep.ReportSyslogPort = IniIntValue(ini, "ReportSyslogPort");
 					StrCpy(rep.ReportSyslogPrefix, sizeof(rep.ReportSyslogPrefix), IniStrValue(ini, "ReportSyslogPrefix"));
+					Trim(rep.ReportSyslogPrefix);
 
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
 
@@ -5001,20 +5278,91 @@ void TfMain(TF_SERVICE *svc)
 				cfg_WatchOnlyWhenLocked = false;
 				cfg_IncludeProcessCommandLine = false;
 				cfg_EnableFirewall = false;
+				lastState_locked = INFINITE;
+				lastState_watchActive = INFINITE;
 			}
 
 			last_cfg_read = now;
 			AddInterrupt(im, now + (UINT64)cfg_SettingReloadIntervalMsec);
 		}
 
-		if (last_netinfo == 0 || now >= (last_netinfo + (UINT64)cfg_GetNetworkInfoIntervalMsec))
+		if (lastState_Enable != cfg_Enable)
 		{
-			last_netinfo = now;
-			AddInterrupt(im, now + (UINT64)cfg_GetNetworkInfoIntervalMsec);
+			lastState_Enable = cfg_Enable;
 
-			// Update current DNS servers list
-			MsFreeDnsServersList(current_dns_servers_list);
-			current_dns_servers_list = MsGetCurrentDnsServersList();
+			if (cfg_Enable)
+			{
+				char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
+				TfLog(svc, "-------------------- Start Thin Firewall System --------------------");
+				TfLog(svc, "CEDAR_VER: %u", CEDAR_VER);
+				TfLog(svc, "CEDAR_BUILD: %u", CEDAR_BUILD);
+				TfLog(svc, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
+				TfLog(svc, "THINLIB_COMMIT_ID: %S", THINLIB_COMMIT_ID);
+				TfLog(svc, "THINLIB_VER_LABEL: %S", THINLIB_VER_LABEL);
+				TfLog(svc, "SSL_LIB_VER: %S", ssl_lib_ver);
+
+				OS_INFO *os = GetOsInfo();
+				if (os != NULL)
+				{
+					TfLog(svc, "OsType: %u", os->OsType);
+					TfLog(svc, "OsServicePack: %u", os->OsServicePack);
+					TfLog(svc, "OsSystemName: %S", os->OsSystemName);
+					TfLog(svc, "OsProductName: %S", os->OsProductName);
+					TfLog(svc, "OsVendorName: %S", os->OsVendorName);
+					TfLog(svc, "OsVersion: %S", os->OsVersion);
+					TfLog(svc, "KernelName: %S", os->KernelName);
+					TfLog(svc, "KernelVersion: %S", os->KernelVersion);
+				}
+
+				MEMINFO mem = CLEAN;
+				GetMemInfo(&mem);
+
+				TfLog(svc, "Memory - TotalMemory: %I64u", mem.TotalMemory);
+				TfLog(svc, "Memory - UsedMemory: %I64u", mem.UsedMemory);
+				TfLog(svc, "Memory - FreeMemory: %I64u", mem.FreeMemory);
+				TfLog(svc, "Memory - TotalPhys: %I64u", mem.TotalPhys);
+				TfLog(svc, "Memory - UsedPhys: %I64u", mem.UsedPhys);
+				TfLog(svc, "Memory - FreePhys: %I64u", mem.FreePhys);
+			}
+			else
+			{
+				TfLog(svc, "-------------------- Stop Thin Firewall System --------------------");
+			}
+		}
+
+		if (cfg_Enable)
+		{
+			if (last_netinfo == 0 || now >= (last_netinfo + (UINT64)cfg_GetNetworkInfoIntervalMsec))
+			{
+				last_netinfo = now;
+				AddInterrupt(im, now + (UINT64)cfg_GetNetworkInfoIntervalMsec);
+
+				// Update current DNS servers list
+				MsFreeDnsServersList(current_dns_servers_list);
+				current_dns_servers_list = MsGetCurrentDnsServersList();
+
+				// Get current MAC address
+				UCHAR mac[6] = CLEAN;
+
+				if (TfGetCurrentMacAddress(mac))
+				{
+					if (Cmp(mac, lastState_mac, 6) != 0)
+					{
+						Copy(lastState_mac, mac, 6);
+
+						char mac_str[24] = CLEAN;
+						MacToStr(mac_str, sizeof(mac_str), mac);
+
+						TfLog(svc, "This computer's MAC address: %S", mac_str);
+
+						Copy(svc->MacAddress, mac, 6);
+					}
+				}
+			}
 		}
 
 		if (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec))
@@ -5036,8 +5384,16 @@ void TfMain(TF_SERVICE *svc)
 				else
 				{
 					// Use mouse pointer movement to detect inactivity
+					is_locked = !MsWtsOneOrMoreUnlockedSessionExists(); // TODO
 				}
 
+				if (lastState_locked != is_locked)
+				{
+					lastState_locked = is_locked;
+
+					TfLog(svc, "Desktop lock state is changed. New state is '%S'.",
+						is_locked ? "Locked" : "Unlocked");
+				}
 
 				if (cfg_WatchOnlyWhenLocked)
 				{
@@ -5046,6 +5402,14 @@ void TfMain(TF_SERVICE *svc)
 				else
 				{
 					is_watch_active = true;
+				}
+
+				if (lastState_watchActive != is_watch_active)
+				{
+					lastState_watchActive = is_watch_active;
+
+					TfLog(svc, "Watcher active state is changed. New state is '%S'.",
+						is_watch_active ? "Active" : "Inactive");
 				}
 
 				if (is_watch_active)
@@ -5245,6 +5609,11 @@ void TfMain(TF_SERVICE *svc)
 	MsFreeSidToUsernameCache(sid_cache);
 
 	MsFreeDnsServersList(current_dns_servers_list);
+
+	if (cfg_Enable)
+	{
+		TfLog(svc, "-------------------- Stop Thin Firewall System --------------------");
+	}
 }
 
 void TfThreadProc(THREAD *thread, void *param)
@@ -5257,6 +5626,68 @@ void TfThreadProc(THREAD *thread, void *param)
 	TF_SERVICE *svc = param;
 
 	TfMain(svc);
+}
+
+void TfLog(TF_SERVICE *svc, char *format, ...)
+{
+	va_list args;
+	char format2[MAX_SIZE * 2] = CLEAN;
+	// 引数チェック
+	if (format == NULL || svc == NULL)
+	{
+		return;
+	}
+
+	Format(format2, sizeof(format2), "[%s] %s", "Engine", format);
+
+	va_start(args, format);
+
+	TfLogMain(svc, format2, args);
+
+	va_end(args);
+}
+
+void TfLogEx(TF_SERVICE *svc, char *prefix, char *format, ...)
+{
+	va_list args;
+	char format2[MAX_SIZE * 2] = CLEAN;
+	// 引数チェック
+	if (format == NULL || svc == NULL)
+	{
+		return;
+	}
+
+	Format(format2, sizeof(format2), "[%s] %s", prefix, format);
+
+	va_start(args, format);
+
+	TfLogMain(svc, format2, args);
+
+	va_end(args);
+}
+
+void TfLogMain(TF_SERVICE *svc, char *format, va_list args)
+{
+	UINT buf_tmp_size = 4096 * sizeof(wchar_t);
+	if (format == NULL)
+	{
+		return;
+	}
+
+	wchar_t *buf3 = ZeroMalloc(buf_tmp_size);
+	wchar_t *format_clone = CopyStrToUni(format);
+
+	UniFormatArgs(buf3, buf_tmp_size, format_clone, args);
+
+	if (svc != NULL && svc->Log != NULL)
+	{
+		InsertUnicodeRecord(svc->Log, buf3);
+	}
+
+	Debug("TF_LOG: %S\n", buf3);
+
+	Free(buf3);
+	Free(format_clone);
 }
 
 void TfStopService(TF_SERVICE *svc)
@@ -5276,6 +5707,8 @@ void TfStopService(TF_SERVICE *svc)
 
 	DeleteLock(svc->CurrentReportSettingsLock);
 
+	FreeLog(svc->Log);
+
 	Free(svc);
 }
 
@@ -5287,6 +5720,9 @@ TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename)
 	}
 
 	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
+
+	svc->Log = NewLogEx(TF_LOG_DIR_NAME, "thinfw", LOG_SWITCH_DAY, false);
+	svc->Log->Flush = true;
 
 	svc->CurrentReportSettingsLock = NewLock();
 
