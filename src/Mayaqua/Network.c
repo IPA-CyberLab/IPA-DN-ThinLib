@@ -181,6 +181,7 @@ static UCHAR machine_ip_process_hash[SHA1_SIZE];
 static LOCK *machine_ip_process_hash_lock = NULL;
 static LOCK *current_global_ip_lock = NULL;
 static LOCK *current_fqdn_lock = NULL;
+static LOCK *last_local_ip_lock = NULL;
 static bool current_global_ip_set = false;
 static IP current_glocal_ipv4 = {0};
 static IP current_glocal_ipv6 = {0};
@@ -600,6 +601,76 @@ LABEL_CLEANUP:
 		Disconnect(s);
 		ReleaseSock(s);
 	}
+	return ret;
+}
+
+char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 time, char *body_utf8)
+{
+	if (StrLen(body_utf8) >= 0x20000000)
+	{
+		return NULL;
+	}
+
+	char *template = "MIME-Version: 1.0\n"
+		"Date: __TIMESTAMP__\n"
+		"Subject: =?UTF-8?B?_SUBJECT_?=\n"
+		"From: _FROM_ <_FROM_>\n"
+		"To: _TO_\n"
+		"X-Mailer: ThinFirewall\n"
+		"Content-Type: text/plain; charset=UTF-8\n"
+		"Content-Transfer-Encoding: Base64\n\n";
+
+	UINT ret_size = 4096 + StrLen(body_utf8) * 2;
+	char *ret = ZeroMalloc(ret_size);
+
+	StrCpy(ret, ret_size, template);
+
+	char date_str[64] = CLEAN;
+	GetHttpDateStr(date_str, sizeof(date_str), time);
+
+	UCHAR rand[16] = CLEAN;
+	Rand(rand, sizeof(rand));
+	char rand_str[64] = CLEAN;
+	BinToStr(rand_str, sizeof(rand_str), rand, sizeof(rand));
+	StrLower(rand_str);
+
+	ReplaceStrEx(ret, ret_size, ret, "__TIMESTAMP__", date_str, false);
+	ReplaceStrEx(ret, ret_size, ret, "_RAND_", rand_str, false);
+	ReplaceStrEx(ret, ret_size, ret, "_MACHINE_NAME_", rand_str, false);
+	ReplaceStrEx(ret, ret_size, ret, "_FROM_", from, false);
+	ReplaceStrEx(ret, ret_size, ret, "_TO_", to, false);
+
+	char *subject_utf = CopyUniToUtf(subject);
+
+	char *subject_b64 = B64_EncodeToStr(subject_utf, StrLen(subject_utf));
+
+	ReplaceStrEx(ret, ret_size, ret, "_SUBJECT_", subject_b64, false);
+
+	char *body_b64 = B64_EncodeToStr(body_utf8, StrLen(body_utf8));
+
+	BUF *body_b64_buf = NewBufFromMemory(body_b64, StrLen(body_b64));
+
+	SeekBufToBegin(body_b64_buf);
+
+	while (true)
+	{
+		char line[77] = CLEAN;
+
+		UINT sz = ReadBuf(body_b64_buf, line, 76);
+		if (sz == 0)
+		{
+			break;
+		}
+
+		StrCat(ret, ret_size, line);
+	}
+
+	FreeBuf(body_b64_buf);
+
+	Free(subject_utf);
+	Free(subject_b64);
+	Free(body_b64);
+
 	return ret;
 }
 
@@ -17682,6 +17753,8 @@ SOCK *ConnectEx4(char *hostname, UINT port, UINT timeout, bool *cancel_flag, cha
 		{
 			SetCurrentGlobalIP(&sock->LocalIP, is_ipv6);
 		}
+
+		SetLastLocalIp(&sock->LocalIP);
 	}
 
 	sock->Connected = true;
@@ -17691,6 +17764,72 @@ SOCK *ConnectEx4(char *hostname, UINT port, UINT timeout, bool *cancel_flag, cha
 
 	return sock;
 }
+
+static IP last_local_ip_v4 = CLEAN;
+static IP last_local_ip_v6 = CLEAN;
+
+void SetLastLocalIp(IP *ip)
+{
+	if (IsZeroIP(ip))
+	{
+		return;
+	}
+
+	Lock(last_local_ip_lock);
+	{
+		if (IsIP4(ip))
+		{
+			CopyIP(&last_local_ip_v4, ip);
+		}
+		else
+		{
+			CopyIP(&last_local_ip_v6, ip);
+		}
+	}
+	Unlock(last_local_ip_lock);
+}
+
+bool GetLastLocalIp(IP *ip, bool ipv6)
+{
+	if (ip == NULL)
+	{
+		return false;
+	}
+
+	if (ipv6)
+	{
+		ZeroIP6(ip);
+	}
+	else
+	{
+		ZeroIP4(ip);
+	}
+
+	IP *current = ipv6 ? &last_local_ip_v6 : &last_local_ip_v4;
+
+	bool ret = false;
+	
+	Lock(last_local_ip_lock);
+	{
+		if (IsZeroIP(current) == false)
+		{
+			CopyIP(ip, current);
+
+			ret = true;
+		}
+	}
+	Unlock(last_local_ip_lock);
+
+	if (ret == false)
+	{
+		GetCurrentGlobalIPGuess(ip, ipv6);
+
+		ret = !IsZeroIP(ip);
+	}
+
+	return ret;
+}
+
 
 // Get the current accepting IPv4 address
 void TryGetCurrentAcceptingIPv4Address(IP *ip)
@@ -20302,6 +20441,7 @@ void InitNetwork()
 
 	cipher_list_token = ParseToken(cipher_list, " ");
 
+	last_local_ip_lock = NewLock();
 	current_global_ip_lock = NewLock();
 	current_fqdn_lock = NewLock();
 	current_global_ip_set = false;
@@ -20794,6 +20934,9 @@ void FreeNetwork()
 
 	DeleteLock(current_global_ip_lock);
 	current_global_ip_lock = NULL;
+
+	DeleteLock(last_local_ip_lock);
+	last_local_ip_lock = NULL;
 
 	DeleteLock(current_fqdn_lock);
 	current_fqdn_lock = NULL;

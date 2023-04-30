@@ -1751,6 +1751,9 @@ bool GetCurrentGlobalIP(IP *ip, bool ipv6);
 void GetCurrentGlobalIPGuess(IP *ip, bool ipv6);
 bool IsIPAddressInSameLocalNetwork(IP *a);
 
+void SetLastLocalIp(IP *ip);
+bool GetLastLocalIp(IP *ip, bool ipv6);
+
 bool IsIPPrivate(IP *ip);
 bool IsIPLocalOrPrivate(IP *ip);
 bool IsIPMyHost(IP *ip);
@@ -1823,6 +1826,8 @@ UINT ParseProxyProtocol(PROXY_PROTOCOL *dst, UCHAR* peek_buf, UINT peek_size);
 
 bool SmtpSendMail(char* server_host, UINT server_port, char* from, char* to, char* body);
 bool SmtpSendMailEx(char* server_host, UINT server_port, char* from, char* to, char* body, BUF *error, char *username, char *password, UINT timeout, UINT ssl_type, UINT auth_type);
+
+char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 time, char *body_utf8);
 
 void MSecsToTimeval(struct timeval *tv, UINT msecs);
 

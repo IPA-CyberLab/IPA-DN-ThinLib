@@ -4572,6 +4572,7 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 void TfReportThreadProc(THREAD *thread, void *param)
 {
 	wchar_t computer_name[128] = CLEAN;
+	wchar_t computer_name_short[128] = CLEAN;
 	TF_SERVICE *svc;
 	if (thread == NULL || param == NULL)
 	{
@@ -4584,13 +4585,144 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), false);
 
+	UniStrCpy(computer_name_short, sizeof(computer_name_short), computer_name);
+	UINT len = UniStrLen(computer_name_short);
+	UINT i;
+	for (i = 0;i < len;i++)
+	{
+		if (computer_name_short[i] == '.')
+		{
+			computer_name_short[i] = 0;
+		}
+	}
+
+	BUF *current_mail_body = NewBuf();
+	UINT current_mail_element_index = 0;
+	UINT64 last_mail_sent_tick = 0;
+
+	wchar_t prefix_tmp[MAX_PATH] = CLEAN;
+
 	while (svc->ReportThreadHaltFlag == false)
 	{
 		while (true)
 		{
+			UINT64 now = Tick64();
+
 			if (svc->ReportThreadHaltFlag)
 			{
 				break;
+			}
+
+			TF_REPORT_SETTINGS st = CLEAN;
+			Lock(svc->CurrentReportSettingsLock);
+			{
+				Copy(&st, &svc->CurrentReportSettings, sizeof(TF_REPORT_SETTINGS));
+			}
+			Unlock(svc->CurrentReportSettingsLock);
+
+			if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
+				IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
+			{
+			}
+			else
+			{
+				last_mail_sent_tick = now;
+			}
+
+			if (GetBufSize(current_mail_body) == 0)
+			{
+				last_mail_sent_tick = now;
+			}
+
+			if (GetBufSize(current_mail_body) >= 1 && 
+				((GetBufSize(current_mail_body) >= st.ReportMailMaxSize) ||
+					(st.ReportMailIntervalMsec == 0 || now >= (last_mail_sent_tick + st.ReportMailIntervalMsec)))
+				)
+			{
+				last_mail_sent_tick = now;
+
+				char tmp[260];
+				char date_str[64] = CLEAN;
+				char time_str[64] = CLEAN;
+				char mac_str[48] = CLEAN;
+				IP my_ip = CLEAN;
+
+				GetLastLocalIp(&my_ip, false);
+
+				MacToStr(mac_str, sizeof(mac_str), svc->MacAddress);
+
+				UINT64 time = LocalTime64();
+				GetDateStr64(date_str, sizeof(date_str), time);
+				GetTimeStrMilli64(time_str, sizeof(time_str), time);
+
+				Format(tmp, sizeof(tmp), "\n---\nMail Timestamp: %s %s\n", date_str, time_str);
+				WriteBuf(current_mail_body, tmp, StrLen(tmp));
+
+				Format(tmp, sizeof(tmp), "Hostname: %S\n", computer_name);
+				WriteBuf(current_mail_body, tmp, StrLen(tmp));
+
+				Format(tmp, sizeof(tmp), "IP Address: %r\n", &my_ip);
+				WriteBuf(current_mail_body, tmp, StrLen(tmp));
+
+				Format(tmp, sizeof(tmp), "MAC Address: %s\n\n", mac_str);
+				WriteBuf(current_mail_body, tmp, StrLen(tmp));
+
+				WriteBufChar(current_mail_body, 0);
+
+				if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
+					IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
+				{
+					wchar_t mac_str_w[48] = CLEAN;
+					StrToUni(mac_str_w, sizeof(mac_str_w), mac_str);
+
+					StrToUni(prefix_tmp, sizeof(prefix_tmp), st.ReportMailSubjectPrefix);
+					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+						L"$hostname", computer_name_short, false);
+					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+						L"$macaddress", mac_str_w, false);
+
+					TOKEN_LIST *to_list = ParseToken(st.ReportMailTo, "/, \t");
+					
+					UINT i;
+					for (i = 0;i < to_list->NumTokens;i++)
+					{
+						char *to_address = to_list->Token[i];
+
+						char *mail_body = SmtpGenerateUtf8MailBody(prefix_tmp, st.ReportMailFrom, to_address,
+							time, current_mail_body->Buf);
+
+						BUF *mail_error = NewBuf();
+
+						TfLog(svc, "Sending mail to %S with the SMTP Server %S:%u  (mail size = %u bytes)",
+							to_address, st.ReportMailHost, st.ReportMailPort, GetBufSize(current_mail_body));
+
+						if (SmtpSendMailEx(st.ReportMailHost, st.ReportMailPort, st.ReportMailFrom, to_address,
+							mail_body, mail_error, st.ReportMailUsername, st.ReportMailPassword, 0,
+							st.ReportMailSslType, st.ReportMailAuthType) == false)
+						{
+							SeekBufToEnd(mail_error);
+							WriteBufChar(mail_error, 0);
+
+							TfLog(svc, "SMTP mail send error to %S (SMTP server returned the error string: %S)",
+								to_address,
+								mail_error->Buf);
+						}
+						else
+						{
+							TfLog(svc, "SMTP mail is sent to %S (body size = %u bytes)",
+								to_address, GetBufSize(current_mail_body));
+						}
+
+						FreeBuf(mail_error);
+
+						Free(mail_body);
+					}
+
+					FreeToken(to_list);
+				}
+
+				ClearBufEx(current_mail_body, true);
+				current_mail_element_index = 0;
 			}
 
 			DIFF_ENTRY *e = NULL;
@@ -4605,13 +4737,6 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			{
 				break;
 			}
-
-			TF_REPORT_SETTINGS st = CLEAN;
-			Lock(svc->CurrentReportSettingsLock);
-			{
-				Copy(&st, &svc->CurrentReportSettings, sizeof(TF_REPORT_SETTINGS));
-			}
-			Unlock(svc->CurrentReportSettingsLock);
 
 			UINT gethostname_flag = GETHOSTNAME_FLAG_NO_NETBIOS_NAME | GETHOSTNAME_USE_DNS_API;
 
@@ -4647,7 +4772,6 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			char category[64] = CLEAN;
 			wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
 			wchar_t tmp2[THINFW_MAX_LINE_SIZE] = CLEAN;
-			wchar_t prefix_tmp[MAX_PATH] = CLEAN;
 			TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
 			if (UniIsFilledUniStr(tmp))
 			{
@@ -4690,6 +4814,24 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 						SendSysLog(syslog, tmp2);
 					}
+
+					if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
+						IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
+					{
+						ClearUniStr(tmp2, sizeof(tmp2));
+
+						current_mail_element_index++;
+
+						UniFormat(tmp2, sizeof(tmp2),
+							L"Event #%u: %S %S\n[%S] %s\n\n",
+							current_mail_element_index,
+							date_str, time_str,
+							category, tmp);
+
+						char *utf8 = CopyUniToUtf(tmp2);
+						WriteBuf(current_mail_body, utf8, StrLen(utf8));
+						Free(utf8);
+					}
 				}
 			}
 
@@ -4708,6 +4850,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	{
 		FreeSysLog(syslog);
 	}
+
+	FreeBuf(current_mail_body);
 }
 
 bool TfGetCurrentMacAddress(UCHAR *mac)
@@ -5147,7 +5291,6 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchDns = false;
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchTcp = false;
-	UINT cfg_ReportMailIntervalMsec = 5000;
 	bool cfg_WatchOnlyWhenLocked = false;
 	bool cfg_IncludeProcessCommandLine = false;
 	bool cfg_EnableFirewall = false;
@@ -5163,6 +5306,8 @@ void TfMain(TF_SERVICE *svc)
 	LIST *current_list = NULL;
 
 	LIST *current_dns_servers_list = MsGetCurrentDnsServersList();
+
+	UINT current_process_id = MsGetCurrentProcessId();
 
 	// Init report thread
 	svc->ReportQueue = NewQueue();
@@ -5212,11 +5357,6 @@ void TfMain(TF_SERVICE *svc)
 					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
 					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
-					cfg_ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
-					if (cfg_ReportMailIntervalMsec == 0)
-					{
-						cfg_ReportMailIntervalMsec = 5000;
-					}
 
 					cfg_GetNetworkInfoIntervalMsec = IniIntValue(ini, "GetNetworkInfoIntervalMsec");
 					if (cfg_GetNetworkInfoIntervalMsec == 0)
@@ -5227,6 +5367,9 @@ void TfMain(TF_SERVICE *svc)
 
 					TF_REPORT_SETTINGS rep = CLEAN;
 					rep.EnableTcpHostnameLookup = IniBoolValue(ini, "EnableTcpHostnameLookup");
+
+					rep.ReportMailMaxSize = IniIntValue(ini, "ReportMailMaxSize");
+					rep.ReportMailMaxSize = MIN(rep.ReportMailMaxSize, 5000000);
 
 					rep.ReportMailOnlyWhenLocked = IniBoolValue(ini, "ReportMailOnlyWhenLocked");
 					rep.ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
@@ -5252,7 +5395,6 @@ void TfMain(TF_SERVICE *svc)
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 
 					if (rep.HostnameLookupTimeoutMsec == 0) rep.HostnameLookupTimeoutMsec = 1000;
-					if (rep.ReportMailIntervalMsec == 0) rep.ReportMailIntervalMsec = 5000;
 
 					Lock(svc->CurrentReportSettingsLock);
 					{
@@ -5274,7 +5416,6 @@ void TfMain(TF_SERVICE *svc)
 				cfg_EnableWatchDns = false;
 				cfg_EnableWatchProcess = false;
 				cfg_EnableWatchTcp = false;
-				cfg_ReportMailIntervalMsec = 5000;
 				cfg_WatchOnlyWhenLocked = false;
 				cfg_IncludeProcessCommandLine = false;
 				cfg_EnableFirewall = false;
@@ -5484,7 +5625,10 @@ void TfMain(TF_SERVICE *svc)
 									//		proc->Rdp.SessionId, proc->Rdp.WinStationName);
 									//}
 
-									ok = true;
+									if (proc->ProcessId != current_process_id)
+									{
+										ok = true;
+									}
 									break;
 
 								case MS_THINFW_ENTRY_TYPE_DNS:
@@ -5511,7 +5655,10 @@ void TfMain(TF_SERVICE *svc)
 										}
 										else
 										{
-											ok = true;
+											if (tcp->Process.ProcessId != current_process_id)
+											{
+												ok = true;
+											}
 										}
 									}
 									break;

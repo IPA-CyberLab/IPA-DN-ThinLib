@@ -90,6 +90,7 @@ struct TF_REPORT_SETTINGS
 
 	bool ReportMailOnlyWhenLocked;
 	UINT ReportMailIntervalMsec;
+	UINT ReportMailMaxSize;
 	char ReportMailHost[MAX_PATH];
 	UINT ReportMailPort;
 	char ReportMailUsername[MAX_PATH];
