@@ -2998,15 +2998,43 @@ KV_LIST *SearchKvList(LIST *o, char *key)
 	return Search(o, &t);
 }
 
-void AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1)
+KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_size, UINT type, UINT64 param1)
 {
 	if (o == NULL)
 	{
-		return;
+		return NULL;
+	}
+	if (initial_size > KV_LIST_DATA_SIZE)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = "";
+
+	KV_LIST *ret = SearchKvList(o, key);
+
+	if (ret == NULL)
+	{
+		ret = AddKvList(o, key, initial_data, initial_size, type, param1, true);
+	}
+
+	if (ret == NULL)
+	{
+		return NULL;
+	}
+
+	return ret;
+}
+
+KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation)
+{
+	if (o == NULL)
+	{
+		return NULL;
 	}
 	if (size > KV_LIST_DATA_SIZE)
 	{
-		return;
+		return NULL;
 	}
 
 	if (key == NULL) key = "";
@@ -3021,7 +3049,16 @@ void AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 para
 	k->Type = type;
 	k->Param1 = param1;
 
-	Add(o, k);
+	if (insert_operation == false)
+	{
+		Add(o, k);
+	}
+	else
+	{
+		Insert(o, k);
+	}
+
+	return k;
 }
 
 void FreeKvList(LIST *o)

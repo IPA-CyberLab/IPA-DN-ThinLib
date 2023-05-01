@@ -91,6 +91,7 @@ bool UniCheckStrSize(wchar_t *str, UINT size);
 bool UniCheckStrLen(wchar_t *str, UINT len);
 UINT UniStrCat(wchar_t *dst, UINT size, wchar_t *src);
 UINT UniStrCatLeft(wchar_t *dst, UINT size, wchar_t *src);
+UINT UniStrCatA(wchar_t *dst, UINT size, char *src_a);
 wchar_t UniToLower(wchar_t c);
 wchar_t UniToUpper(wchar_t c);
 void UniStrLower(wchar_t *str);

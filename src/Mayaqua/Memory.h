@@ -596,8 +596,9 @@ DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e);
 
 int CmpKvList(void *p1, void *p2);
 KV_LIST *SearchKvList(LIST *o, char *key);
+KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_size, UINT type, UINT64 param1);
 void *SearchKvListData(LIST *o, char *key, UINT type);
-void AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1);
+KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation);
 void FreeKvList(LIST *o);
 LIST *NewKvList();
 

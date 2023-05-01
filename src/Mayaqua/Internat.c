@@ -3520,6 +3520,24 @@ wchar_t UniToUpper(wchar_t c)
 	return c;
 }
 
+UINT UniStrCatA(wchar_t *dst, UINT size, char *src_a)
+{
+	if (dst == NULL || src_a == NULL)
+	{
+		return 0;
+	}
+
+	UINT ret;
+
+	wchar_t *src = CopyStrToUni(src_a);
+
+	ret = UniStrCat(dst, size, src);
+
+	Free(src);
+
+	return ret;
+}
+
 // String concatenation
 UINT UniStrCat(wchar_t *dst, UINT size, wchar_t *src)
 {

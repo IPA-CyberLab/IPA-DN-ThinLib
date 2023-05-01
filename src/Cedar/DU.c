@@ -4602,6 +4602,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 	wchar_t prefix_tmp[MAX_PATH] = CLEAN;
 
+	LIST *mail_category_list = NewKvList();
+
 	while (svc->ReportThreadHaltFlag == false)
 	{
 		while (true)
@@ -4649,22 +4651,22 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 				GetLastLocalIp(&my_ip, false);
 
-				MacToStr(mac_str, sizeof(mac_str), svc->MacAddress);
+				BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
 
 				UINT64 time = LocalTime64();
 				GetDateStr64(date_str, sizeof(date_str), time);
 				GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
-				Format(tmp, sizeof(tmp), "\n---\nMail Timestamp: %s %s\n", date_str, time_str);
+				Format(tmp, sizeof(tmp), "\n---\nMail timestamp: %s %s\n", date_str, time_str);
 				WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 				Format(tmp, sizeof(tmp), "Hostname: %S\n", computer_name);
 				WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-				Format(tmp, sizeof(tmp), "IP Address: %r\n", &my_ip);
+				Format(tmp, sizeof(tmp), "IP address: %r\n", &my_ip);
 				WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-				Format(tmp, sizeof(tmp), "MAC Address: %s\n\n", mac_str);
+				Format(tmp, sizeof(tmp), "MAC address: %s\n\n", mac_str);
 				WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 				WriteBufChar(current_mail_body, 0);
@@ -4681,9 +4683,31 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 						L"$macaddress", mac_str_w, false);
 
+					Sort(mail_category_list);
+
+					char tmp[MAX_PATH];
+					Format(tmp, sizeof(tmp), " - %u Events (", LIST_NUM(mail_category_list));
+					UniStrCatA(prefix_tmp, sizeof(prefix_tmp), tmp);
+
+					UINT i;
+					for (i = 0;i < LIST_NUM(mail_category_list);i++)
+					{
+						KV_LIST *kv = LIST_DATA(mail_category_list, i);
+						UINT *value = (UINT *)kv->Data;
+
+						Format(tmp, sizeof(tmp), "%s: %u", kv->Key, *value);
+						UniStrCatA(prefix_tmp, sizeof(prefix_tmp), tmp);
+
+						if (i != (LIST_NUM(mail_category_list) - 1))
+						{
+							UniStrCatA(prefix_tmp, sizeof(prefix_tmp), ", ");
+						}
+					}
+
+					UniStrCatA(prefix_tmp, sizeof(prefix_tmp), ")");
+
 					TOKEN_LIST *to_list = ParseToken(st.ReportMailTo, "/, \t");
 					
-					UINT i;
 					for (i = 0;i < to_list->NumTokens;i++)
 					{
 						char *to_address = to_list->Token[i];
@@ -4719,6 +4743,9 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					}
 
 					FreeToken(to_list);
+
+					FreeKvList(mail_category_list);
+					mail_category_list = NewKvList();
 				}
 
 				ClearBufEx(current_mail_body, true);
@@ -4780,7 +4807,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				char date_str[64] = CLEAN;
 				char time_str[64] = CLEAN;
 
-				MacToStr(mac_str, sizeof(mac_str), svc->MacAddress);
+				BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
 				StrToUni(mac_str_w, sizeof(mac_str_w), mac_str);
 
 				UINT64 time	= SystemToLocal64(TickToTime(e->Tick));
@@ -4831,6 +4858,13 @@ void TfReportThreadProc(THREAD *thread, void *param)
 						char *utf8 = CopyUniToUtf(tmp2);
 						WriteBuf(current_mail_body, utf8, StrLen(utf8));
 						Free(utf8);
+
+						UINT zero = 0;
+						KV_LIST *kv = AddOrGetKvList(mail_category_list, category, &zero, sizeof(UINT), 0, 0);
+						if (kv != NULL)
+						{
+							(*((UINT *)kv->Data))++;
+						}
 					}
 				}
 			}
@@ -4852,6 +4886,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	}
 
 	FreeBuf(current_mail_body);
+
+	FreeKvList(mail_category_list);
 }
 
 bool TfGetCurrentMacAddress(UCHAR *mac)
@@ -5496,7 +5532,7 @@ void TfMain(TF_SERVICE *svc)
 						Copy(lastState_mac, mac, 6);
 
 						char mac_str[24] = CLEAN;
-						MacToStr(mac_str, sizeof(mac_str), mac);
+						BinToStr(mac_str, sizeof(mac_str), mac, 6);
 
 						TfLog(svc, "This computer's MAC address: %S", mac_str);
 

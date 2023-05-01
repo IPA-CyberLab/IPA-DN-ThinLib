@@ -899,7 +899,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 					{
 						char session_id_str[16] = CLEAN;
 						ToStr(session_id_str, ex1->SessionId);
-						AddKvList(rdp_session_kv_list, session_id_str, &data, sizeof(data), 0, 0);
+						AddKvList(rdp_session_kv_list, session_id_str, &data, sizeof(data), 0, 0, false);
 					}
 
 					if (ok)
