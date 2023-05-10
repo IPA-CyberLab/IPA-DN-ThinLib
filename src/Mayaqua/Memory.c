@@ -5810,7 +5810,7 @@ DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e)
 		return NULL;
 	}
 
-	DIFF_ENTRY *ret = Malloc(sizeof(DIFF_ENTRY));
+	DIFF_ENTRY *ret = Malloc(sizeof(DIFF_ENTRY) + e->DataSize);
 	UniStrCpy(ret->Key, sizeof(ret->Key), e->Key);
 	ret->Tick = e->Tick;
 	ret->IsAdded = e->IsAdded;
@@ -5893,9 +5893,9 @@ DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param,
 	if (key == NULL) key = L"";
 	if (tick == 0) tick = Tick64();
 
-	DIFF_ENTRY *e = Malloc(sizeof(DIFF_ENTRY));
+	DIFF_ENTRY *e = Malloc(sizeof(DIFF_ENTRY) + data_size);
 
-	Copy(e->Data, data, MIN(data_size, DIFF_ENTRY_DATASIZE));
+	Copy(e->Data, data, data_size);
 	e->Data[data_size] = 0;
 
 	e->DataSize = data_size;

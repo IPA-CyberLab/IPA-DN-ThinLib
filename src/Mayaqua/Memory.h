@@ -141,14 +141,22 @@ struct LIST
 	UINT64 Param1;
 };
 
+#ifdef	OS_WIN32
+#pragma pack(push, 1)
+#endif	// OS_WIN32
+
 struct KV_LIST
 {
-	char Key[MAX_PATH];
-	UINT Type;
+	char Key[256];
 	UINT64 Param1;
+	UINT Type;
 	UINT DataSize;
 	UCHAR Data[16]; // Dummy: size may vary
-};
+} GCC_PACKED;
+
+#ifdef	OS_WIN32
+#pragma pack(pop)
+#endif	// OS_WIN32
 
 // Queue
 struct QUEUE
@@ -241,19 +249,25 @@ struct LOCKOUT
 	LIST* EntryList;
 };
 
-#define	DIFF_ENTRY_DATASIZE		4096
+#ifdef	OS_WIN32
+#pragma pack(push, 1)
+#endif	// OS_WIN32
 
 // Diff
 struct DIFF_ENTRY
 {
-	wchar_t Key[MAX_SIZE];
+	wchar_t Key[512];
 	UINT64 Tick;
 	bool IsAdded, IsRemoved;
-	UCHAR Data[DIFF_ENTRY_DATASIZE + 4];
-	UINT DataSize;
 	UINT64 Param;
 	UINT Flags;
-};
+	UINT DataSize;
+	UCHAR Data[16]; // Dummy: size may vary
+} GCC_PACKED;
+
+#ifdef	OS_WIN32
+#pragma pack(pop)
+#endif	// OS_WIN32
 
 #define PC_TYPE_NONE					0
 #define PC_TYPE_SECTION					1
