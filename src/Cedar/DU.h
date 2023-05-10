@@ -96,6 +96,7 @@ struct TF_REPORT_SETTINGS
 	UINT HostnameLookupTimeoutMsec;
 
 	bool ReportMailOnlyWhenLocked;
+	bool ReportSendEngineEvent;
 	UINT ReportMailIntervalMsec;
 	UINT ReportMailMaxSize;
 	char ReportMailHost[MAX_PATH];

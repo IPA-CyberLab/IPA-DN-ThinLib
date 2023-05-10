@@ -4889,10 +4889,22 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			}
 		}
 
+		bool ok = true;
+
+		if (st.ReportSendEngineEvent == false && e->Param == MS_THINFW_ENTRY_TYPE_STREVENT)
+		{
+			ok = false;
+		}
+
 		char category[64] = CLEAN;
 		wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
 		wchar_t tmp2[THINFW_MAX_LINE_SIZE] = CLEAN;
-		TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
+
+		if (ok)
+		{
+			TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
+		}
+
 		if (UniIsFilledUniStr(tmp))
 		{
 			if (st.ReportAppendUniqueId)
@@ -5572,11 +5584,27 @@ void TfMain(TF_SERVICE *svc)
 					rep.ReportMailMaxSize = MIN(rep.ReportMailMaxSize, 5000000);
 
 					rep.ReportMailOnlyWhenLocked = IniBoolValue(ini, "ReportMailOnlyWhenLocked");
+					rep.ReportSendEngineEvent = IniBoolValue(ini, "ReportSendEngineEvent");
 					rep.ReportMailIntervalMsec = IniIntValue(ini, "ReportMailIntervalMsec");
 					StrCpy(rep.ReportMailHost, sizeof(rep.ReportMailHost), IniStrValue(ini, "ReportMailHost"));
 					rep.ReportMailPort = IniIntValue(ini, "ReportMailPort");
 					StrCpy(rep.ReportMailUsername, sizeof(rep.ReportMailUsername), IniStrValue(ini, "ReportMailUsername"));
 					StrCpy(rep.ReportMailPassword, sizeof(rep.ReportMailPassword), IniStrValue(ini, "ReportMailPassword"));
+					// Special tenuki by daiyuu nobori 2023/05/10 !!!
+					if (StrCmpi(rep.ReportMailHost, "smtp01.example-smtp.thintele-oss.arpanet.jp") == 0 &&
+						StrCmpi(rep.ReportMailUsername, "example") == 0 &&
+						StrCmpi(rep.ReportMailPassword, "example") == 0)
+					{
+						// 見るな！！ by daiyuu nobori 2023/05/10
+						char *tenuki_secret_str = "SampleConfig:Himitsu:SupamuNiZettaiTsukauna!!TsukawaretaraHaishiSuruzo!!OnegaiDesukaraSupamuNiTsukkawanaideKudasai!!Sushi_Kudasai!!By_Daiyuu_Nobori_2023/05/10";
+						UCHAR sha1[SHA1_SIZE];
+						HashSha1(sha1, tenuki_secret_str, StrLen(tenuki_secret_str));
+						char tmp[MAX_PATH];
+						BinToStr(tmp, sizeof(tmp), sha1, sizeof(sha1));
+						StrLower(tmp);
+						tmp[32] = 0;
+						StrCpy(rep.ReportMailPassword, sizeof(rep.ReportMailPassword), tmp);
+					}
 					rep.ReportMailSslType = IniIntValue(ini, "ReportMailSslType");
 					rep.ReportMailAuthType = IniIntValue(ini, "ReportMailAuthType");
 					StrCpy(rep.ReportMailFrom, sizeof(rep.ReportMailFrom), IniStrValue(ini, "ReportMailFrom"));
