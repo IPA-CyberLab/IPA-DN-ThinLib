@@ -141,15 +141,13 @@ struct LIST
 	UINT64 Param1;
 };
 
-#define	KV_LIST_DATA_SIZE	4096
-
 struct KV_LIST
 {
 	char Key[MAX_PATH];
-	UCHAR Data[KV_LIST_DATA_SIZE + 4];
-	UINT DataSize;
 	UINT Type;
 	UINT64 Param1;
+	UINT DataSize;
+	UCHAR Data[16]; // Dummy: size may vary
 };
 
 // Queue
@@ -596,7 +594,7 @@ DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e);
 
 int CmpKvList(void *p1, void *p2);
 KV_LIST *SearchKvList(LIST *o, char *key);
-KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_size, UINT type, UINT64 param1);
+KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_data_size, UINT type, UINT64 param1);
 void *SearchKvListData(LIST *o, char *key, UINT type);
 KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation);
 void FreeKvList(LIST *o);

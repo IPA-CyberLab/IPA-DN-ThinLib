@@ -2998,13 +2998,9 @@ KV_LIST *SearchKvList(LIST *o, char *key)
 	return Search(o, &t);
 }
 
-KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_size, UINT type, UINT64 param1)
+KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_data_size, UINT type, UINT64 param1)
 {
 	if (o == NULL)
-	{
-		return NULL;
-	}
-	if (initial_size > KV_LIST_DATA_SIZE)
 	{
 		return NULL;
 	}
@@ -3015,7 +3011,7 @@ KV_LIST *AddOrGetKvList(LIST *o, char *key, void *initial_data, UINT initial_siz
 
 	if (ret == NULL)
 	{
-		ret = AddKvList(o, key, initial_data, initial_size, type, param1, true);
+		ret = AddKvList(o, key, initial_data, initial_data_size, type, param1, true);
 	}
 
 	if (ret == NULL)
@@ -3032,14 +3028,10 @@ KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 
 	{
 		return NULL;
 	}
-	if (size > KV_LIST_DATA_SIZE)
-	{
-		return NULL;
-	}
 
 	if (key == NULL) key = "";
 
-	KV_LIST *k = Malloc(sizeof(KV_LIST));
+	KV_LIST *k = Malloc(sizeof(KV_LIST) + size);
 
 	StrCpy(k->Key, sizeof(k->Key), key);
 	Copy(k->Data, data, size);
@@ -3081,7 +3073,9 @@ void FreeKvList(LIST *o)
 
 LIST *NewKvList()
 {
-	return NewList(CmpKvList);
+	LIST *o = NewList(CmpKvList);
+
+	return o;
 }
 
 // Randomize the contents of the list

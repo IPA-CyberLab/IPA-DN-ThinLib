@@ -4686,7 +4686,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					Sort(mail_category_list);
 
 					char tmp[MAX_PATH];
-					Format(tmp, sizeof(tmp), " - %u Events (", LIST_NUM(mail_category_list));
+					Format(tmp, sizeof(tmp), " - %u Events (", current_mail_element_index);
 					UniStrCatA(prefix_tmp, sizeof(prefix_tmp), tmp);
 
 					UINT i;
