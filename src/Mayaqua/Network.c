@@ -6720,10 +6720,13 @@ int SslCertVerifyCallback(int preverify_ok, X509_STORE_CTX *ctx)
 			if (cert != NULL)
 			{
 				X *tmpX = X509ToX(cert); // this only wraps cert, but we need to make a copy
-				X *copyX = CloneX(tmpX);
-				tmpX->do_not_free = true; // do not release inner X509 object
-				FreeX(tmpX);
-				clientcert->X = copyX;
+				if (tmpX != NULL)
+				{
+					X *copyX = CloneX(tmpX);
+					tmpX->do_not_free = true; // do not release inner X509 object
+					FreeX(tmpX);
+					clientcert->X = copyX;
+				}
 			}
 		}
 	}
@@ -15001,9 +15004,16 @@ bool StartSSLWithSettings(SOCK* sock, UINT ssl_timeout, char* sni_hostname, SSL_
 		X *local_x;
 		// Got a certificate
 		local_x = X509ToX(x509);
-		local_x->do_not_free = true;
-		sock->LocalX = CloneX(local_x);
-		FreeX(local_x);
+		if (local_x != NULL)
+		{
+			local_x->do_not_free = true;
+			sock->LocalX = CloneX(local_x);
+			FreeX(local_x);
+		}
+		else
+		{
+			sock->LocalX = NULL;
+		}
 	}
 
 	// Automatic retry mode
