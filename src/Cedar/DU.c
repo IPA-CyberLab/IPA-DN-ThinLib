@@ -4653,10 +4653,10 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			GetDateStr64(date_str, sizeof(date_str), time);
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
-			Format(tmp, sizeof(tmp), "\n---\nMail timestamp: %s %s\n", date_str, time_str);
+			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s\n", svc->StartupSettings.AppTitle, date_str, time_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-			Format(tmp, sizeof(tmp), "Hostname: %S\n", computer_name);
+			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 			Format(tmp, sizeof(tmp), "IP address: %r\n", &my_ip);
@@ -4805,6 +4805,16 @@ void TfReportThreadProc(THREAD *thread, void *param)
 		TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
 		if (UniIsFilledUniStr(tmp))
 		{
+			if (st.ReportAppendUniqueId)
+			{
+				UCHAR rand[20] = CLEAN;
+				Rand(rand, sizeof(rand));
+				char rand_str[64] = CLEAN;
+				BinToStr(rand_str, sizeof(rand_str), rand, sizeof(rand));
+				UniFormat(tmp2, sizeof(tmp2), L" (UniqueId: %S)", rand_str);
+				UniStrCat(tmp, sizeof(tmp), tmp2);
+			}
+
 			char mac_str[48] = CLEAN;
 			wchar_t mac_str_w[48] = CLEAN;
 			char date_str[64] = CLEAN;
@@ -5354,7 +5364,7 @@ void TfMain(TF_SERVICE *svc)
 		if (last_cfg_read == 0 || now >= (last_cfg_read + (UINT64)cfg_SettingReloadIntervalMsec))
 		{
 			// Config file reload
-			BUF *new_content = ReadDumpW(svc->SettingFileName);
+			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
 			if (new_content != NULL)
 			{
 				// Compare
@@ -5431,6 +5441,7 @@ void TfMain(TF_SERVICE *svc)
 					Trim(rep.ReportSyslogPrefix);
 
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
+					rep.ReportAppendUniqueId = IniBoolValue(ini, "ReportAppendUniqueId");
 
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 
@@ -5478,7 +5489,8 @@ void TfMain(TF_SERVICE *svc)
 
 				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
 
-				TfLog(svc, "-------------------- Start Thin Firewall System --------------------");
+				TfLog(svc, "-------------------- Start %S --------------------", svc->StartupSettings.AppTitle);
+				TfLog(svc, "APP_NAME: %S", svc->StartupSettings.AppTitle);
 				TfLog(svc, "CEDAR_VER: %u", CEDAR_VER);
 				TfLog(svc, "CEDAR_BUILD: %u", CEDAR_BUILD);
 				TfLog(svc, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
@@ -5512,7 +5524,7 @@ void TfMain(TF_SERVICE *svc)
 			}
 			else
 			{
-				TfLog(svc, "-------------------- Stop Thin Firewall System --------------------");
+				TfLog(svc, "-------------------- Stop %S --------------------", svc->StartupSettings.AppTitle);
 			}
 		}
 
@@ -5558,7 +5570,7 @@ void TfMain(TF_SERVICE *svc)
 				bool is_locked = false;
 				bool is_watch_active = false;
 
-				if (svc->Mode == TF_SVC_MODE_SYSTEMMODE)
+				if (svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE)
 				{
 					// Use the terminal service API
 					is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
@@ -5907,23 +5919,27 @@ void TfStopService(TF_SERVICE *svc)
 	Free(svc);
 }
 
-TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename)
+TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 {
-	if (setting_filename == NULL)
+	if (settings == NULL)
 	{
 		return NULL;
 	}
 
 	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
 
+	Copy(&svc->StartupSettings, settings, sizeof(TF_STARTUP_SETTINGS));
+
+	if (IsEmptyStr(svc->StartupSettings.AppTitle))
+	{
+		StrCpy(svc->StartupSettings.AppTitle, sizeof(svc->StartupSettings.AppTitle),
+			"Thin Firewall System");
+	}
+
 	svc->Log = NewLogEx(TF_LOG_DIR_NAME, "thinfw", LOG_SWITCH_DAY, false);
 	svc->Log->Flush = true;
 
 	svc->CurrentReportSettingsLock = NewLock();
-
-	svc->Mode = mode;
-
-	UniStrCpy(svc->SettingFileName, sizeof(svc->SettingFileName), setting_filename);
 
 	svc->HaltEvent = NewEvent();
 

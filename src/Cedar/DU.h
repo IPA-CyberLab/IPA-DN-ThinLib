@@ -82,6 +82,13 @@
 
 #define	TF_LOG_DIR_NAME				"@thinfirewall_log"
 
+struct TF_STARTUP_SETTINGS
+{
+	UINT Mode;
+	wchar_t SettingFileName[MAX_PATH];
+	char AppTitle[MAX_PATH];
+};
+
 struct TF_REPORT_SETTINGS
 {
 	bool EnableTcpHostnameLookup;
@@ -107,12 +114,13 @@ struct TF_REPORT_SETTINGS
 	char ReportSyslogPrefix[MAX_PATH];
 
 	bool ReportSaveToDir;
+	bool ReportAppendUniqueId;
 };
 
 struct TF_SERVICE
 {
-	UINT Mode;
-	wchar_t SettingFileName[MAX_PATH];
+	TF_STARTUP_SETTINGS StartupSettings;
+
 	EVENT *HaltEvent;
 	bool HaltFlag;
 	THREAD *Thread;
@@ -132,7 +140,7 @@ struct TF_SERVICE
 
 void DUExec();
 
-TF_SERVICE *TfStartService(UINT mode, wchar_t *setting_filename);
+TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings);
 void TfStopService(TF_SERVICE *svc);
 void TfThreadProc(THREAD *thread, void *param);
 
