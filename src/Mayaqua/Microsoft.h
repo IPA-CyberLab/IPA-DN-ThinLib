@@ -814,13 +814,19 @@ typedef struct MS_SID_INFO
 	wchar_t DomainName[MAX_SIZE];
 } MS_SID_INFO;
 
-#define	MS_THINFW_ENTRY_TYPE_PROCESS		0
-#define	MS_THINFW_ENTRY_TYPE_TCP			1
-#define	MS_THINFW_ENTRY_TYPE_RDP			2
-#define	MS_THINFW_ENTRY_TYPE_DNS			3
+#define MS_THINFW_ENTRY_TYPE_STREVENT		0
+#define	MS_THINFW_ENTRY_TYPE_PROCESS		1
+#define	MS_THINFW_ENTRY_TYPE_TCP			2
+#define	MS_THINFW_ENTRY_TYPE_RDP			3
+#define	MS_THINFW_ENTRY_TYPE_DNS			4
 
 #define	MS_THINFW_ENTRY_FLAG_NONE			0
 #define	MS_THINFW_ENTRY_FLAG_LOCKED			1
+
+typedef struct MS_THINFW_ENTRY_STREVENT
+{
+	wchar_t Str[2048];
+} MS_THINFW_ENTRY_STREVENT;
 
 typedef struct MS_THINFW_ENTRY_RDP
 {
@@ -980,6 +986,7 @@ bool MsDetermineIsLockedByWtsApi();
 void MsWtsTest1();
 
 bool MsWtsOneOrMoreUnlockedSessionExists();
+bool MsIsScreenSaverRunning();
 
 bool MsIsRdpAllowLoginScreen();
 void MsSetRdpAllowLoginScreen(bool b);

@@ -14990,6 +14990,18 @@ void MsNewGuid(void *guid)
 	CoCreateGuid(guid);
 }
 
+// スクリーンセーバーが動作しているかどうか取得する
+bool MsIsScreenSaverRunning()
+{
+	UINT ret = 0;
+	if (SystemParametersInfoA(SPI_GETSCREENSAVERRUNNING, 0, &ret, 0) == false)
+	{
+		return false;
+	}
+
+	return ret ? true : false;
+}
+
 // 1 つ以上のロックされていない WTS セッションが存在するかどうか
 bool MsWtsOneOrMoreUnlockedSessionExists()
 {

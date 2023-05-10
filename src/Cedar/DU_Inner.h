@@ -280,7 +280,7 @@ bool FwParseRuleStr(ACCESS *a, char *str);
 void FwParseIpAndMask(IP *ip, IP *mask, char *str);
 void FwParsePortRange(UINT *start, UINT *end, char *str);
 
-void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf);
+UINT FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf);
 
 
 void TfMain(TF_SERVICE *svc);
@@ -293,7 +293,13 @@ void TfLogEx(TF_SERVICE *w, char *prefix, char *format, ...);
 void TfLogMain(TF_SERVICE *w, char *format, va_list args);
 void TfStopService(TF_SERVICE *svc);
 
+DIFF_ENTRY *TfNewStrEvent(char *str);
+DIFF_ENTRY *TfNewStrEventW(wchar_t *str);
+void TfInsertStrEvent(TF_SERVICE *svc, wchar_t *str);
+
 bool TfGetCurrentMacAddress(UCHAR *mac);
+
+
 
 
 

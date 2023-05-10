@@ -1090,8 +1090,18 @@ void Win32GetOsInfo(OS_INFO *info)
 	{
 		char *s;
 		char *keyname = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+		UINT ubr = MsRegReadInt(REG_LOCAL_MACHINE, keyname, "UBR");
+
 		info->OsSystemName = CopyStr("Windows NT");
-		Format(tmp, sizeof(tmp), "Build %u", os.dwBuildNumber);
+		if (ubr == 0)
+		{
+			Format(tmp, sizeof(tmp), "Build %u", os.dwBuildNumber);
+		}
+		else
+		{
+			Format(tmp, sizeof(tmp), "Build %u.%u", os.dwBuildNumber, ubr);
+		}
+
 		if (s = MsRegReadStr(REG_LOCAL_MACHINE, keyname, "CurrentType"))
 		{
 			char str[MAX_SIZE];
@@ -1105,12 +1115,23 @@ void Win32GetOsInfo(OS_INFO *info)
 			Format(str, sizeof(str), ", Service Pack %u", os.wServicePackMajor);
 			StrCat(tmp, sizeof(tmp), str);
 		}
-		if (s = MsRegReadStr(REG_LOCAL_MACHINE, keyname, "BuildLab"))
+		if (s = MsRegReadStr(REG_LOCAL_MACHINE, keyname, "DisplayVersion"))
 		{
 			char str[MAX_SIZE];
 			Format(str, sizeof(str), " (%s)", s);
 			StrCat(tmp, sizeof(tmp), str);
 			Free(s);
+		}
+		if (MsIsWindows10() == false)
+		{
+			// Windows 10's BuildLab string cannot be trusted
+			if (s = MsRegReadStr(REG_LOCAL_MACHINE, keyname, "BuildLab"))
+			{
+				char str[MAX_SIZE];
+				Format(str, sizeof(str), " (%s)", s);
+				StrCat(tmp, sizeof(tmp), str);
+				Free(s);
+			}
 		}
 		info->OsVersion = CopyStr(tmp);
 		info->KernelName = CopyStr("NTOS Kernel");

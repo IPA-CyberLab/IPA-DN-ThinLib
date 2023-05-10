@@ -136,6 +136,8 @@ struct TF_SERVICE
 	bool ReportThreadHaltFlag;
 
 	LOG *Log;
+
+	void *WfpEngine;
 };
 
 void DUExec();
@@ -143,5 +145,7 @@ void DUExec();
 TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings);
 void TfStopService(TF_SERVICE *svc);
 void TfThreadProc(THREAD *thread, void *param);
+
+bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied);
 
 #endif	// DU_H

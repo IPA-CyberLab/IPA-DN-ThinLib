@@ -99,6 +99,10 @@
 #define MAX_ACTIVE_PATCH					1024
 
 
+#ifdef	OS_WIN32
+#pragma pack(push, 1)
+#endif	// OS_WIN32
+
 // Memory tag
 struct MEMTAG
 {
@@ -106,7 +110,11 @@ struct MEMTAG
 	UINT Size;
 	bool ZeroFree;
 	UINT Padding;
-};
+} GCC_PACKED;
+
+#ifdef	OS_WIN32
+#pragma pack(pop)
+#endif	// OS_WIN32
 
 // Buffer
 struct BUF

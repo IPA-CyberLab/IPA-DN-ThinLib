@@ -3602,6 +3602,9 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	FWPM_FILTER_CONDITION0 c[10] = CLEAN;
 	bool isv4 = !a->IsIPv6;
 
+	FWP_RANGE0 remote_port_range = CLEAN;
+	FWP_RANGE0 local_port_range = CLEAN;
+
 	UniFormat(name, sizeof(name), L"_ThinFW ACL %04u", index);
 
 	if (UniIsFilledStr(a->Note))
@@ -3673,7 +3676,6 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 	if (a->Protocol == IP_PROTO_TCP || a->Protocol == IP_PROTO_UDP)
 	{
 		// Remote Port
-		FWP_RANGE0 remote_port_range = CLEAN;
 		remote_port_range.valueLow.type = FWP_UINT16;
 		remote_port_range.valueLow.uint16 = a->DestPortStart;
 		remote_port_range.valueHigh.type = FWP_UINT16;
@@ -3686,7 +3688,6 @@ void DuFwpAddAccess(HANDLE hEngine, GUID *provider, GUID *sublayer, UINT index, 
 		c_index++;
 
 		// Local Port
-		FWP_RANGE0 local_port_range = CLEAN;
 		local_port_range.valueLow.type = FWP_UINT16;
 		local_port_range.valueLow.uint16 = a->SrcPortStart;
 		local_port_range.valueHigh.type = FWP_UINT16;
@@ -3924,6 +3925,89 @@ void DuWfpTest()
 			Debug("FwpmFilterAdd0 for IPv4 Ok.\n");
 		}
 	}
+}
+
+bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied)
+{
+	static UINT dummy = 0;
+	if (num_rules_applied == NULL) num_rules_applied = &dummy;
+	*num_rules_applied = 0;
+
+	if (svc == NULL)
+	{
+		return false;
+	}
+
+	if (MsIsAdmin() == false)
+	{
+		return false;
+	}
+
+	if (rules_text == NULL)
+	{
+		if (du_wfp_api != NULL)
+		{
+			if (svc->WfpEngine != NULL)
+			{
+				du_wfp_api->FwpmEngineClose0(svc->WfpEngine);
+				svc->WfpEngine = NULL;
+			}
+		}
+	}
+	else
+	{
+		if (DuInitWfpApi() == false)
+		{
+			return false;
+		}
+
+		if (svc->WfpEngine != NULL)
+		{
+			du_wfp_api->FwpmEngineClose0(svc->WfpEngine);
+			svc->WfpEngine = NULL;
+		}
+
+		FWPM_SESSION0 session = CLEAN;
+		session.flags = FWPM_SESSION_FLAG_DYNAMIC;
+
+		HANDLE hEngine = NULL;
+		
+		UINT ret = du_wfp_api->FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, &session, &hEngine);
+		if (ret)
+		{
+			return false;
+		}
+
+		char provider_name[MAX_PATH] = CLEAN;
+		char sublayer_name[MAX_PATH] = CLEAN;
+
+		Format(provider_name, sizeof(provider_name), "ThinFwEngine Provider for %s", svc->StartupSettings.AppTitle);
+		Format(sublayer_name, sizeof(sublayer_name), "ThinFwEngine Sublayer for %s", svc->StartupSettings.AppTitle);
+
+		GUID provider = CLEAN;
+		if (DuWfpCreateProvider(hEngine, &provider, provider_name) == false)
+		{
+			du_wfp_api->FwpmEngineClose0(hEngine);
+			return false;
+		}
+
+		GUID sublayer = CLEAN;
+		if (DuWfpCreateSublayer(hEngine, &sublayer, &provider, sublayer_name, 0xFFFF) == false)
+		{
+			du_wfp_api->FwpmEngineClose0(hEngine);
+			return false;
+		}
+
+		BUF *text_copy = CloneBuf(rules_text);
+
+		*num_rules_applied = FwApplyAllRulesFromLinesBuf(hEngine, &provider, &sublayer, text_copy);
+
+		FreeBuf(text_copy);
+
+		svc->WfpEngine = hEngine;
+	}
+
+	return true;
 }
 
 void DuWfpTest2()
@@ -4519,14 +4603,16 @@ bool FwParseRuleStr(ACCESS *a, char *str)
 	return ret;
 }
 
-void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf)
+UINT FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer, BUF *buf)
 {
 	UINT index = 0;
 
 	if (provider == NULL || sublayer == NULL || buf == NULL)
 	{
-		return;
+		return 0;
 	}
+
+	UINT num_rules_applied = 0;
 
 	// Add this exe as trusted
 	wchar_t *this_exe_path = MsGetExeFileNameW();
@@ -4563,10 +4649,14 @@ void FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 				// Normal ACL
 				DuFwpAddAccess(hEngine, provider, sublayer, ++index, &a);
 			}
+
+			num_rules_applied++;
 		}
 
 		Free(line);
 	}
+
+	return num_rules_applied;
 }
 
 void TfReportThreadProc(THREAD *thread, void *param)
@@ -5131,6 +5221,12 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 	switch (e->Param)
 	{
+	case MS_THINFW_ENTRY_TYPE_STREVENT:
+		StrCpy(category, category_size, "ENGINE_LOG");
+		MS_THINFW_ENTRY_STREVENT *event = (MS_THINFW_ENTRY_STREVENT *)&e->Data;
+		UniStrCpy(dst, dst_size, event->Str);
+		break;
+
 	case MS_THINFW_ENTRY_TYPE_DNS:
 		StrCpy(category, category_size, "DNS");
 		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
@@ -5307,6 +5403,41 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 	}
 }
 
+DIFF_ENTRY *TfNewStrEvent(char *str)
+{
+	DIFF_ENTRY *e;
+	wchar_t *tmp = CopyStrToUni(str);
+
+	e = TfNewStrEventW(tmp);
+
+	Free(tmp);
+
+	return e;
+}
+
+DIFF_ENTRY *TfNewStrEventW(wchar_t *str)
+{
+	MS_THINFW_ENTRY_STREVENT e = CLEAN;
+
+	UniStrCpy(e.Str, sizeof(e.Str), str);
+
+	return NewDiffEntry(L"", e.Str, sizeof(e), MS_THINFW_ENTRY_TYPE_STREVENT, Tick64());
+}
+
+void TfInsertStrEvent(TF_SERVICE *svc, wchar_t *str)
+{
+	if (svc == NULL || str == NULL)
+	{
+		return;
+	}
+
+	LockQueue(svc->ReportQueue);
+	{
+		InsertQueue(svc->ReportQueue, TfNewStrEventW(str));
+	}
+	UnlockQueue(svc->ReportQueue);
+}
+
 void TfMain(TF_SERVICE *svc)
 {
 	if (svc == NULL)
@@ -5336,21 +5467,28 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_WatchOnlyWhenLocked = false;
 	bool cfg_IncludeProcessCommandLine = false;
 	bool cfg_EnableFirewall = false;
+	bool cfg_EnableFirewallOnlyWhenLocked = false;
 	UINT cfg_GetNetworkInfoIntervalMsec = 300000;
 	bool cfg_IgnoreDNSoverTCPSession = false;
 	UINT cfg_ReportMaxQueueLength = 1024;
+	UINT cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 
 	UCHAR lastState_mac[6] = CLEAN;
 	bool lastState_Enable = false;
 
 	UINT lastState_locked = INFINITE;
 	UINT lastState_watchActive = INFINITE;
+	UINT lastState_firewall = INFINITE;
 
 	LIST *current_list = NULL;
 
 	LIST *current_dns_servers_list = MsGetCurrentDnsServersList();
 
 	UINT current_process_id = MsGetCurrentProcessId();
+
+	UINT config_revision = 1;
+
+	wchar_t tmp[2048];
 
 	// Init report thread
 	svc->ReportQueue = NewQueue();
@@ -5373,7 +5511,11 @@ void TfMain(TF_SERVICE *svc)
 					// Reload settings
 					LIST *new_ini = ReadIni(new_content);
 
-					WHERE;
+					config_revision++;
+
+					UniFormat(tmp, sizeof(tmp), L"Config file reloaded. Revision: %u", config_revision);
+					TfInsertStrEvent(svc, tmp);
+
 					FreeIni(ini);
 
 					ini = new_ini;
@@ -5384,11 +5526,13 @@ void TfMain(TF_SERVICE *svc)
 					// Interpret ini
 					cfg_Enable = IniBoolValue(ini, "Enable");
 					cfg_EnableFirewall = IniBoolValue(ini, "EnableFirewall");
+					cfg_EnableFirewallOnlyWhenLocked = IniBoolValue(ini, "EnableFirewallOnlyWhenLocked");
 					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
 					if (cfg_SettingReloadIntervalMsec == 0)
 					{
 						cfg_SettingReloadIntervalMsec = 10000;
 					}
+					cfg_SettingReloadIntervalMsec = MIN(cfg_SettingReloadIntervalMsec, 60 * 5 * 1000);
 					cfg_WatchPollingIntervalMsec = IniIntValue(ini, "WatchPollingIntervalMsec");
 					if (cfg_WatchPollingIntervalMsec == 0)
 					{
@@ -5411,6 +5555,12 @@ void TfMain(TF_SERVICE *svc)
 					if (cfg_ReportMaxQueueLength == 0)
 					{
 						cfg_ReportMaxQueueLength = 1024;
+					}
+
+					cfg_InputIdleTimerMsec = IniIntValue(ini, "InputIdleTimerMsec");
+					if (cfg_InputIdleTimerMsec == 0)
+					{
+						cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 					}
 
 					cfg_IgnoreDNSoverTCPSession = IniBoolValue(ini, "IgnoreDNSoverTCPSession");
@@ -5470,9 +5620,12 @@ void TfMain(TF_SERVICE *svc)
 				cfg_WatchOnlyWhenLocked = false;
 				cfg_IncludeProcessCommandLine = false;
 				cfg_EnableFirewall = false;
+				cfg_EnableFirewallOnlyWhenLocked = false;
 				cfg_ReportMaxQueueLength = 1024;
+				cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
+				lastState_firewall = INFINITE;
 			}
 
 			last_cfg_read = now;
@@ -5491,6 +5644,7 @@ void TfMain(TF_SERVICE *svc)
 
 				TfLog(svc, "-------------------- Start %S --------------------", svc->StartupSettings.AppTitle);
 				TfLog(svc, "APP_NAME: %S", svc->StartupSettings.AppTitle);
+				TfLog(svc, "THINFW_MODE: %S", svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode");
 				TfLog(svc, "CEDAR_VER: %u", CEDAR_VER);
 				TfLog(svc, "CEDAR_BUILD: %u", CEDAR_BUILD);
 				TfLog(svc, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
@@ -5521,10 +5675,39 @@ void TfMain(TF_SERVICE *svc)
 				TfLog(svc, "Memory - TotalPhys: %I64u", mem.TotalPhys);
 				TfLog(svc, "Memory - UsedPhys: %I64u", mem.UsedPhys);
 				TfLog(svc, "Memory - FreePhys: %I64u", mem.FreePhys);
+
+				wchar_t computer_name[128] = CLEAN;
+				MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
+
+				UniFormat(tmp, sizeof(tmp), L"%S is started. Mode: %S, CEDAR_VER: %u, "
+					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
+					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S, SSL_LIB_VER: %S, "
+					L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
+					L"OsVersion: %S, "
+					L"ComputerName: %s, "
+					L"UserName: %s, "
+					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessExePath: %s",
+					svc->StartupSettings.AppTitle, svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
+					CEDAR_VER,
+					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
+					THINLIB_COMMIT_ID, THINLIB_VER_LABEL, ssl_lib_ver,
+					os->OsSystemName, os->OsProductName, os->OsVendorName,
+					os->OsVersion,
+					computer_name,
+					MsGetUserNameExW(),
+					mem.TotalPhys, mem.UsedPhys, mem.FreePhys,
+					MsGetExeFileNameW()
+				);
+
+				TfInsertStrEvent(svc, tmp);
 			}
 			else
 			{
 				TfLog(svc, "-------------------- Stop %S --------------------", svc->StartupSettings.AppTitle);
+
+				UniFormat(tmp, sizeof(tmp), L"%S is stopped.", svc->StartupSettings.AppTitle);
+				TfInsertStrEvent(svc, tmp);
 			}
 		}
 
@@ -5564,6 +5747,8 @@ void TfMain(TF_SERVICE *svc)
 			last_poll = now;
 			AddInterrupt(im, now + (UINT64)cfg_WatchPollingIntervalMsec);
 
+			bool is_firewall_active = false;
+
 			if (cfg_Enable)
 			{
 				// Determine whether run the watch procedures
@@ -5578,7 +5763,22 @@ void TfMain(TF_SERVICE *svc)
 				else
 				{
 					// Use mouse pointer movement to detect inactivity
-					is_locked = !MsWtsOneOrMoreUnlockedSessionExists(); // TODO
+					if (MsWtsOneOrMoreUnlockedSessionExists() == false)
+					{
+						is_locked = true;
+					}
+					else if (MsIsScreenSaverRunning())
+					{
+						is_locked = true;
+					}
+					else
+					{
+						UINT64 idle_tick = MsGetIdleTick();
+						if (idle_tick >= 1 && idle_tick >= (UINT64)cfg_InputIdleTimerMsec)
+						{
+							is_locked = true;
+						}
+					}
 				}
 
 				if (lastState_locked != is_locked)
@@ -5596,6 +5796,15 @@ void TfMain(TF_SERVICE *svc)
 				else
 				{
 					is_watch_active = true;
+				}
+
+				if (cfg_EnableFirewallOnlyWhenLocked)
+				{
+					is_firewall_active = cfg_EnableFirewall && is_locked;
+				}
+				else
+				{
+					is_firewall_active = cfg_EnableFirewall;
 				}
 
 				if (lastState_watchActive != is_watch_active)
@@ -5769,6 +5978,39 @@ void TfMain(TF_SERVICE *svc)
 					}
 				}
 			}
+
+			UINT fw_new_state = (config_revision & 0x0FFFFFFF) | (is_firewall_active ? 0x10000000 : 0);
+
+			if (lastState_firewall != fw_new_state)
+			{
+				lastState_firewall = fw_new_state;
+				TfLog(svc, "Firewall active state is changed. New state is '%S' (Config revision: %u).",
+					is_firewall_active ? "Active" : "Inactive", config_revision);
+
+				if (is_firewall_active == false)
+				{
+					bool old_state = svc->WfpEngine ? true : false;
+
+					TfSetFirewall(svc, NULL, NULL);
+
+					if (old_state)
+					{
+						TfLog(svc, "Clear all firewall rules from the Windows Kernel.");
+					}
+				}
+				else
+				{
+					UINT num_rules_applied = 0;
+					if (TfSetFirewall(svc, cfg_file_content, &num_rules_applied))
+					{
+						TfLog(svc, "Successfully inserted %u firewall rules to the Windows Kernel.", num_rules_applied);
+					}
+					else
+					{
+						TfLog(svc, "**Error** Failed to insert firewall rules to the Windows Kernel.");
+					}
+				}
+			}
 		}
 
 		UINT wait_interval = GetNextIntervalForInterrupt(im);
@@ -5780,6 +6022,9 @@ void TfMain(TF_SERVICE *svc)
 
 		Wait(svc->HaltEvent, wait_interval);
 	}
+
+	// Stop firewall
+	TfSetFirewall(svc, NULL, NULL);
 
 	if (current_list != NULL)
 	{
@@ -5845,7 +6090,7 @@ void TfLog(TF_SERVICE *svc, char *format, ...)
 		return;
 	}
 
-	Format(format2, sizeof(format2), "[%s] %s", "Engine", format);
+	Format(format2, sizeof(format2), "[%s] %s", "ENGINE", format);
 
 	va_start(args, format);
 
