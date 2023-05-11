@@ -99,6 +99,7 @@ struct TF_REPORT_SETTINGS
 	bool ReportSendEngineEvent;
 	UINT ReportMailIntervalMsec;
 	UINT ReportMailMaxSize;
+	UINT ReportMailFailSleepIntervalMsec;
 	char ReportMailHost[MAX_PATH];
 	UINT ReportMailPort;
 	char ReportMailUsername[MAX_PATH];

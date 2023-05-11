@@ -4689,6 +4689,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	BUF *current_mail_body = NewBuf();
 	UINT current_mail_element_index = 0;
 	UINT64 last_mail_sent_tick = 0;
+	UINT64 mail_sleep_until_tick = 0;
 
 	wchar_t prefix_tmp[MAX_PATH] = CLEAN;
 
@@ -4696,14 +4697,14 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 	while (true)
 	{
-		UINT64 now = Tick64();
-
 		TF_REPORT_SETTINGS st = CLEAN;
 		Lock(svc->CurrentReportSettingsLock);
 		{
 			Copy(&st, &svc->CurrentReportSettings, sizeof(TF_REPORT_SETTINGS));
 		}
 		Unlock(svc->CurrentReportSettingsLock);
+
+		UINT64 now = Tick64();
 
 		if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
 			IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
@@ -4719,7 +4720,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			last_mail_sent_tick = now;
 		}
 
-		if (GetBufSize(current_mail_body) >= 1 && 
+		if (mail_sleep_until_tick <= now &&
+			GetBufSize(current_mail_body) >= 1 && 
 			(
 				(GetBufSize(current_mail_body) >= st.ReportMailMaxSize) ||
 				(st.ReportMailIntervalMsec == 0 || now >= (last_mail_sent_tick + st.ReportMailIntervalMsec)) ||
@@ -4803,8 +4805,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 					BUF *mail_error = NewBuf();
 
-					TfLog(svc, "Sending mail to %S with the SMTP Server %S:%u  (mail size = %u bytes)",
-						to_address, st.ReportMailHost, st.ReportMailPort, GetBufSize(current_mail_body));
+					TfLog(svc, "Sending mail to %S with the SMTP Server %S:%u  (items = %u, mail size = %u bytes)",
+						to_address, st.ReportMailHost, st.ReportMailPort, current_mail_element_index, GetBufSize(current_mail_body));
 
 					if (SmtpSendMailEx(st.ReportMailHost, st.ReportMailPort, st.ReportMailFrom, to_address,
 						mail_body, mail_error, st.ReportMailUsername, st.ReportMailPassword, 0,
@@ -4813,14 +4815,17 @@ void TfReportThreadProc(THREAD *thread, void *param)
 						SeekBufToEnd(mail_error);
 						WriteBufChar(mail_error, 0);
 
-						TfLog(svc, "SMTP mail send error to %S (SMTP server returned the error string: %S)",
+						TfLog(svc, "SMTP mail send error to %S. Giving up sending email within %u seconds. (SMTP server returned the error string: %S)",
 							to_address,
+							st.ReportMailFailSleepIntervalMsec / 1000,
 							mail_error->Buf);
+
+						mail_sleep_until_tick = Tick64() + (UINT64)st.ReportMailFailSleepIntervalMsec;
 					}
 					else
 					{
-						TfLog(svc, "SMTP mail is sent to %S (body size = %u bytes)",
-							to_address, GetBufSize(current_mail_body));
+						TfLog(svc, "SMTP mail is sent to %S (items = %u, body size = %u bytes)",
+							to_address, current_mail_element_index, GetBufSize(current_mail_body));
 					}
 
 					FreeBuf(mail_error);
@@ -5582,6 +5587,9 @@ void TfMain(TF_SERVICE *svc)
 
 					rep.ReportMailMaxSize = IniIntValue(ini, "ReportMailMaxSize");
 					rep.ReportMailMaxSize = MIN(rep.ReportMailMaxSize, 5000000);
+
+					rep.ReportMailFailSleepIntervalMsec = IniIntValue(ini, "ReportMailFailSleepIntervalMsec");
+					rep.ReportMailFailSleepIntervalMsec = MAX(rep.ReportMailFailSleepIntervalMsec, 15000);
 
 					rep.ReportMailOnlyWhenLocked = IniBoolValue(ini, "ReportMailOnlyWhenLocked");
 					rep.ReportSendEngineEvent = IniBoolValue(ini, "ReportSendEngineEvent");
