@@ -2593,6 +2593,53 @@ bool DeleteKey(LIST *o, UINT key)
 	return Delete(o, p);
 }
 
+LIST* DeleteByIndexes(LIST *o, LIST *index_list)
+{
+	LIST *ret = NewListFast(NULL);
+
+	if (o == NULL || index_list == NULL) {}
+	else
+	{
+		void **tmp_array = Clone(o->p, sizeof(void *) * o->num_item);
+
+		UINT i;
+
+		for (i = 0;i < LIST_NUM(index_list);i++)
+		{
+			UINT index = *((UINT *)LIST_DATA(index_list, i));
+
+			if (index < o->num_item)
+			{
+				if (tmp_array[index] != NULL)
+				{
+					Add(ret, tmp_array[index]);
+
+					tmp_array[index] = NULL;
+				}
+			}
+		}
+
+		UINT k = 0;
+
+		for (i = 0;i < o->num_item;i++)
+		{
+			void *p = tmp_array[i];
+
+			if (p != NULL)
+			{
+				o->p[k] = p;
+				k++;
+			}
+		}
+
+		o->num_item = k;
+
+		Free(tmp_array);
+	}
+
+	return ret;
+}
+
 // Delete the element from the list
 bool Delete(LIST *o, void *p)
 {
@@ -5820,6 +5867,101 @@ DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e)
 	ret->Data[ret->DataSize] = 0;
 	ret->Param = e->Param;
 	ret->Flags = e->Flags;
+
+	return ret;
+}
+
+UINT DeleteOldDiffEntry(LIST *list, UINT64 threshold_tick)
+{
+	if (list == NULL)
+	{
+		return 0;
+	}
+
+	LIST *delete_index_list = NULL;
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(list);i++)
+	{
+		DIFF_ENTRY *e = LIST_DATA(list, i);
+
+		if (e->Tick < threshold_tick)
+		{
+			if (delete_index_list == NULL)
+			{
+				delete_index_list = NewIntList(false);
+			}
+
+			AddInt(delete_index_list, i);
+		}
+	}
+
+	UINT ret = 0;
+
+	if (delete_index_list != NULL)
+	{
+		ret = LIST_NUM(delete_index_list);
+
+		LIST *deleted_items = DeleteByIndexes(list, delete_index_list);
+
+		for (i = 0; i < LIST_NUM(deleted_items);i++)
+		{
+			DIFF_ENTRY *e = LIST_DATA(deleted_items, i);
+
+			Free(e);
+		}
+
+		ReleaseList(deleted_items);
+
+		ReleaseIntList(delete_index_list);
+	}
+
+	return ret;
+}
+
+bool AddOrRenewDiffEntry(LIST *list, wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick)
+{
+	bool ret = false;
+
+	if (list == NULL)
+	{
+		return false;
+	}
+
+	if (key == NULL) key = L"";
+	if (tick == 0) tick = Tick64();
+
+	DIFF_ENTRY t = CLEAN;
+	UniStrCpy(t.Key, sizeof(t.Key), key);
+
+	DIFF_ENTRY *exist = Search(list, &t);
+
+	if (exist == NULL)
+	{
+		DIFF_ENTRY *new_entry = NewDiffEntry(key, data, data_size, param, tick);
+
+		Insert(list, new_entry);
+
+		exist = new_entry;
+
+		ret = false;
+	}
+	else
+	{
+		if (exist->Tick < tick)
+		{
+			if (exist->DataSize == data_size)
+			{
+				// Update
+				exist->Tick = tick;
+				exist->Param = param;
+				Copy(exist->Data, data, data_size);
+				exist->Data[data_size] = 0;
+
+				ret = true;
+			}
+		}
+	}
 
 	return ret;
 }

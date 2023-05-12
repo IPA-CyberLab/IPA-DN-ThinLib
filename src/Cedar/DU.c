@@ -89,6 +89,7 @@
 #define	_WIN32_IE			0x0600
 #define	_WIN32_WINNT		0x0502
 #define	WINVER				0x0502
+#define NTDDI_VERSION NTDDI_WIN7
 #include <winsock2.h>
 #include <Iphlpapi.h>
 #include <windows.h>
@@ -190,6 +191,110 @@ typedef struct DU_WFP_FUNCTIONS
 	DWORD (WINAPI *FwpmGetAppIdFromFileName0)(
 			IN PCWSTR fileName,
 			OUT FWP_BYTE_BLOB **appId
+		);
+
+	DWORD
+		(WINAPI *FwpmNetEventCreateEnumHandle0)(
+			__in HANDLE engineHandle,
+			__in_opt const FWPM_NET_EVENT_ENUM_TEMPLATE0 *enumTemplate,
+			__out HANDLE *enumHandle
+		);
+
+	DWORD
+	(WINAPI *FwpmNetEventEnum0)(
+		__in HANDLE engineHandle,
+		__in HANDLE enumHandle,
+		__in UINT32 numEntriesRequested,
+		__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+		__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+		(WINAPI *FwpmNetEventEnum1)(
+			__in HANDLE engineHandle,
+			__in HANDLE enumHandle,
+			__in UINT32 numEntriesRequested,
+			__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+			__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+	(WINAPI *FwpmNetEventEnum2)(
+		__in HANDLE engineHandle,
+		__in HANDLE enumHandle,
+		__in UINT32 numEntriesRequested,
+		__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+		__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+	(WINAPI *FwpmNetEventEnum3)(
+		__in HANDLE engineHandle,
+		__in HANDLE enumHandle,
+		__in UINT32 numEntriesRequested,
+		__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+		__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+	(WINAPI *FwpmNetEventEnum4)(
+		__in HANDLE engineHandle,
+		__in HANDLE enumHandle,
+		__in UINT32 numEntriesRequested,
+		__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+		__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+	(WINAPI *FwpmNetEventEnum5)(
+		__in HANDLE engineHandle,
+		__in HANDLE enumHandle,
+		__in UINT32 numEntriesRequested,
+		__deref_out_ecount(*numEntriesReturned) FWPM_NET_EVENT1 ***entries,
+		__out UINT32 *numEntriesReturned
+		);
+
+	DWORD
+		(WINAPI *FwpmNetEventDestroyEnumHandle0)(
+			__in HANDLE engineHandle,
+			__inout HANDLE enumHandle
+		);
+
+	DWORD
+		(WINAPI *FwpmEngineGetOption0)(
+			__in HANDLE engineHandle,
+			__in FWPM_ENGINE_OPTION option,
+			__deref_out FWP_VALUE0 **value
+		);
+
+	DWORD
+		(WINAPI *FwpmEngineSetOption0)(
+			__in HANDLE engineHandle,
+			__in FWPM_ENGINE_OPTION option,
+			__in const FWP_VALUE0 *newValue
+		);
+
+	DWORD
+		(WINAPI *FwpmNetEventSubscribe0)(
+			__in HANDLE engineHandle,
+			__in const FWPM_NET_EVENT_SUBSCRIPTION0 *subscription,
+			__in FWPM_NET_EVENT_CALLBACK0 callback,
+			__in_opt void *context,
+			__out HANDLE *eventsHandle
+		);
+
+	DWORD
+		(WINAPI *FwpmNetEventUnsubscribe0)(
+			__in HANDLE engineHandle,
+			__inout HANDLE eventsHandle
+		);
+
+
+	DWORD
+		(WINAPI *FwpmLayerGetByKey0)(
+			__in HANDLE engineHandle,
+			__in const GUID *key,
+			__deref_out FWPM_LAYER0 **layer
 		);
 
 } DU_WFP_FUNCTIONS;
@@ -3277,7 +3382,6 @@ void DUExec()
 
 
 
-
 // Initialization of the API
 bool DuInitWfpApi()
 {
@@ -3347,6 +3451,58 @@ bool DuInitWfpApi()
 		(DWORD(__stdcall *)(PCWSTR, FWP_BYTE_BLOB **))
 		GetProcAddress(du_wfp_dll, "FwpmGetAppIdFromFileName0");
 
+	du_wfp_api->FwpmNetEventCreateEnumHandle0 =
+		(DWORD(__stdcall *)(HANDLE, const FWPM_NET_EVENT_ENUM_TEMPLATE0 *, HANDLE *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventCreateEnumHandle0");
+
+	du_wfp_api->FwpmNetEventEnum0 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum0");
+
+	du_wfp_api->FwpmNetEventEnum1 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum1");
+
+	du_wfp_api->FwpmNetEventEnum2 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum2");
+
+	du_wfp_api->FwpmNetEventEnum3 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum3");
+
+	du_wfp_api->FwpmNetEventEnum4 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum4");
+
+	du_wfp_api->FwpmNetEventEnum5 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE, UINT32, FWPM_NET_EVENT1 ***, UINT32 *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventEnum5");
+
+	du_wfp_api->FwpmNetEventDestroyEnumHandle0 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventDestroyEnumHandle0");
+
+	du_wfp_api->FwpmEngineGetOption0 =
+		(DWORD(__stdcall *)(HANDLE, FWPM_ENGINE_OPTION, FWP_VALUE0 **))
+		GetProcAddress(du_wfp_dll, "FwpmEngineGetOption0");
+
+	du_wfp_api->FwpmEngineSetOption0 =
+		(DWORD(__stdcall *)(HANDLE, FWPM_ENGINE_OPTION, const FWP_VALUE0 *))
+		GetProcAddress(du_wfp_dll, "FwpmEngineSetOption0");
+
+	du_wfp_api->FwpmNetEventSubscribe0 =
+		(DWORD(__stdcall *)(HANDLE, const FWPM_NET_EVENT_SUBSCRIPTION0 *, FWPM_NET_EVENT_CALLBACK0, void *, HANDLE *))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventSubscribe0");
+	
+	du_wfp_api->FwpmNetEventUnsubscribe0 =
+		(DWORD(__stdcall *)(HANDLE, HANDLE))
+		GetProcAddress(du_wfp_dll, "FwpmNetEventUnsubscribe0");
+
+	du_wfp_api->FwpmLayerGetByKey0 =
+		(DWORD(__stdcall *)(HANDLE, const GUID *, FWPM_LAYER0 **))
+		GetProcAddress(du_wfp_dll, "FwpmLayerGetByKey0");
+
 	if (du_wfp_api->FwpmEngineOpen0 == NULL ||
 		du_wfp_api->FwpmEngineClose0 == NULL ||
 		du_wfp_api->FwpmFreeMemory0 == NULL ||
@@ -3358,7 +3514,11 @@ bool DuInitWfpApi()
 		du_wfp_api->FwpmCalloutAdd0 == NULL ||
 		du_wfp_api->FwpmSubLayerAdd0 == NULL ||
 		du_wfp_api->FwpmProviderAdd0 == NULL ||
-		du_wfp_api->FwpmGetAppIdFromFileName0 == NULL
+		du_wfp_api->FwpmGetAppIdFromFileName0 == NULL ||
+		du_wfp_api->FwpmEngineGetOption0 == NULL ||
+		du_wfp_api->FwpmEngineSetOption0 == NULL ||
+		du_wfp_api->FwpmLayerGetByKey0 == NULL ||
+		false
 		)
 	{
 		free(du_wfp_api);
@@ -3367,6 +3527,553 @@ bool DuInitWfpApi()
 	}
 
 	return true;
+}
+
+UINT DuWfpGetLayerIdFromLayerKey(HANDLE hEngine, const GUID *layer_key)
+{
+	if (hEngine == NULL || layer_key == NULL)
+	{
+		return INFINITE;
+	}
+
+	FWPM_LAYER0 *t = NULL;
+
+	UINT ret = du_wfp_api->FwpmLayerGetByKey0(hEngine, layer_key, &t);
+
+	if (ret)
+	{
+		return INFINITE;
+	}
+
+	UINT layer_id = INFINITE;
+
+	if (t != NULL)
+	{
+		layer_id = t->layerId;
+
+		du_wfp_api->FwpmFreeMemory0(&t);
+	}
+
+	return layer_id;
+}
+
+void CALLBACK DuWfpLogSubscriberCallback(void *ctx, const FWPM_NET_EVENT1 *ev)
+{
+	DU_WFP_LOG *g = (DU_WFP_LOG *)ctx;
+	if (g == NULL)
+	{
+		return;
+	}
+
+	wchar_t key[2048];
+
+	MS_THINFW_ENTRY_BLOCK b = CLEAN;
+
+	if (DuWfpNetEvent1ToStructure(g, (void *)ev, &b, key, sizeof(key)))
+	{
+	}
+}
+
+bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *b, wchar_t *key, UINT key_size)
+{
+	FWPM_NET_EVENT1 *ev = (FWPM_NET_EVENT1 *)event;
+
+	Zero(b, sizeof(MS_THINFW_ENTRY_BLOCK));
+	if (g == NULL || ev == NULL || b == NULL || key == NULL)
+	{
+		return false;
+	}
+
+	if (ev->type != FWPM_NET_EVENT_TYPE_CLASSIFY_DROP)
+	{
+		return false;
+	}
+
+	FWPM_NET_EVENT_HEADER1 *h = &ev->header;
+
+	if (
+		ev->classifyDrop != NULL &&
+		ev->classifyDrop->isLoopback == false &&
+		(ev->classifyDrop->msFwpDirection == FWP_DIRECTION_INBOUND || ev->classifyDrop->msFwpDirection == FWP_DIRECTION_OUTBOUND) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_IP_PROTOCOL_SET) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_ADDR_SET) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_ADDR_SET) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_PORT_SET) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_PORT_SET) &&
+		(h->flags & FWPM_NET_EVENT_FLAG_IP_VERSION_SET) &&
+		(h->ipVersion == FWP_IP_VERSION_V4 || h->ipVersion == FWP_IP_VERSION_V6) &&
+		(h->ipProtocol == IP_PROTO_TCP || h->ipProtocol == IP_PROTO_UDP) &&
+		(ev->classifyDrop->layerId == g->LayerId_IPv4_Receive ||
+			ev->classifyDrop->layerId == g->LayerId_IPv4_Send || 
+			ev->classifyDrop->layerId == g->LayerId_IPv6_Receive || 
+			ev->classifyDrop->layerId == g->LayerId_IPv6_Send)
+		)
+	{
+		MS_THINFW_ENTRY_BLOCK b = CLEAN;
+
+		b.IsReceive = (ev->classifyDrop->layerId == g->LayerId_IPv4_Receive || ev->classifyDrop->layerId == g->LayerId_IPv6_Receive);
+		b.Protocol = h->ipProtocol;
+
+		if (h->ipVersion == FWP_IP_VERSION_V4)
+		{
+			UINTToIP(&b.LocalIP, Endian32(h->localAddrV4));
+			UINTToIP(&b.RemoteIP, Endian32(h->remoteAddrV4));
+		}
+		else
+		{
+			InAddrToIP6(&b.LocalIP, (struct in6_addr *)&h->localAddrV6);
+			InAddrToIP6(&b.RemoteIP, (struct in6_addr *)&h->remoteAddrV6);
+		}
+
+		b.LocalPort = h->localPort;
+		b.RemotePort = h->remotePort;
+
+		if (h->flags & FWPM_NET_EVENT_FLAG_APP_ID_SET)
+		{
+			Copy(b.ProcessExeName, h->appId.data, MIN(h->appId.size, sizeof(b.ProcessExeName) - 4));
+		}
+		else
+		{
+			UniStrCpy(b.ProcessExeName, sizeof(b.ProcessExeName), L"(unknown app)");
+		}
+
+		UniStrCpy(b.Username, sizeof(b.Username), L"(unknown user)");
+		UniStrCpy(b.DomainName, sizeof(b.DomainName), L".");
+
+		SYSTEMTIME st = CLEAN;
+		if (FileTimeToSystemTime(&h->timeStamp, &st))
+		{
+			b.SystemTime = SystemToUINT64(&st);
+		}
+
+		if (h->flags & FWPM_NET_EVENT_FLAG_USER_ID_SET && h->userId != NULL)
+		{
+			MS_SID_INFO *info = NULL;
+
+			info = MsGetUsernameFromSid2(g->MsSidCache, h->userId);
+
+			if (info != NULL)
+			{
+				UniStrCpy(b.Username, sizeof(b.Username), info->Username);
+				UniStrCpy(b.DomainName, sizeof(b.DomainName), info->DomainName);
+			}
+		}
+
+		UniFormat(key, key_size,
+			L"WPF_DROP_LOG %r %u %r %u %u %u %s %s\\%s",
+			&b.RemoteIP, b.RemotePort,
+			&b.LocalIP, b.LocalPort,
+			b.IsReceive, b.Protocol,
+			b.ProcessExeName, b.Username, b.DomainName);
+
+		UniPrint(L"%s\n", key);
+
+		return true;
+	}
+
+	return false;
+}
+
+DU_WFP_LOG *DuWfpStartLog2()
+{
+	if (DuInitWfpApi() == false)
+	{
+		return NULL;
+	}
+
+	if (MsIsAdmin() == false)
+	{
+		return NULL;
+	}
+
+	if (du_wfp_api->FwpmNetEventSubscribe0 == NULL ||
+		du_wfp_api->FwpmNetEventUnsubscribe0 == NULL)
+	{
+		return NULL;
+	}
+
+	FWPM_SESSION0 session = CLEAN;
+
+	HANDLE engine = NULL;
+
+	UINT ret = du_wfp_api->FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, &session, &engine);
+	if (ret)
+	{
+		Debug("DuWfpStartLog: FwpmEngineOpen0 Failed. ret = 0x%X\n", ret);
+		return false;
+	}
+
+	DU_WFP_LOG *g = ZeroMalloc(sizeof(DU_WFP_LOG));
+
+	g->CurrentEntryList = NewDiffList();
+
+	g->Engine = engine;
+
+	g->LayerId_IPv4_Receive = DuWfpGetLayerIdFromLayerKey(g->Engine, &FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4);
+	g->LayerId_IPv4_Send = DuWfpGetLayerIdFromLayerKey(g->Engine, &FWPM_LAYER_ALE_AUTH_CONNECT_V4);
+
+	g->LayerId_IPv6_Receive = DuWfpGetLayerIdFromLayerKey(g->Engine, &FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6);
+	g->LayerId_IPv6_Send = DuWfpGetLayerIdFromLayerKey(g->Engine, &FWPM_LAYER_ALE_AUTH_CONNECT_V6);
+
+	g->MsSidCache = MsNewSidToUsernameCache();
+
+	FWPM_NET_EVENT_SUBSCRIPTION0 t = CLEAN;
+
+	ret = du_wfp_api->FwpmNetEventSubscribe0(g->Engine, &t, DuWfpLogSubscriberCallback, g, &g->Subscription);
+	if (ret)
+	{
+		Debug("DuWfpStartLog: FwpmNetEventSubscribe0 Failed. ret = 0x%X\n", ret);
+
+		DuWfpStopLog2(g);
+
+		return false;
+	}
+
+	return g;
+}
+
+void DuWfpStopLog2(DU_WFP_LOG *g)
+{
+	UINT ret = 0;
+
+	if (g == NULL)
+	{
+		return;
+	}
+
+	if (g->Subscription != NULL)
+	{
+		ret = du_wfp_api->FwpmNetEventUnsubscribe0(g->Engine, g->Subscription);
+
+		if (ret)
+		{
+			Debug("DuWfpStartLog: FwpmNetEventSubscribe0 Failed. ret = 0x%X\n", ret);
+		}
+	}
+
+	MsFreeSidToUsernameCache(g->MsSidCache);
+
+	du_wfp_api->FwpmEngineClose0(g->Engine);
+
+	FreeDiffList(g->CurrentEntryList);
+
+	Free(g);
+}
+
+DU_WFP_LOG *DuWfpStartLog()
+{
+	if (DuInitWfpApi() == false)
+	{
+		return false;
+	}
+
+	if (du_wfp_api->FwpmNetEventCreateEnumHandle0 == NULL ||
+		du_wfp_api->FwpmNetEventEnum1 == NULL ||
+		du_wfp_api->FwpmNetEventDestroyEnumHandle0 == NULL)
+	{
+		return false;
+	}
+
+	FWPM_SESSION0 session = CLEAN;
+
+	HANDLE engine = NULL;
+
+	UINT ret = du_wfp_api->FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, &session, &engine);
+	if (ret)
+	{
+		Debug("DuWfpStartLog: FwpmEngineOpen0 Failed. ret = 0x%X\n", ret);
+		return false;
+	}
+
+	FWP_VALUE value = CLEAN;
+
+	value.type = FWP_UINT32;
+	value.uint32 = 1;
+
+	ret = du_wfp_api->FwpmEngineSetOption0(engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
+	if (ret)
+	{
+		Debug("DuWfpStartLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
+		du_wfp_api->FwpmEngineClose0(engine);
+		return false;
+	}
+
+	DU_WFP_LOG *g = ZeroMalloc(sizeof(DU_WFP_LOG));
+
+	g->Engine = engine;
+
+	return g;
+}
+
+void DuWfpStopLog(DU_WFP_LOG *g)
+{
+	if (g == NULL)
+	{
+		return;
+	}
+
+	du_wfp_api->FwpmEngineClose0(g->Engine);
+
+	Free(g);
+}
+
+bool DuWfpEnumLog(DU_WFP_LOG *g, LIST *dst_diff_list, LIST *sid_cache)
+{
+	if (g == NULL || dst_diff_list == NULL)
+	{
+		return false;
+	}
+
+	UINT num_retry = 0;
+
+L_RETRY:
+	
+	if (num_retry >= 3)
+	{
+		WHERE;
+		return false;
+	}
+
+	HANDLE enum_handle = NULL;
+
+	UINT ret = du_wfp_api->FwpmNetEventCreateEnumHandle0(g->Engine, NULL, &enum_handle);
+	if (ret == FWP_E_NET_EVENTS_DISABLED)
+	{
+		FWP_VALUE value = CLEAN;
+
+		value.type = FWP_UINT32;
+		value.uint32 = 1;
+		ret = du_wfp_api->FwpmEngineSetOption0(g->Engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
+
+		if (ret)
+		{
+			Debug("DuWfpEnumLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
+
+			if (enum_handle != NULL)
+			{
+				du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
+			}
+			return false;
+		}
+
+		num_retry++;
+		goto L_RETRY;
+	}
+	else if (ret)
+	{
+		Debug("DuWfpEnumLog: FwpmNetEventCreateEnumHandle0 Failed. ret = 0x%X\n", ret);
+
+		if (enum_handle != NULL)
+		{
+			du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
+		}
+		return false;
+	}
+
+	LIST *tmp_list = NewListFast(NULL);
+
+	UINT num_request = 65536;
+
+	bool ok = true;
+
+	UINT64 now = Tick64();
+
+	while (true)
+	{
+		UINT num_return = 0;
+
+		FWPM_NET_EVENT1 **list = NULL;
+
+		ret = du_wfp_api->FwpmNetEventEnum5(g->Engine, enum_handle, num_request, &list,
+			&num_return);
+
+		du_wfp_api->FwpmFreeMemory0((void **)&list);
+
+		break;
+
+		if (ret == FWP_E_NET_EVENTS_DISABLED)
+		{
+			du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
+
+			FWP_VALUE value = CLEAN;
+
+			value.type = FWP_UINT32;
+			value.uint32 = 1;
+			ret = du_wfp_api->FwpmEngineSetOption0(g->Engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
+
+			if (ret)
+			{
+				Debug("DuWfpEnumLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
+
+				ok = false;
+				break;
+			}
+
+			UINT i;
+
+			for (i = 0;i < LIST_NUM(tmp_list);i++)
+			{
+				DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
+
+				Free(e);
+			}
+
+			ReleaseList(tmp_list);
+			
+			num_retry++;
+			goto L_RETRY;
+		}
+		else if (ret == ERROR_SUCCESS)
+		{
+			UINT i;
+			for (i = 0;i < num_return;i++)
+			{
+				FWPM_NET_EVENT1 *ev = list[i];
+
+				if (false && ev->type == FWPM_NET_EVENT_TYPE_CLASSIFY_DROP)
+				{
+					FWPM_NET_EVENT_HEADER1 *h = &ev->header;
+
+					if (
+						ev->classifyDrop != NULL &&
+						ev->classifyDrop->isLoopback == false &&
+						(ev->classifyDrop->msFwpDirection == FWP_DIRECTION_INBOUND || ev->classifyDrop->msFwpDirection == FWP_DIRECTION_OUTBOUND) &&
+						(h->flags & FWPM_NET_EVENT_FLAG_IP_PROTOCOL_SET) &&
+						(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_ADDR_SET) &&
+						(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_ADDR_SET) &&
+//						(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_PORT_SET) &&
+//						(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_PORT_SET) &&
+						(h->flags & FWPM_NET_EVENT_FLAG_IP_VERSION_SET) &&
+						(h->ipVersion == FWP_IP_VERSION_V4 || h->ipVersion == FWP_IP_VERSION_V6) &&
+						(h->ipProtocol == IP_PROTO_TCP || h->ipProtocol == IP_PROTO_UDP || h->ipProtocol == IP_PROTO_ICMPV4 || h->ipProtocol == IP_PROTO_ICMPV6))
+					{
+						MS_THINFW_ENTRY_BLOCK b = CLEAN;
+
+						b.IsReceive = (ev->classifyDrop->msFwpDirection == FWP_DIRECTION_INBOUND);
+						b.Protocol = h->ipProtocol;
+
+						if (h->ipVersion == FWP_IP_VERSION_V4)
+						{
+							UINTToIP(&b.LocalIP, Endian32(h->localAddrV4));
+							UINTToIP(&b.RemoteIP, Endian32(h->remoteAddrV4));
+						}
+						else
+						{
+							InAddrToIP6(&b.LocalIP, (struct in6_addr *)&h->localAddrV6);
+							InAddrToIP6(&b.RemoteIP, (struct in6_addr *)&h->remoteAddrV6);
+						}
+
+						if (h->flags & FWPM_NET_EVENT_FLAG_LOCAL_PORT_SET)
+						{
+							b.LocalPort = h->localPort;
+						}
+
+						if (h->flags & FWPM_NET_EVENT_FLAG_REMOTE_PORT_SET)
+						{
+							b.RemotePort = h->remotePort;
+						}
+
+						if (h->flags & FWPM_NET_EVENT_FLAG_APP_ID_SET)
+						{
+							Copy(b.ProcessExeName, h->appId.data, MIN(h->appId.size, sizeof(b.ProcessExeName) - 4));
+						}
+						else
+						{
+							UniStrCpy(b.ProcessExeName, sizeof(b.ProcessExeName), L"(unknown app)");
+						}
+
+						UniStrCpy(b.Username, sizeof(b.Username), L"(unknown user)");
+						UniStrCpy(b.DomainName, sizeof(b.DomainName), L".");
+
+						SYSTEMTIME st = CLEAN;
+						if (FileTimeToSystemTime(&h->timeStamp, &st))
+						{
+							b.SystemTime = SystemToUINT64(&st);
+						}
+
+						if (h->flags & FWPM_NET_EVENT_FLAG_USER_ID_SET && h->userId != NULL)
+						{
+							MS_SID_INFO *info = MsGetUsernameFromSid2(sid_cache, h->userId);
+
+							if (info != NULL)
+							{
+								UniStrCpy(b.Username, sizeof(b.Username), info->Username);
+								UniStrCpy(b.DomainName, sizeof(b.DomainName), info->DomainName);
+							}
+						}
+
+						wchar_t key[1024];
+						
+						UniFormat(key, sizeof(key),
+							L"WPF_DROP_LOG %I64u %u ts=%I64u dir=%u proto=%u lip=%r lp=%u rip=%r rp=%u exe=%s un=%s\\%s",
+							ev->classifyDrop->filterId,
+							(UINT)ev->classifyDrop->layerId,
+							b.SystemTime,
+							(ev->classifyDrop->msFwpDirection), b.Protocol, &b.LocalIP, b.LocalPort, &b.RemoteIP, b.RemotePort,
+							b.ProcessExeName, b.Username, b.DomainName);
+
+						//UniPrint(L"%s\n", key);
+
+						Add(tmp_list, NewDiffEntry(key, &b, sizeof(b), MS_THINFW_ENTRY_TYPE_BLOCK, now));
+					}
+				}
+			}
+
+			//for (i = 0;i < num_return;i++)
+			//{
+			//	FWPM_NET_EVENT1 *ev = list[i];
+			//	du_wfp_api->FwpmFreeMemory0((void **)ev->classifyDrop);
+			//}
+
+			du_wfp_api->FwpmFreeMemory0((void **)&list);
+
+			if (num_return < num_request)
+			{
+				break;
+			}
+		}
+		else
+		{
+			Debug("DuWfpEnumLog: FwpmNetEventEnum1 Failed. ret = 0x%X\n", ret);
+
+			ok = false;
+
+			break;
+		}
+	}
+
+	ret = du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
+	if (ret)
+	{
+		Debug("DuWfpEnumLog: FwpmNetEventDestroyEnumHandle0 Failed. ret = 0x%X\n", ret);
+	}
+
+	if (ok == false)
+	{
+		UINT i;
+
+		for (i = 0;i < LIST_NUM(tmp_list);i++)
+		{
+			DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
+
+			Free(e);
+		}
+	}
+	else
+	{
+		UINT i;
+
+		for (i = 0;i < LIST_NUM(tmp_list);i++)
+		{
+			DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
+
+			Add(dst_diff_list, e);
+		}
+	}
+
+	ReleaseList(tmp_list);
+
+	return ok;
 }
 
 bool DuWfpCreateProvider(HANDLE hEngine, GUID *created_guid, char *name)
@@ -4008,6 +4715,45 @@ bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied)
 	}
 
 	return true;
+}
+
+void DuWfpTest3()
+{
+
+	LIST *cache = MsNewSidToUsernameCache();
+
+	UINT count = 0;
+
+	do
+	{
+		DU_WFP_LOG *g = DuWfpStartLog();
+		if (g == NULL)
+		{
+			WHERE;
+			return;
+		}
+
+		LIST *current = NewDiffList();
+
+		if (DuWfpEnumLog(g, current, cache) == false)
+		{
+			WHERE;
+		}
+
+		FreeDiffList(current);
+
+		count++;
+
+		if ((count % 10) == 0)
+		{
+			Print("%u\n", count);
+		}
+
+		DuWfpStopLog(g);
+	} while (true);
+
+
+	MsFreeDnsServersList(cache);
 }
 
 void DuWfpTest2()
@@ -5505,6 +6251,8 @@ void TfMain(TF_SERVICE *svc)
 
 	UINT config_revision = 1;
 
+	DU_WFP_LOG *wfp_log = DuWfpStartLog2();
+
 	wchar_t tmp[2048];
 
 	// Init report thread
@@ -6097,6 +6845,8 @@ void TfMain(TF_SERVICE *svc)
 	MsFreeSidToUsernameCache(sid_cache);
 
 	MsFreeDnsServersList(current_dns_servers_list);
+
+	DuWfpStopLog2(wfp_log);
 
 	if (cfg_Enable)
 	{

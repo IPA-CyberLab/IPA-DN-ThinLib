@@ -481,6 +481,7 @@ void InsertDistinct(LIST *o, void *p);
 bool Delete(LIST *o, void *p);
 bool DeleteKey(LIST *o, UINT key);
 void DeleteAll(LIST *o);
+LIST *DeleteByIndexes(LIST *o, LIST *index_list);
 void LockList(LIST *o);
 void UnlockList(LIST *o);
 void ReleaseList(LIST *o);
@@ -613,6 +614,8 @@ void FreeDiffList(LIST *list);
 LIST *UpdateDiffList(LIST *base_list, LIST *new_items);
 DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
 DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e);
+bool AddOrRenewDiffEntry(LIST *list, wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
+UINT DeleteOldDiffEntry(LIST *list, UINT64 threshold_tick);
 
 int CmpKvList(void *p1, void *p2);
 KV_LIST *SearchKvList(LIST *o, char *key);

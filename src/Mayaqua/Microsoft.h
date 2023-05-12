@@ -819,6 +819,8 @@ typedef struct MS_SID_INFO
 #define	MS_THINFW_ENTRY_TYPE_TCP			2
 #define	MS_THINFW_ENTRY_TYPE_RDP			3
 #define	MS_THINFW_ENTRY_TYPE_DNS			4
+#define MS_THINFW_ENTRY_TYPE_BLOCK			5
+
 
 #define	MS_THINFW_ENTRY_FLAG_NONE			0
 #define	MS_THINFW_ENTRY_FLAG_LOCKED			1
@@ -868,6 +870,20 @@ typedef struct MS_THINFW_ENTRY_DNS
 	char Hostname[MAX_PATH];
 	IP Ip;
 } MS_THINFW_ENTRY_DNS;
+
+typedef struct MS_THINFW_ENTRY_BLOCK
+{
+	UINT64 SystemTime;
+	bool IsReceive;
+	UINT Protocol;
+	IP LocalIP;
+	UINT LocalPort;
+	IP RemoteIP;
+	UINT RemotePort;
+	wchar_t ProcessExeName[MAX_PATH];
+	wchar_t Username[MAX_SIZE];
+	wchar_t DomainName[MAX_SIZE];
+} MS_THINFW_ENTRY_BLOCK;
 
 // Function prototype
 void MsInit();
@@ -1157,6 +1173,7 @@ void MsUpdateCompatibleIDs(char *instance_name);
 LIST *MsGetProcessList(UINT flags);
 LIST *MsGetProcessList9x();
 LIST *MsGetProcessListNt(UINT flags);
+BUF *MsCheckAndGetSidBufFromSid(void *sid);
 bool MsIs64bitProcess(void* handle);
 void MsFreeProcessList(LIST *o);
 void MsPrintProcessList(LIST *o);
@@ -1177,6 +1194,7 @@ UINT MsReadCallingServiceManagerProcessId(char *svcname, bool current_user);
 bool MsStopIPsecService();
 char *MsGetIPsecServiceName();
 bool MsStartIPsecService();
+BUF *MsCheckAndGetSidBufFromSid(void *sid);
 
 void MsKillScreenshotProcesses();
 
@@ -1484,6 +1502,7 @@ bool MsIsFastStartupEnabled();
 
 LIST *MsNewSidToUsernameCache();
 MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size);
+MS_SID_INFO *MsGetUsernameFromSid2(LIST *cache_list, void *sid);
 void MsFreeSidToUsernameCache(LIST *cache_list);
 LIST *MsGetCurrentDnsServersList();
 void MsFreeDnsServersList(LIST *o);

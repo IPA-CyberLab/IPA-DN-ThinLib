@@ -1164,14 +1164,27 @@ LIST *MsGetCurrentDnsServersList()
 	return ret;
 }
 
-MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size)
+MS_SID_INFO *MsGetUsernameFromSid2(LIST *cache_list, void *sid)
 {
-	if (MsIsNt() == false)
+	BUF *sid_buf = MsCheckAndGetSidBufFromSid(sid);
+	if (sid_buf == NULL)
 	{
 		return NULL;
 	}
 
-	MS_SID_INFO *e;
+	MS_SID_INFO *ret = MsGetUsernameFromSid(cache_list, sid_buf->Buf, sid_buf->Size);
+
+	FreeBuf(sid_buf);
+
+	return ret;
+}
+MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_size)
+{
+	MS_SID_INFO *e = NULL;
+	if (MsIsNt() == false)
+	{
+		return NULL;
+	}
 
 	if (cache_list == NULL || sid_data == NULL || sid_size == 0 || sid_size >= sizeof(e->SidData))
 	{
@@ -1179,16 +1192,27 @@ MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_siz
 	}
 
 	// Search cache
-	UINT i;
-	for (i = 0;i < LIST_NUM(cache_list);i++)
-	{
-		MS_SID_INFO *e = LIST_DATA(cache_list, i);
+	MS_SID_INFO *ret = NULL;
 
-		if (ms->nt->EqualSid(e->SidData, sid_data))
+	UINT i;
+	LockList(cache_list);
+	{
+		for (i = 0;i < LIST_NUM(cache_list);i++)
 		{
-			// match
-			return e;
+			MS_SID_INFO *e = LIST_DATA(cache_list, i);
+
+			if (ms->nt->EqualSid(e->SidData, sid_data))
+			{
+				// match
+				ret = e;
+			}
 		}
+	}
+	UnlockList(cache_list);
+
+	if (ret != NULL)
+	{
+		return ret;
 	}
 
 	if (LIST_NUM(cache_list) >= 256)
@@ -1218,7 +1242,11 @@ MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_siz
 	UniStrCpy(e->Username, sizeof(e->Username), username);
 	UniStrCpy(e->DomainName, sizeof(e->DomainName), domain);
 
-	Add(cache_list, e);
+	LockList(cache_list);
+	{
+		Add(cache_list, e);
+	}
+	UnlockList(cache_list);
 
 	return e;
 }
@@ -7385,6 +7413,34 @@ bool MsIs64bitProcess(void *handle)
 			return false;
 		}
 	}
+}
+
+BUF *MsCheckAndGetSidBufFromSid(void *sid)
+{
+	if (MsIsNt() == false)
+	{
+		return NULL;
+	}
+	if (sid == NULL)
+	{
+		return NULL;
+	}
+
+	if (ms->nt->IsValidSid(sid))
+	{
+		UINT sid_size = ms->nt->GetLengthSid(sid);
+
+		UCHAR data[64] = CLEAN;
+
+		if (sid_size >= 1 && sid_size <= sizeof(data))
+		{
+			Copy(data, sid, sid_size);
+
+			return NewBufFromMemory(data, sid_size);
+		}
+	}
+
+	return NULL;
 }
 
 static bool ms_proc_get_other_users_proc_inited = false;

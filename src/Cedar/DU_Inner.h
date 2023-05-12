@@ -161,7 +161,18 @@ typedef struct DU_ABOUT
 	char *BuildInfo;
 } DU_ABOUT;
 
+typedef struct DU_WFP_LOG
+{
+	HANDLE Engine;
+	HANDLE Subscription;
+	LIST *MsSidCache;
+	LIST *CurrentEntryList;
 
+	UINT LayerId_IPv4_Receive;
+	UINT LayerId_IPv4_Send;
+	UINT LayerId_IPv6_Receive;
+	UINT LayerId_IPv6_Send;
+} DU_WFP_LOG;
 
 
 
@@ -299,6 +310,15 @@ void TfInsertStrEvent(TF_SERVICE *svc, wchar_t *str);
 
 bool TfGetCurrentMacAddress(UCHAR *mac);
 
+DU_WFP_LOG *DuWfpStartLog();
+void DuWfpStopLog(DU_WFP_LOG *g);
+bool DuWfpEnumLog(DU_WFP_LOG *g, LIST *dst_diff_list, LIST *sid_cache);
+bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *b, wchar_t *key, UINT key_size);
+UINT DuWfpGetLayerIdFromLayerKey(HANDLE hEngine, const GUID *layer_key);
+
+
+DU_WFP_LOG *DuWfpStartLog2();
+void DuWfpStopLog2(DU_WFP_LOG *g);
 
 
 
