@@ -162,6 +162,15 @@ struct KV_LIST
 	UCHAR Data[16]; // Dummy: size may vary
 } GCC_PACKED;
 
+struct KV_LISTW
+{
+	wchar_t Key[256];
+	UINT64 Param1;
+	UINT Type;
+	UINT DataSize;
+	UCHAR Data[16]; // Dummy: size may vary
+} GCC_PACKED;
+
 #ifdef	OS_WIN32
 #pragma pack(pop)
 #endif	// OS_WIN32
@@ -624,6 +633,14 @@ void *SearchKvListData(LIST *o, char *key, UINT type);
 KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation);
 void FreeKvList(LIST *o);
 LIST *NewKvList();
+
+int CmpKvListW(void *p1, void *p2);
+KV_LISTW *SearchKvListW(LIST *o, wchar_t *key);
+KV_LISTW *AddOrGetKvListW(LIST *o, wchar_t *key, void *initial_data, UINT initial_data_size, UINT type, UINT64 param1);
+void *SearchKvListDataW(LIST *o, wchar_t *key, UINT type);
+KV_LISTW *AddKvListW(LIST *o, wchar_t *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation);
+void FreeKvListW(LIST *o);
+LIST *NewKvListW();
 
 PC_TABLE *NewPcTable();
 void FreePcTable(PC_TABLE *t);

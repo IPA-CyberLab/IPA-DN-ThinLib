@@ -3125,6 +3125,145 @@ LIST *NewKvList()
 	return o;
 }
 
+
+
+int CmpKvListW(void *p1, void *p2)
+{
+	if (p1 == NULL || p2 == NULL)
+	{
+		return 0;
+	}
+
+	KV_LISTW *k1 = *((KV_LISTW **)p1);
+	KV_LISTW *k2 = *((KV_LISTW **)p2);
+	if (k1 == NULL || k2 == NULL)
+	{
+		return 0;
+	}
+
+	return UniStrCmpi(k1->Key, k2->Key);
+}
+
+void *SearchKvListDataW(LIST *o, wchar_t *key, UINT type)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = L"";
+
+	KV_LISTW *k = SearchKvListW(o, key);
+	if (k == NULL)
+	{
+		return NULL;
+	}
+
+	if (k->Type != type)
+	{
+		return NULL;
+	}
+
+	return k->Data;
+}
+
+KV_LISTW *SearchKvListW(LIST *o, wchar_t *key)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = L"";
+
+	KV_LISTW t = CLEAN;
+	UniStrCpy(t.Key, sizeof(t.Key), key);
+
+	return Search(o, &t);
+}
+
+KV_LISTW *AddOrGetKvListW(LIST *o, wchar_t *key, void *initial_data, UINT initial_data_size, UINT type, UINT64 param1)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = L"";
+
+	KV_LISTW *ret = SearchKvListW(o, key);
+
+	if (ret == NULL)
+	{
+		ret = AddKvListW(o, key, initial_data, initial_data_size, type, param1, true);
+	}
+
+	if (ret == NULL)
+	{
+		return NULL;
+	}
+
+	return ret;
+}
+
+KV_LISTW *AddKvListW(LIST *o, wchar_t *key, void *data, UINT size, UINT type, UINT64 param1, bool insert_operation)
+{
+	if (o == NULL)
+	{
+		return NULL;
+	}
+
+	if (key == NULL) key = L"";
+
+	KV_LISTW *k = Malloc(sizeof(KV_LISTW) + size);
+
+	UniStrCpy(k->Key, sizeof(k->Key), key);
+	Copy(k->Data, data, size);
+	k->Data[size] = 0;
+
+	k->DataSize = size;
+	k->Type = type;
+	k->Param1 = param1;
+
+	if (insert_operation == false)
+	{
+		Add(o, k);
+	}
+	else
+	{
+		Insert(o, k);
+	}
+
+	return k;
+}
+
+void FreeKvListW(LIST *o)
+{
+	if (o == NULL)
+	{
+		return;
+	}
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		KV_LISTW *k = (KV_LISTW *)LIST_DATA(o, i);
+
+		Free(k);
+	}
+
+	ReleaseList(o);
+}
+
+LIST *NewKvListW()
+{
+	LIST *o = NewList(CmpKvListW);
+
+	return o;
+}
+
+
+
 // Randomize the contents of the list
 void RandomizeList(LIST *o)
 {
@@ -5948,7 +6087,7 @@ bool AddOrRenewDiffEntry(LIST *list, wchar_t *key, void *data, UINT data_size, U
 	}
 	else
 	{
-		if (exist->Tick < tick)
+		if (tick > exist->Tick)
 		{
 			if (exist->DataSize == data_size)
 			{

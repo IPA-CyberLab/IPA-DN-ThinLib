@@ -377,6 +377,135 @@ void MsTestFunc1(HWND hWnd)
 	}
 }
 
+typedef struct MS_DOSPATH_TO_FULLPATH_DATA
+{
+	wchar_t FullPath[512];
+} MS_DOSPATH_TO_FULLPATH_DATA;
+
+LIST *MsNewConvertDosDevicePathToFullPathCache()
+{
+	LIST *cache = NewKvListW();
+
+	return cache;
+}
+
+void MsFreeConvertDosDevicePathToFullPathCache(LIST *cache)
+{
+	if (cache == NULL)
+	{
+		return;
+	}
+
+	FreeKvListW(cache);
+}
+
+bool MsConvertDosDevicePathToFullPathWithCache(LIST *cache, wchar_t *dst, UINT dst_size, wchar_t *src)
+{
+	ClearUniStr(dst, dst_size);
+	if (cache == NULL || dst == NULL || src == NULL)
+	{
+		return false;
+	}
+
+	MS_DOSPATH_TO_FULLPATH_DATA *d;
+	
+	LockList(cache);
+	{
+		d = SearchKvListDataW(cache, src, 0);
+
+		if (d != NULL)
+		{
+			UniStrCpy(dst, dst_size, d->FullPath);
+		}
+	}
+	UnlockList(cache);
+
+	if (d != NULL)
+	{
+		return UniIsFilledUniStr(dst);
+	}
+
+	wchar_t tmp[512] = CLEAN;
+
+	bool r = MsConvertDosDevicePathToFullPath(tmp, sizeof(tmp), src);
+
+	if (r == false)
+	{
+		Zero(tmp, sizeof(tmp));
+	}
+
+	MS_DOSPATH_TO_FULLPATH_DATA d2 = CLEAN;
+	UniStrCpy(d2.FullPath, sizeof(d2.FullPath), tmp);
+
+	LockList(cache);
+	{
+		AddOrGetKvListW(cache, src, &d2, sizeof(d2), 0, 0);
+	}
+	UnlockList(cache);
+
+	return r;
+}
+
+bool MsConvertDosDevicePathToFullPath(wchar_t *dst, UINT dst_size, wchar_t *src)
+{
+	ClearUniStr(dst, dst_size);
+	if (dst == NULL || src == NULL)
+	{
+		return false;
+	}
+	if (ms->nt->GetFinalPathNameByHandleW == NULL)
+	{
+		return false;
+	}
+
+	if (UniStartWith(src, L"\\device\\mup\\"))
+	{
+		UniFormat(dst, dst_size, L"\\\\%s", src + 12);
+		return true;
+	}
+
+	if (UniStartWith(src, L"\\device\\harddiskvolume") == false)
+	{
+		return false;
+	}
+
+	wchar_t tmp[1024];
+	UniFormat(tmp, sizeof(tmp), L"\\\\?%s", src + 7);
+
+	void *wow = MsDisableWow64FileSystemRedirection();
+
+	HANDLE h = CreateFileW(tmp, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		NULL, OPEN_EXISTING,
+		0, NULL);
+
+	bool ret = false;
+
+	if (h != INVALID_HANDLE_VALUE)
+	{
+		Zero(tmp, sizeof(tmp));
+
+		if (ms->nt->GetFinalPathNameByHandleW(h, tmp, sizeof(tmp) / sizeof(wchar_t) - 1, VOLUME_NAME_DOS) != 0)
+		{
+			if (UniStartWith(tmp, L"\\\\?\\"))
+			{
+				UniStrCpy(dst, dst_size, tmp + 4);
+				ret = true;
+			}
+		}
+		else
+		{
+			//UINT err = GetLastError();
+			//Debug("e2 %u\n", err);
+		}
+
+		CloseHandle(h);
+	}
+
+	MsRestoreWow64FileSystemRedirection(wow);
+
+	return ret;
+}
+
 MS_DNS_CACHE_ENTRY_A *MsSearchDnsCacheList_A(LIST *o, IP *ip)
 {
 	if (o == NULL || ip == NULL)
@@ -15928,6 +16057,9 @@ NT_API *MsLoadNtApiFunctions()
 	nt->Wow64RevertWow64FsRedirection =
 		(BOOL(__stdcall *)(void *))
 		GetProcAddress(nt->hKernel32, "Wow64RevertWow64FsRedirection");
+	nt->GetFinalPathNameByHandleW =
+		(DWORD(__stdcall *)(HANDLE, LPWSTR, DWORD, DWORD))
+		GetProcAddress(nt->hKernel32, "GetFinalPathNameByHandleW");
 
 	if (nt->hPsApi != NULL)
 	{

@@ -3701,10 +3701,24 @@ bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK
 			}
 		}
 
+		UINT key_local_port = b.LocalPort;
+		UINT key_remote_port = b.RemotePort;
+
+		if (b.IsReceive)
+		{
+			// TCP or UDP server mode: Do not store remote port on the key string
+			key_remote_port = 0;
+		}
+		else
+		{
+			// TCP or UDP client mode: Do not store local port on the key string
+			key_local_port = 0;
+		}
+
 		UniFormat(key, key_size,
 			L"WPF_DROP_LOG %r %u %r %u %u %u %s %s\\%s",
-			&b.RemoteIP, b.RemotePort,
-			&b.LocalIP, b.LocalPort,
+			&b.RemoteIP, key_remote_port,
+			&b.LocalIP, key_local_port,
 			b.IsReceive, b.Protocol,
 			b.ProcessExeName, b.Username, b.DomainName);
 
@@ -3814,322 +3828,6 @@ void DuWfpStopLog2(DU_WFP_LOG *g)
 	FreeDiffList(g->CurrentEntryList);
 
 	Free(g);
-}
-
-DU_WFP_LOG *DuWfpStartLog()
-{
-	if (DuInitWfpApi() == false)
-	{
-		return false;
-	}
-
-	if (du_wfp_api->FwpmNetEventCreateEnumHandle0 == NULL ||
-		du_wfp_api->FwpmNetEventEnum1 == NULL ||
-		du_wfp_api->FwpmNetEventDestroyEnumHandle0 == NULL)
-	{
-		return false;
-	}
-
-	FWPM_SESSION0 session = CLEAN;
-
-	HANDLE engine = NULL;
-
-	UINT ret = du_wfp_api->FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, &session, &engine);
-	if (ret)
-	{
-		Debug("DuWfpStartLog: FwpmEngineOpen0 Failed. ret = 0x%X\n", ret);
-		return false;
-	}
-
-	FWP_VALUE value = CLEAN;
-
-	value.type = FWP_UINT32;
-	value.uint32 = 1;
-
-	ret = du_wfp_api->FwpmEngineSetOption0(engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
-	if (ret)
-	{
-		Debug("DuWfpStartLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
-		du_wfp_api->FwpmEngineClose0(engine);
-		return false;
-	}
-
-	DU_WFP_LOG *g = ZeroMalloc(sizeof(DU_WFP_LOG));
-
-	g->Engine = engine;
-
-	return g;
-}
-
-void DuWfpStopLog(DU_WFP_LOG *g)
-{
-	if (g == NULL)
-	{
-		return;
-	}
-
-	du_wfp_api->FwpmEngineClose0(g->Engine);
-
-	Free(g);
-}
-
-bool DuWfpEnumLog(DU_WFP_LOG *g, LIST *dst_diff_list, LIST *sid_cache)
-{
-	if (g == NULL || dst_diff_list == NULL)
-	{
-		return false;
-	}
-
-	UINT num_retry = 0;
-
-L_RETRY:
-	
-	if (num_retry >= 3)
-	{
-		WHERE;
-		return false;
-	}
-
-	HANDLE enum_handle = NULL;
-
-	UINT ret = du_wfp_api->FwpmNetEventCreateEnumHandle0(g->Engine, NULL, &enum_handle);
-	if (ret == FWP_E_NET_EVENTS_DISABLED)
-	{
-		FWP_VALUE value = CLEAN;
-
-		value.type = FWP_UINT32;
-		value.uint32 = 1;
-		ret = du_wfp_api->FwpmEngineSetOption0(g->Engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
-
-		if (ret)
-		{
-			Debug("DuWfpEnumLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
-
-			if (enum_handle != NULL)
-			{
-				du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
-			}
-			return false;
-		}
-
-		num_retry++;
-		goto L_RETRY;
-	}
-	else if (ret)
-	{
-		Debug("DuWfpEnumLog: FwpmNetEventCreateEnumHandle0 Failed. ret = 0x%X\n", ret);
-
-		if (enum_handle != NULL)
-		{
-			du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
-		}
-		return false;
-	}
-
-	LIST *tmp_list = NewListFast(NULL);
-
-	UINT num_request = 65536;
-
-	bool ok = true;
-
-	UINT64 now = Tick64();
-
-	while (true)
-	{
-		UINT num_return = 0;
-
-		FWPM_NET_EVENT1 **list = NULL;
-
-		ret = du_wfp_api->FwpmNetEventEnum5(g->Engine, enum_handle, num_request, &list,
-			&num_return);
-
-		du_wfp_api->FwpmFreeMemory0((void **)&list);
-
-		break;
-
-		if (ret == FWP_E_NET_EVENTS_DISABLED)
-		{
-			du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
-
-			FWP_VALUE value = CLEAN;
-
-			value.type = FWP_UINT32;
-			value.uint32 = 1;
-			ret = du_wfp_api->FwpmEngineSetOption0(g->Engine, FWPM_ENGINE_COLLECT_NET_EVENTS, &value);
-
-			if (ret)
-			{
-				Debug("DuWfpEnumLog: FwpmEngineSetOption0 Failed. ret = 0x%X\n", ret);
-
-				ok = false;
-				break;
-			}
-
-			UINT i;
-
-			for (i = 0;i < LIST_NUM(tmp_list);i++)
-			{
-				DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
-
-				Free(e);
-			}
-
-			ReleaseList(tmp_list);
-			
-			num_retry++;
-			goto L_RETRY;
-		}
-		else if (ret == ERROR_SUCCESS)
-		{
-			UINT i;
-			for (i = 0;i < num_return;i++)
-			{
-				FWPM_NET_EVENT1 *ev = list[i];
-
-				if (false && ev->type == FWPM_NET_EVENT_TYPE_CLASSIFY_DROP)
-				{
-					FWPM_NET_EVENT_HEADER1 *h = &ev->header;
-
-					if (
-						ev->classifyDrop != NULL &&
-						ev->classifyDrop->isLoopback == false &&
-						(ev->classifyDrop->msFwpDirection == FWP_DIRECTION_INBOUND || ev->classifyDrop->msFwpDirection == FWP_DIRECTION_OUTBOUND) &&
-						(h->flags & FWPM_NET_EVENT_FLAG_IP_PROTOCOL_SET) &&
-						(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_ADDR_SET) &&
-						(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_ADDR_SET) &&
-//						(h->flags & FWPM_NET_EVENT_FLAG_LOCAL_PORT_SET) &&
-//						(h->flags & FWPM_NET_EVENT_FLAG_REMOTE_PORT_SET) &&
-						(h->flags & FWPM_NET_EVENT_FLAG_IP_VERSION_SET) &&
-						(h->ipVersion == FWP_IP_VERSION_V4 || h->ipVersion == FWP_IP_VERSION_V6) &&
-						(h->ipProtocol == IP_PROTO_TCP || h->ipProtocol == IP_PROTO_UDP || h->ipProtocol == IP_PROTO_ICMPV4 || h->ipProtocol == IP_PROTO_ICMPV6))
-					{
-						MS_THINFW_ENTRY_BLOCK b = CLEAN;
-
-						b.IsReceive = (ev->classifyDrop->msFwpDirection == FWP_DIRECTION_INBOUND);
-						b.Protocol = h->ipProtocol;
-
-						if (h->ipVersion == FWP_IP_VERSION_V4)
-						{
-							UINTToIP(&b.LocalIP, Endian32(h->localAddrV4));
-							UINTToIP(&b.RemoteIP, Endian32(h->remoteAddrV4));
-						}
-						else
-						{
-							InAddrToIP6(&b.LocalIP, (struct in6_addr *)&h->localAddrV6);
-							InAddrToIP6(&b.RemoteIP, (struct in6_addr *)&h->remoteAddrV6);
-						}
-
-						if (h->flags & FWPM_NET_EVENT_FLAG_LOCAL_PORT_SET)
-						{
-							b.LocalPort = h->localPort;
-						}
-
-						if (h->flags & FWPM_NET_EVENT_FLAG_REMOTE_PORT_SET)
-						{
-							b.RemotePort = h->remotePort;
-						}
-
-						if (h->flags & FWPM_NET_EVENT_FLAG_APP_ID_SET)
-						{
-							Copy(b.ProcessExeName, h->appId.data, MIN(h->appId.size, sizeof(b.ProcessExeName) - 4));
-						}
-						else
-						{
-							UniStrCpy(b.ProcessExeName, sizeof(b.ProcessExeName), L"(unknown app)");
-						}
-
-						UniStrCpy(b.Username, sizeof(b.Username), L"(unknown user)");
-						UniStrCpy(b.DomainName, sizeof(b.DomainName), L".");
-
-						SYSTEMTIME st = CLEAN;
-						if (FileTimeToSystemTime(&h->timeStamp, &st))
-						{
-							b.SystemTime = SystemToUINT64(&st);
-						}
-
-						if (h->flags & FWPM_NET_EVENT_FLAG_USER_ID_SET && h->userId != NULL)
-						{
-							MS_SID_INFO *info = MsGetUsernameFromSid2(sid_cache, h->userId);
-
-							if (info != NULL)
-							{
-								UniStrCpy(b.Username, sizeof(b.Username), info->Username);
-								UniStrCpy(b.DomainName, sizeof(b.DomainName), info->DomainName);
-							}
-						}
-
-						wchar_t key[1024];
-						
-						UniFormat(key, sizeof(key),
-							L"WPF_DROP_LOG %I64u %u ts=%I64u dir=%u proto=%u lip=%r lp=%u rip=%r rp=%u exe=%s un=%s\\%s",
-							ev->classifyDrop->filterId,
-							(UINT)ev->classifyDrop->layerId,
-							b.SystemTime,
-							(ev->classifyDrop->msFwpDirection), b.Protocol, &b.LocalIP, b.LocalPort, &b.RemoteIP, b.RemotePort,
-							b.ProcessExeName, b.Username, b.DomainName);
-
-						//UniPrint(L"%s\n", key);
-
-						Add(tmp_list, NewDiffEntry(key, &b, sizeof(b), MS_THINFW_ENTRY_TYPE_BLOCK, now));
-					}
-				}
-			}
-
-			//for (i = 0;i < num_return;i++)
-			//{
-			//	FWPM_NET_EVENT1 *ev = list[i];
-			//	du_wfp_api->FwpmFreeMemory0((void **)ev->classifyDrop);
-			//}
-
-			du_wfp_api->FwpmFreeMemory0((void **)&list);
-
-			if (num_return < num_request)
-			{
-				break;
-			}
-		}
-		else
-		{
-			Debug("DuWfpEnumLog: FwpmNetEventEnum1 Failed. ret = 0x%X\n", ret);
-
-			ok = false;
-
-			break;
-		}
-	}
-
-	ret = du_wfp_api->FwpmNetEventDestroyEnumHandle0(g->Engine, enum_handle);
-	if (ret)
-	{
-		Debug("DuWfpEnumLog: FwpmNetEventDestroyEnumHandle0 Failed. ret = 0x%X\n", ret);
-	}
-
-	if (ok == false)
-	{
-		UINT i;
-
-		for (i = 0;i < LIST_NUM(tmp_list);i++)
-		{
-			DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
-
-			Free(e);
-		}
-	}
-	else
-	{
-		UINT i;
-
-		for (i = 0;i < LIST_NUM(tmp_list);i++)
-		{
-			DIFF_ENTRY *e = LIST_DATA(tmp_list, i);
-
-			Add(dst_diff_list, e);
-		}
-	}
-
-	ReleaseList(tmp_list);
-
-	return ok;
 }
 
 bool DuWfpCreateProvider(HANDLE hEngine, GUID *created_guid, char *name)
@@ -4775,41 +4473,6 @@ bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied)
 
 void DuWfpTest3()
 {
-
-	LIST *cache = MsNewSidToUsernameCache();
-
-	UINT count = 0;
-
-	do
-	{
-		DU_WFP_LOG *g = DuWfpStartLog();
-		if (g == NULL)
-		{
-			WHERE;
-			return;
-		}
-
-		LIST *current = NewDiffList();
-
-		if (DuWfpEnumLog(g, current, cache) == false)
-		{
-			WHERE;
-		}
-
-		FreeDiffList(current);
-
-		count++;
-
-		if ((count % 10) == 0)
-		{
-			Print("%u\n", count);
-		}
-
-		DuWfpStopLog(g);
-	} while (true);
-
-
-	MsFreeDnsServersList(cache);
 }
 
 void DuWfpTest2()
@@ -5495,6 +5158,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 	wchar_t prefix_tmp[MAX_PATH] = CLEAN;
 
+	LIST *ms_fullpath_cache = MsNewConvertDosDevicePathToFullPathCache();
+
 	LIST *mail_category_list = NewKvList();
 
 	while (true)
@@ -5708,6 +5373,18 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			}
 		}
 
+		if (e->Param == MS_THINFW_ENTRY_TYPE_BLOCK)
+		{
+			MS_THINFW_ENTRY_BLOCK *block = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+
+			wchar_t exe_fullpath[512] = CLEAN;
+
+			if (MsConvertDosDevicePathToFullPathWithCache(ms_fullpath_cache, exe_fullpath, sizeof(exe_fullpath), block->ProcessExeName))
+			{
+				UniStrCpy(block->ProcessExeName, sizeof(block->ProcessExeName), exe_fullpath);
+			}
+		}
+
 		bool ok = true;
 
 		if (st.ReportSendEngineEvent == false && e->Param == MS_THINFW_ENTRY_TYPE_STREVENT)
@@ -5815,6 +5492,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	FreeBuf(current_mail_body);
 
 	FreeKvList(mail_category_list);
+
+	MsFreeConvertDosDevicePathToFullPathCache(ms_fullpath_cache);
 }
 
 bool TfGetCurrentMacAddress(UCHAR *mac)
@@ -6076,22 +5755,22 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		{
 			if (block->IsReceive)
 			{
-				StrCpy(category, category_size, "TCP_RECV_BLOCK");
+				StrCpy(category, category_size, "TCP_BLOCK_SERVER");
 			}
 			else
 			{
-				StrCpy(category, category_size, "TCP_SEND_BLOCK");
+				StrCpy(category, category_size, "TCP_BLOCK_CLIENT");
 			}
 		}
 		else if (block->Protocol == IP_PROTO_UDP)
 		{
 			if (block->IsReceive)
 			{
-				StrCpy(category, category_size, "UDP_RECV_BLOCK");
+				StrCpy(category, category_size, "UDP_BLOCK_SERVER");
 			}
 			else
 			{
-				StrCpy(category, category_size, "UDP_SEND_BLOCK");
+				StrCpy(category, category_size, "UDP_BLOCK_CLIENT");
 			}
 		}
 
@@ -6122,7 +5801,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		ClearStr(ep_hostname, 0);
 
 		UniFormat(proc_info, sizeof(proc_info),
-			L" ProcessInfo=(ExePath: %s, User: %s\\%s)",
+			L" ProcessInfo=(AppPath: %s, User: %s\\%s)",
 			block->ProcessExeName,
 			block->DomainName,
 			block->Username);
@@ -6167,7 +5846,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		Format(category, category_size, "PROCESS_%s", e->IsAdded ? "START" : "STOP");
 
-		UniFormat(dst, dst_size, L"(PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
+		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
 			proc->ProcessId,
 			proc->Is64BitProcess ? 64 : 32,
 			proc->ExeFilenameW,
@@ -6278,7 +5957,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			}
 
 			UniFormat(proc_info, sizeof(proc_info),
-				L" ProcessInfo=(PID: %u, %ubit, ExePath: %s, User: %s\\%s, RdpSessionId: %u)%s",
+				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, RdpSessionId: %u)%s",
 				tcp->Process.ProcessId,
 				tcp->Process.Is64BitProcess ? 64 : 32,
 				tcp->Process.ExeFilenameW,
@@ -6608,7 +6287,7 @@ void TfMain(TF_SERVICE *svc)
 					L"OsVersion: %S, "
 					L"ComputerName: %s, "
 					L"UserName: %s, "
-					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessExePath: %s",
+					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessAppPath: %s",
 					svc->StartupSettings.AppTitle, svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
 					CEDAR_VER,
 					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,

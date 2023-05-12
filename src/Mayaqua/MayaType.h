@@ -376,6 +376,7 @@ typedef struct BUF BUF;
 typedef struct FIFO FIFO;
 typedef struct LIST LIST;
 typedef struct KV_LIST KV_LIST;
+typedef struct KV_LISTW KV_LISTW;
 typedef struct QUEUE QUEUE;
 typedef struct SK SK;
 typedef struct CANDIDATE CANDIDATE;

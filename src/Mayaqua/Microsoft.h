@@ -607,6 +607,12 @@ typedef struct NT_API
 	BOOLEAN(WINAPI *WinStationQueryInformationW)(
 		HANDLE, ULONG, UINT, PVOID, ULONG, PULONG);
 	BOOL(WINAPI *GetLastInputInfo)(PLASTINPUTINFO);
+	DWORD(WINAPI *GetFinalPathNameByHandleW)(
+		__in HANDLE hFile,
+			__out_ecount(cchFilePath) LPWSTR lpszFilePath,
+			__in DWORD cchFilePath,
+			__in DWORD dwFlags
+		);
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -1522,6 +1528,11 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();
+
+bool MsConvertDosDevicePathToFullPath(wchar_t *dst, UINT dst_size, wchar_t *src);
+bool MsConvertDosDevicePathToFullPathWithCache(LIST *cache, wchar_t *dst, UINT dst_size, wchar_t *src);
+LIST *MsNewConvertDosDevicePathToFullPathCache();
+void MsFreeConvertDosDevicePathToFullPathCache(LIST *cache);
 
 // Inner functions
 #ifdef	MICROSOFT_C
