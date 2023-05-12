@@ -161,8 +161,17 @@ typedef struct DU_ABOUT
 	char *BuildInfo;
 } DU_ABOUT;
 
+#define DU_WFP_LOG_ENTRY_EXPIRES_MSEC_DEFAULT		(60 * 1000)
+
+typedef struct DU_WFP_LOG_SETTINGS
+{
+	UINT EntryExpireMsec;
+} DU_WFP_LOG_SETTINGS;
+
 typedef struct DU_WFP_LOG
 {
+	DU_WFP_LOG_SETTINGS Settings;
+
 	HANDLE Engine;
 	HANDLE Subscription;
 	LIST *MsSidCache;
@@ -172,6 +181,8 @@ typedef struct DU_WFP_LOG
 	UINT LayerId_IPv4_Send;
 	UINT LayerId_IPv6_Receive;
 	UINT LayerId_IPv6_Send;
+
+	UINT64 LastGcTick;
 } DU_WFP_LOG;
 
 
@@ -313,11 +324,12 @@ bool TfGetCurrentMacAddress(UCHAR *mac);
 DU_WFP_LOG *DuWfpStartLog();
 void DuWfpStopLog(DU_WFP_LOG *g);
 bool DuWfpEnumLog(DU_WFP_LOG *g, LIST *dst_diff_list, LIST *sid_cache);
-bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *b, wchar_t *key, UINT key_size);
+bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *dst, wchar_t *key, UINT key_size);
 UINT DuWfpGetLayerIdFromLayerKey(HANDLE hEngine, const GUID *layer_key);
 
+UINT DuWfpLogGc(DU_WFP_LOG *g, UINT64 tick, bool force);
 
-DU_WFP_LOG *DuWfpStartLog2();
+DU_WFP_LOG *DuWfpStartLog2(DU_WFP_LOG_SETTINGS* settings);
 void DuWfpStopLog2(DU_WFP_LOG *g);
 
 

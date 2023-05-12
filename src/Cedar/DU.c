@@ -3565,21 +3565,63 @@ void CALLBACK DuWfpLogSubscriberCallback(void *ctx, const FWPM_NET_EVENT1 *ev)
 		return;
 	}
 
+	UINT64 tick = Tick64();
+
 	wchar_t key[2048];
 
 	MS_THINFW_ENTRY_BLOCK b = CLEAN;
 
 	if (DuWfpNetEvent1ToStructure(g, (void *)ev, &b, key, sizeof(key)))
 	{
+		LockList(g->CurrentEntryList);
+		{
+			AddOrRenewDiffEntry(g->CurrentEntryList, key, &b, sizeof(b), MS_THINFW_ENTRY_TYPE_BLOCK, tick);
+
+			DuWfpLogGc(g, tick, false);
+		}
+		UnlockList(g->CurrentEntryList);
 	}
 }
 
-bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *b, wchar_t *key, UINT key_size)
+UINT DuWfpLogGc(DU_WFP_LOG *g, UINT64 tick, bool force)
+{
+	if (g == NULL)
+	{
+		return 0;
+	}
+
+	if (tick == 0)
+	{
+		tick = Tick64();
+	}
+
+	UINT num_deleted = 0;
+
+	if (force || ((g->LastGcTick + (UINT64)g->Settings.EntryExpireMsec) < tick))
+	{
+		UINT64 threshold = 0;
+
+		if (tick > (UINT64)g->Settings.EntryExpireMsec)
+		{
+			threshold = tick - (UINT64)g->Settings.EntryExpireMsec;
+		}
+
+		num_deleted = DeleteOldDiffEntry(g->CurrentEntryList, threshold);
+
+		g->LastGcTick = tick;
+
+		//Debug("GC: DeleteOldDiffEntry: %u, current = %u\n", num_deleted, LIST_NUM(g->CurrentEntryList));
+	}
+
+	return num_deleted;
+}
+
+bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK *dst, wchar_t *key, UINT key_size)
 {
 	FWPM_NET_EVENT1 *ev = (FWPM_NET_EVENT1 *)event;
 
-	Zero(b, sizeof(MS_THINFW_ENTRY_BLOCK));
-	if (g == NULL || ev == NULL || b == NULL || key == NULL)
+	Zero(dst, sizeof(MS_THINFW_ENTRY_BLOCK));
+	if (g == NULL || ev == NULL || dst == NULL || key == NULL)
 	{
 		return false;
 	}
@@ -3666,7 +3708,9 @@ bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK
 			b.IsReceive, b.Protocol,
 			b.ProcessExeName, b.Username, b.DomainName);
 
-		UniPrint(L"%s\n", key);
+		//UniPrint(L"%s\n", key);
+
+		Copy(dst, &b, sizeof(b));
 
 		return true;
 	}
@@ -3674,8 +3718,13 @@ bool DuWfpNetEvent1ToStructure(DU_WFP_LOG *g, void *event, MS_THINFW_ENTRY_BLOCK
 	return false;
 }
 
-DU_WFP_LOG *DuWfpStartLog2()
+DU_WFP_LOG *DuWfpStartLog2(DU_WFP_LOG_SETTINGS *settings)
 {
+	if (settings == NULL)
+	{
+		return NULL;
+	}
+
 	if (DuInitWfpApi() == false)
 	{
 		return NULL;
@@ -3704,6 +3753,13 @@ DU_WFP_LOG *DuWfpStartLog2()
 	}
 
 	DU_WFP_LOG *g = ZeroMalloc(sizeof(DU_WFP_LOG));
+
+	Copy(&g->Settings, settings, sizeof(DU_WFP_LOG_SETTINGS));
+
+	if (g->Settings.EntryExpireMsec == 0)
+	{
+		g->Settings.EntryExpireMsec = DU_WFP_LOG_ENTRY_EXPIRES_MSEC_DEFAULT;
+	}
 
 	g->CurrentEntryList = NewDiffList();
 
@@ -5638,6 +5694,18 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					}
 				}
 			}
+			else if (e->Param == MS_THINFW_ENTRY_TYPE_BLOCK)
+			{
+				MS_THINFW_ENTRY_BLOCK *block = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+
+				if (IsEmptyStr(block->RemoteIPHostname_Resolved))
+				{
+					if (IsZeroIP(&block->RemoteIP) == false && IsLocalHostIP(&block->RemoteIP) == false)
+					{
+						GetHostNameEx(block->RemoteIPHostname_Resolved, sizeof(block->RemoteIPHostname_Resolved), &block->RemoteIP, st.HostnameLookupTimeoutMsec, gethostname_flag);
+					}
+				}
+			}
 		}
 
 		bool ok = true;
@@ -5981,6 +6049,8 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 	wchar_t proc_info[MAX_SIZE * 2] = CLEAN;
 	wchar_t tmpw[MAX_SIZE] = CLEAN;
 	wchar_t rdp_session_info[MAX_SIZE] = CLEAN;
+	char local_ip[128] = CLEAN;
+	char remote_ip[128] = CLEAN;
 
 	switch (e->Param)
 	{
@@ -5995,6 +6065,70 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
 		UniFormat(dst, dst_size, L"(Hostname: %S, IPv%u_Address: %r)",
 			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_BLOCK:
+		DoNothing();
+
+		MS_THINFW_ENTRY_BLOCK *block = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+
+		if (block->Protocol == IP_PROTO_TCP)
+		{
+			if (block->IsReceive)
+			{
+				StrCpy(category, category_size, "TCP_RECV_BLOCK");
+			}
+			else
+			{
+				StrCpy(category, category_size, "TCP_SEND_BLOCK");
+			}
+		}
+		else if (block->Protocol == IP_PROTO_UDP)
+		{
+			if (block->IsReceive)
+			{
+				StrCpy(category, category_size, "UDP_RECV_BLOCK");
+			}
+			else
+			{
+				StrCpy(category, category_size, "UDP_SEND_BLOCK");
+			}
+		}
+
+		IPToStr(local_ip, sizeof(local_ip), &block->LocalIP);
+		IPToStr(remote_ip, sizeof(remote_ip), &block->RemoteIP);
+
+		if (IsFilledStr(block->RemoteIPHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "RemoteHost: %s, ",
+				block->RemoteIPHostname_Resolved);
+		}
+
+		if (IsZeroIP(&block->RemoteIP))
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(LocalIP: %S, LocalPort: %u)",
+				local_ip, block->LocalPort);
+		}
+		else
+		{
+			UniFormat(ep_info, sizeof(ep_info),
+				L"(%SRemoteIP: %S, RemotePort: %u, LocalIP: %S, LocalPort: %u)",
+				ep_hostname,
+				remote_ip, block->RemotePort,
+				local_ip, block->LocalPort);
+		}
+
+		ClearStr(ep_hostname, 0);
+
+		UniFormat(proc_info, sizeof(proc_info),
+			L" ProcessInfo=(ExePath: %s, User: %s\\%s)",
+			block->ProcessExeName,
+			block->DomainName,
+			block->Username);
+
+		UniStrCat(dst, dst_size, ep_info);
+		UniStrCat(dst, dst_size, proc_info);
 		break;
 
 	case MS_THINFW_ENTRY_TYPE_PROCESS:
@@ -6072,9 +6206,6 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		DoNothing();
 		MS_THINFW_ENTRY_TCP *tcp = (MS_THINFW_ENTRY_TCP *)&e->Data;
 
-		char local_ip[128] = CLEAN;
-		char remote_ip[128] = CLEAN;
-
 		IPToStr(local_ip, sizeof(local_ip), &tcp->Tcp.LocalIP);
 		IPToStr(remote_ip, sizeof(remote_ip), &tcp->Tcp.RemoteIP);
 
@@ -6096,7 +6227,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		if (IsFilledStr(tcp->RemoteIPHostname_Resolved))
 		{
 			Format(ep_hostname, sizeof(ep_hostname), "RemoteHost: %s, ",
-				tcp->RemoteIPHostname_Resolved, tcp->Tcp.RemotePort);
+				tcp->RemoteIPHostname_Resolved);
 		}
 
 		if (IsZeroIP(&tcp->Tcp.RemoteIP))
@@ -6227,6 +6358,7 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchDns = false;
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchTcp = false;
+	bool cfg_EnableWatchFwBlock = false;
 	bool cfg_WatchOnlyWhenLocked = false;
 	bool cfg_IncludeProcessCommandLine = false;
 	bool cfg_EnableFirewall = false;
@@ -6235,6 +6367,8 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_IgnoreDNSoverTCPSession = false;
 	UINT cfg_ReportMaxQueueLength = 1024;
 	UINT cfg_InputIdleTimerMsec = 15 * 60 * 1000;
+
+	bool wfp_log_start_failed = false;
 
 	UCHAR lastState_mac[6] = CLEAN;
 	bool lastState_Enable = false;
@@ -6251,7 +6385,9 @@ void TfMain(TF_SERVICE *svc)
 
 	UINT config_revision = 1;
 
-	DU_WFP_LOG *wfp_log = DuWfpStartLog2();
+	DU_WFP_LOG_SETTINGS wfp_log_settings = CLEAN;
+
+	DU_WFP_LOG *wfp_log = NULL;
 
 	wchar_t tmp[2048];
 
@@ -6309,6 +6445,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
 					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
+					cfg_EnableWatchFwBlock = IniBoolValue(ini, "EnableWatchFwBlock");
 
 					cfg_GetNetworkInfoIntervalMsec = IniIntValue(ini, "GetNetworkInfoIntervalMsec");
 					if (cfg_GetNetworkInfoIntervalMsec == 0)
@@ -6401,6 +6538,7 @@ void TfMain(TF_SERVICE *svc)
 				cfg_EnableWatchDns = false;
 				cfg_EnableWatchProcess = false;
 				cfg_EnableWatchTcp = false;
+				cfg_EnableWatchFwBlock = false;
 				cfg_WatchOnlyWhenLocked = false;
 				cfg_IncludeProcessCommandLine = false;
 				cfg_EnableFirewall = false;
@@ -6599,6 +6737,38 @@ void TfMain(TF_SERVICE *svc)
 						is_watch_active ? "Active" : "Inactive");
 				}
 
+				bool is_watch_fw_block_active = false;
+				if (is_watch_active && cfg_EnableWatchFwBlock)
+				{
+					is_watch_fw_block_active = true;
+				}
+
+				if (is_watch_fw_block_active == false)
+				{
+					wfp_log_start_failed = false;
+				}
+
+				if (is_watch_fw_block_active && wfp_log == NULL)
+				{
+					DU_WFP_LOG_SETTINGS wfp_log_settings = CLEAN;
+
+					if (wfp_log_start_failed == false)
+					{
+						wfp_log = DuWfpStartLog2(&wfp_log_settings);
+
+						if (wfp_log == NULL)
+						{
+							wfp_log_start_failed = true;
+						}
+					}
+				}
+				else if (is_watch_fw_block_active == false && wfp_log != NULL)
+				{
+					DuWfpStopLog2(wfp_log);
+					wfp_log = NULL;
+					wfp_log_start_failed = false;
+				}
+
 				if (is_watch_active)
 				{
 					UINT flags = 0;
@@ -6630,7 +6800,39 @@ void TfMain(TF_SERVICE *svc)
 
 					flags |= MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP;
 
-					LIST *now_list = MsGetThinFwList(sid_cache, flags);
+					LIST *wfp_log_list = NewDiffList();
+
+					if (wfp_log != NULL)
+					{
+						UINT64 tick = Tick64();
+
+						LockList(wfp_log->CurrentEntryList);
+						{
+							DuWfpLogGc(wfp_log, tick, true);
+
+							UINT i;
+							for (i = 0;i < LIST_NUM(wfp_log->CurrentEntryList);i++)
+							{
+								DIFF_ENTRY *e = LIST_DATA(wfp_log->CurrentEntryList, i);
+
+								if (e->Param == MS_THINFW_ENTRY_TYPE_BLOCK &&
+									e->DataSize == sizeof(MS_THINFW_ENTRY_BLOCK))
+								{
+									DIFF_ENTRY *e2 = CloneDiffEntry(e);
+
+									//MS_THINFW_ENTRY_BLOCK *b1 = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+									//MS_THINFW_ENTRY_BLOCK *b2 = (MS_THINFW_ENTRY_BLOCK *)&e2->Data;
+
+									e2->IsAdded = e2->IsRemoved = false;
+
+									Add(wfp_log_list, e2);
+								}
+							}
+						}
+						UnlockList(wfp_log->CurrentEntryList);
+					}
+
+					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list);
 
 					if (current_list == NULL)
 					{
@@ -6679,6 +6881,13 @@ void TfMain(TF_SERVICE *svc)
 
 								case MS_THINFW_ENTRY_TYPE_DNS:
 									if (e->IsAdded) // DNS cache: only new entries shall be reported
+									{
+										ok = true;
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_BLOCK:
+									if (e->IsAdded) // FW Block: only new entries shall be reported
 									{
 										ok = true;
 									}

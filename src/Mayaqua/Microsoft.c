@@ -660,7 +660,7 @@ char *MsGetWtsSessionStateStr(UINT state)
 	}
 }
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free)
 {
 	if (sid_cache == NULL)
 	{
@@ -1058,6 +1058,33 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 		}
 	}
 
+	// FW Block List
+	if (fw_block_list_to_merge_and_free != NULL)
+	{
+		UINT i;
+		for (i = 0;i < LIST_NUM(fw_block_list_to_merge_and_free);i++)
+		{
+			DIFF_ENTRY *e = LIST_DATA(fw_block_list_to_merge_and_free, i);
+
+			e->IsAdded = e->IsRemoved = false;
+
+			MS_THINFW_ENTRY_BLOCK *block = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+
+			if (IsZeroIP(&block->RemoteIP) == false)
+			{
+				MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &block->RemoteIP);
+
+				if (found_a != NULL)
+				{
+					StrCpy(block->RemoteIPHostname_Resolved, sizeof(block->RemoteIPHostname_Resolved),
+						found_a->Hostname);
+				}
+			}
+
+			Add(ret, e);
+		}
+	}
+
 	FreeTcpTableList(tcp_list);
 
 	MsFreeProcessList(process_list);
@@ -1067,6 +1094,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags)
 	FreeSingleMemoryList(a_list);
 
 	FreeKvList(rdp_session_kv_list);
+
+	ReleaseList(fw_block_list_to_merge_and_free);
 
 	return ret;
 }

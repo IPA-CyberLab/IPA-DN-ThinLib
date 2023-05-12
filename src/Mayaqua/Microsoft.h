@@ -880,6 +880,7 @@ typedef struct MS_THINFW_ENTRY_BLOCK
 	UINT LocalPort;
 	IP RemoteIP;
 	UINT RemotePort;
+	char RemoteIPHostname_Resolved[256];
 	wchar_t ProcessExeName[MAX_PATH];
 	wchar_t Username[MAX_SIZE];
 	wchar_t DomainName[MAX_SIZE];
@@ -1517,7 +1518,7 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 #define	MS_GET_THINFW_LIST_FLAGS_NO_PROCESS			32
 
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags);
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();
