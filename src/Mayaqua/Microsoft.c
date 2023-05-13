@@ -15217,10 +15217,18 @@ bool MsIsScreenSaverRunning()
 }
 
 // 1 つ以上のロックされていない WTS セッションが存在するかどうか
-bool MsWtsOneOrMoreUnlockedSessionExists()
+bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_info)
 {
 	WTS_SESSION_INFOA *info = CLEAN;
 	UINT count = 0;
+	static MS_WTS_LOCK_STATE_RET_EX dummy = CLEAN;
+
+	if (additional_info == NULL)
+	{
+		additional_info = &dummy;
+	}
+
+	UINT64 max_last_input_time = 0;
 
 	UINT num_unlocked_sessions = 0;
 
@@ -15273,6 +15281,27 @@ bool MsWtsOneOrMoreUnlockedSessionExists()
 						{
 							num_unlocked_sessions++;
 						}
+
+						//if (is_locked == false)
+						//{
+						//	// うまくいかない
+						//	FILETIME *last_input_time = (FILETIME *)&ex1->LastInputTime;
+
+						//	if (IsZero(last_input_time, sizeof(FILETIME)) == false)
+						//	{
+						//		SYSTEMTIME st = CLEAN;
+
+						//		if (FileTimeToSystemTime(last_input_time, &st))
+						//		{
+						//			UINT64 st64 = SystemToUINT64(&st);
+
+						//			if (st64 != 0)
+						//			{
+						//				max_last_input_time = MAX(max_last_input_time, st64);
+						//			}
+						//		}
+						//	}
+						//}
 
 						ms->nt->WTSFreeMemory(ex);
 					}

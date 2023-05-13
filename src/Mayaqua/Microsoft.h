@@ -892,6 +892,11 @@ typedef struct MS_THINFW_ENTRY_BLOCK
 	wchar_t DomainName[MAX_SIZE];
 } MS_THINFW_ENTRY_BLOCK;
 
+typedef struct MS_WTS_LOCK_STATE_RET_EX
+{
+	UINT Reversed;
+} MS_WTS_LOCK_STATE_RET_EX;
+
 // Function prototype
 void MsInit();
 void MsFree();
@@ -1008,7 +1013,7 @@ bool MsDetermineIsLockedByWtsApi();
 
 void MsWtsTest1();
 
-bool MsWtsOneOrMoreUnlockedSessionExists();
+bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_info);
 bool MsIsScreenSaverRunning();
 
 bool MsIsRdpAllowLoginScreen();

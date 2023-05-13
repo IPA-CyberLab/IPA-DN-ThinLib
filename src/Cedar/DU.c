@@ -6359,12 +6359,12 @@ void TfMain(TF_SERVICE *svc)
 				if (svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE)
 				{
 					// Use the terminal service API
-					is_locked = !MsWtsOneOrMoreUnlockedSessionExists();
+					is_locked = !MsWtsOneOrMoreUnlockedSessionExists(NULL);
 				}
 				else
 				{
 					// Use mouse pointer movement to detect inactivity
-					if (MsWtsOneOrMoreUnlockedSessionExists() == false)
+					if (MsWtsOneOrMoreUnlockedSessionExists(NULL) == false)
 					{
 						is_locked = true;
 					}
