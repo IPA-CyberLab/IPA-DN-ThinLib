@@ -382,11 +382,25 @@ void MsTestFunc1(HWND hWnd)
 	}
 }
 
-// todo: remove me!!!
-#pragma comment(lib, "Wevtapi.lib")
-
 MS_EVENTREADER_SESSION *MsNewEventReaderSession()
 {
+	if (MsIsNt() == false)
+	{
+		return NULL;
+	}
+
+	if (ms->nt->EvtOpenPublisherMetadata == NULL ||
+		ms->nt->EvtClose == NULL ||
+		ms->nt->EvtRender == NULL ||
+		ms->nt->EvtQuery == NULL ||
+		ms->nt->EvtCreateRenderContext == NULL ||
+		ms->nt->EvtSeek == NULL ||
+		ms->nt->EvtNext == NULL ||
+		ms->nt->EvtFormatMessage == NULL)
+	{
+		return NULL;
+	}
+
 	MS_EVENTREADER_SESSION *s = ZeroMalloc(sizeof(MS_EVENTREADER_SESSION));
 
 	s->MsSidCache = MsNewSidToUsernameCache();
@@ -412,7 +426,7 @@ void MsFreeEventReaderSession(MS_EVENTREADER_SESSION *s)
 
 		MS_EVENTREADER_PROVIDER_METADATA *d = (MS_EVENTREADER_PROVIDER_METADATA *)&item->Data;
 
-		EvtClose(d->MetadataHandle);
+		ms->nt->EvtClose(d->MetadataHandle);
 	}
 
 	FreeKvListW(s->ProviderMetadataCache);
@@ -440,7 +454,7 @@ void *MsGetProviderMetadataWithCache(MS_EVENTREADER_SESSION *s, wchar_t *provide
 		return d->MetadataHandle;
 	}
 
-	void *handle = EvtOpenPublisherMetadata(s->SessionHandle, provider_name, NULL, 0, 0);
+	void *handle = ms->nt->EvtOpenPublisherMetadata(s->SessionHandle, provider_name, NULL, 0, 0);
 
 	MS_EVENTREADER_PROVIDER_METADATA d2 = CLEAN;
 	d2.MetadataHandle = handle;
@@ -467,7 +481,7 @@ bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *rende
 	UINT need_size = 0;
 	UINT property_count = 0;
 
-	bool r = EvtRender(render_context, event_handle, EvtRenderEventValues, 0, 0, &need_size, &property_count);
+	bool r = ms->nt->EvtRender(render_context, event_handle, EvtRenderEventValues, 0, 0, &need_size, &property_count);
 
 	if (r == false && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
 	{
@@ -479,7 +493,7 @@ bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *rende
 
 		property_count = 0;
 
-		if (EvtRender(render_context, event_handle, EvtRenderEventValues, alloc_size, buf, &buf_size, &property_count))
+		if (ms->nt->EvtRender(render_context, event_handle, EvtRenderEventValues, alloc_size, buf, &buf_size, &property_count))
 		{
 			EVT_VARIANT *vars = (EVT_VARIANT *)buf;
 			if ((property_count >= 18) && (buf_size >= sizeof(vars) * 18))
@@ -562,17 +576,17 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 
 	LIST *ret = NULL;
 
-	void *query_handle = EvtQuery(s->SessionHandle, log_name, L"*", EvtQueryChannelPath);
+	void *query_handle = ms->nt->EvtQuery(s->SessionHandle, log_name, L"*", EvtQueryChannelPath);
 
 	if (query_handle != NULL)
 	{
-		void *render_context = EvtCreateRenderContext(0, NULL, EvtRenderContextSystem);
+		void *render_context = ms->nt->EvtCreateRenderContext(0, NULL, EvtRenderContextSystem);
 
 		if (render_context != NULL)
 		{
 			LONGLONG position = (LONGLONG)max_return * (LONGLONG)-1;
 
-			if (EvtSeek(query_handle, position, NULL, 0, EvtSeekRelativeToLast))
+			if (ms->nt->EvtSeek(query_handle, position, NULL, 0, EvtSeekRelativeToLast))
 			{
 				ret = NewListFast(NULL);
 
@@ -594,7 +608,7 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 					void *event_array[MS_READ_EVENT_BATCH_SIZE] = CLEAN;
 
 					UINT num_returned = 0;
-					if (EvtNext(query_handle, remain, event_array, 0, INFINITE, &num_returned) == false)
+					if (ms->nt->EvtNext(query_handle, remain, event_array, 0, INFINITE, &num_returned) == false)
 					{
 						// Get next: error. Give up.
 						break;
@@ -633,14 +647,14 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 									{
 										wchar_t dummy[4] = CLEAN;
 										UINT msg_needed = 0;
-										if (EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent, 0, dummy, &msg_needed) == false &&
+										if (ms->nt->EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent, 0, dummy, &msg_needed) == false &&
 											GetLastError() == ERROR_INSUFFICIENT_BUFFER)
 										{
 											wchar_t *buf = ZeroMalloc(sizeof(wchar_t) * (msg_needed + 8));
 
 											UINT dummy2 = 0;
 
-											if (EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent,
+											if (ms->nt->EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent,
 												msg_needed + 4, buf, &dummy2))
 											{
 												UniStrCpy(e.Message, sizeof(e.Message), buf);
@@ -654,16 +668,16 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 								}
 							}
 
-							EvtClose(event_handle);
+							ms->nt->EvtClose(event_handle);
 						}
 					}
 				}
 			}
 
-			EvtClose(render_context);
+			ms->nt->EvtClose(render_context);
 		}
 
-		EvtClose(query_handle);
+		ms->nt->EvtClose(query_handle);
 	}
 
 	return ret;
@@ -16095,6 +16109,8 @@ NT_API *MsLoadNtApiFunctions()
 
 	nt->hWinSta = LoadLibrary("winsta.dll");
 
+	nt->hWevtapi = LoadLibrary("Wevtapi.dll");
+
 	// Read the function
 	nt->GetComputerNameExW =
 		(BOOL(__stdcall *)(COMPUTER_NAME_FORMAT, LPWSTR, LPDWORD))
@@ -16541,6 +16557,42 @@ NT_API *MsLoadNtApiFunctions()
 			GetProcAddress(nt->hDbgHelp, "MiniDumpWriteDump");
 	}
 
+	// Event API
+	if (nt->hWevtapi != NULL)
+	{
+		nt->EvtOpenPublisherMetadata =
+			(EVT_HANDLE(__stdcall *)(EVT_HANDLE, LPCWSTR, LPCWSTR, LCID, DWORD))
+			GetProcAddress(nt->hWevtapi, "EvtOpenPublisherMetadata");
+
+		nt->EvtClose =
+			(BOOL(__stdcall *)(EVT_HANDLE))
+			GetProcAddress(nt->hWevtapi, "EvtClose");
+
+		nt->EvtRender =
+			(BOOL(__stdcall *)(EVT_HANDLE, EVT_HANDLE, DWORD, DWORD, PVOID, PDWORD, PDWORD))
+			GetProcAddress(nt->hWevtapi, "EvtRender");
+
+		nt->EvtQuery =
+			(EVT_HANDLE(__stdcall *)(EVT_HANDLE, LPCWSTR, LPCWSTR, DWORD))
+			GetProcAddress(nt->hWevtapi, "EvtQuery");
+
+		nt->EvtCreateRenderContext =
+			(EVT_HANDLE(__stdcall *)(DWORD, LPCWSTR *, DWORD))
+			GetProcAddress(nt->hWevtapi, "EvtCreateRenderContext");
+
+		nt->EvtSeek =
+			(BOOL(__stdcall *)(EVT_HANDLE, LONGLONG, EVT_HANDLE, DWORD, DWORD))
+			GetProcAddress(nt->hWevtapi, "EvtSeek");
+
+		nt->EvtNext =
+			(BOOL(__stdcall *)(EVT_HANDLE, DWORD, PEVT_HANDLE, DWORD, DWORD, PDWORD))
+			GetProcAddress(nt->hWevtapi, "EvtNext");
+
+		nt->EvtFormatMessage =
+			(BOOL(__stdcall *)(EVT_HANDLE, EVT_HANDLE, DWORD, DWORD, PEVT_VARIANT, DWORD, DWORD, LPWSTR, PDWORD))
+			GetProcAddress(nt->hWevtapi, "EvtFormatMessage");
+	}
+
 	return nt;
 }
 
@@ -16571,6 +16623,11 @@ void MsFreeNtApiFunctions(NT_API *nt)
 	if (nt->hWtsApi32 != NULL)
 	{
 		FreeLibrary(nt->hWtsApi32);
+	}
+
+	if (nt->hWevtapi != NULL)
+	{
+		FreeLibrary(nt->hWevtapi);
 	}
 
 	if (nt->hWinSta != NULL)

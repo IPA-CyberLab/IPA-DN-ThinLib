@@ -504,6 +504,7 @@ typedef struct NT_API
 	HINSTANCE hNtdll;
 	HINSTANCE hWS2_32;
 	HINSTANCE hWinSta;
+	HINSTANCE hWevtapi;
 	BOOL (WINAPI *OpenProcessToken)(HANDLE, DWORD, PHANDLE);
 	BOOL (WINAPI *LookupPrivilegeValue)(char *, char *, PLUID);
 	BOOL (WINAPI *AdjustTokenPrivileges)(HANDLE, BOOL, PTOKEN_PRIVILEGES, DWORD, PTOKEN_PRIVILEGES, PDWORD);
@@ -613,6 +614,77 @@ typedef struct NT_API
 			__in DWORD cchFilePath,
 			__in DWORD dwFlags
 		);
+
+
+	HANDLE(WINAPI *EvtOpenPublisherMetadata)(
+		HANDLE Session,
+		LPCWSTR PublisherId,
+		LPCWSTR LogFilePath,
+		LCID Locale,
+		DWORD Flags
+		);
+
+
+	BOOL(WINAPI *EvtClose)(
+		HANDLE Object
+		);
+
+
+	BOOL(WINAPI *EvtRender)(
+		HANDLE Context,
+		HANDLE Fragment,
+		DWORD Flags,                        // EVT_RENDER_FLAGS
+		DWORD BufferSize,
+		__out_bcount_part_opt(BufferSize, *BufferUsed) PVOID Buffer,
+		__out PDWORD BufferUsed,
+		__out PDWORD PropertyCount
+		);
+
+
+	HANDLE(WINAPI *EvtQuery)(
+		HANDLE Session,
+		LPCWSTR Path,
+		LPCWSTR Query,
+		DWORD Flags
+		);
+
+
+	HANDLE(WINAPI *EvtCreateRenderContext)(
+		DWORD ValuePathsCount,
+		LPCWSTR *ValuePaths,
+		DWORD Flags                         // EVT_RENDER_CONTEXT_FLAGS
+		);
+
+
+	BOOL(WINAPI *EvtSeek)(
+		HANDLE ResultSet,
+		LONGLONG Position,
+		HANDLE Bookmark,
+		__reserved DWORD Timeout,           // currently must be 0
+		DWORD Flags
+		);
+
+	BOOL(WINAPI *EvtNext)(
+		HANDLE ResultSet,
+		DWORD EventsSize,
+		HANDLE* Events,
+		DWORD Timeout,
+		DWORD Flags,
+		__out PDWORD Returned
+		);
+
+	BOOL(WINAPI *EvtFormatMessage)(
+		void* PublisherMetadata,       // Except for forwarded events
+		void *Event,
+		DWORD MessageId,
+		DWORD ValueCount,
+		void *Values,
+		DWORD Flags,
+		DWORD BufferSize,
+		__out_ecount_part_opt(BufferSize, *BufferUsed) LPWSTR Buffer,
+		__out PDWORD BufferUsed
+		);
+
 } NT_API;
 
 typedef struct MS_EVENTLOG
