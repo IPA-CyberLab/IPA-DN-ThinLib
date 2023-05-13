@@ -6068,6 +6068,8 @@ void TfMain(TF_SERVICE *svc)
 
 	DU_WFP_LOG *wfp_log = NULL;
 
+	MS_EVENTREADER_SESSION *event_reader = MsNewEventReaderSession();
+
 	wchar_t tmp[2048];
 
 	// Init report thread
@@ -6735,6 +6737,8 @@ void TfMain(TF_SERVICE *svc)
 	MsFreeDnsServersList(current_dns_servers_list);
 
 	DuWfpStopLog2(wfp_log);
+
+	MsFreeEventReaderSession(event_reader);
 
 	if (cfg_Enable)
 	{

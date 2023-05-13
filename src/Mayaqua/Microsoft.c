@@ -560,58 +560,63 @@ LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT ma
 		{
 			wchar_t *event_log_name = event_log_names_tokens->Token[i];
 
-			char event_log_name_ansi[MAX_PATH] = CLEAN;
-			UniToStr(event_log_name_ansi, sizeof(event_log_name_ansi), event_log_name);
+			UniTrim(event_log_name);
 
-			UINT64 last_index_current_reg_value = MsRegReadInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi);
-			UINT64 last_index = last_index_current_reg_value;
-
-			LIST *o = MsReadEvents(s, event_log_name, max_fetch_per_eventlog);
-			if (o != NULL)
+			if (UniIsEmptyStr(event_log_name) == false)
 			{
-				UINT i;
-				UINT64 max_index = 0;
+				char event_log_name_ansi[MAX_PATH] = CLEAN;
+				UniToStr(event_log_name_ansi, sizeof(event_log_name_ansi), event_log_name);
 
-				for (i = 0;i < LIST_NUM(o);i++)
+				UINT64 last_index_current_reg_value = MsRegReadInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi);
+				UINT64 last_index = last_index_current_reg_value;
+
+				LIST *o = MsReadEvents(s, event_log_name, max_fetch_per_eventlog);
+				if (o != NULL)
 				{
-					MS_EVENTITEM *e = LIST_DATA(o, i);
+					UINT i;
+					UINT64 max_index = 0;
 
-					max_index = MAX(max_index, e->Index);
-				}
-
-				if (max_index < last_index)
-				{
-					// System event log database might be reset!!!
-					last_index = 0;
-				}
-
-				UINT64 new_last_index = last_index;
-
-				for (i = 0;i < LIST_NUM(o);i++)
-				{
-					MS_EVENTITEM *e = LIST_DATA(o, i);
-
-					if (e->Index > last_index)
+					for (i = 0;i < LIST_NUM(o);i++)
 					{
-						new_last_index = MAX(e->Index, new_last_index);
+						MS_EVENTITEM *e = LIST_DATA(o, i);
 
-						Add(ret, e);
+						max_index = MAX(max_index, e->Index);
 					}
-					else
+
+					if (max_index < last_index)
 					{
-						Free(e);
+						// System event log database might be reset!!!
+						last_index = 0;
 					}
-				}
 
-				if (new_last_index != last_index_current_reg_value)
-				{
-					if (MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi, new_last_index) == false)
+					UINT64 new_last_index = last_index;
+
+					for (i = 0;i < LIST_NUM(o);i++)
 					{
-						s->RegistryErrorOccured = true;
-					}
-				}
+						MS_EVENTITEM *e = LIST_DATA(o, i);
 
-				ReleaseList(o);
+						if (e->Index > last_index)
+						{
+							new_last_index = MAX(e->Index, new_last_index);
+
+							Add(ret, e);
+						}
+						else
+						{
+							Free(e);
+						}
+					}
+
+					if (new_last_index != last_index_current_reg_value)
+					{
+						if (MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi, new_last_index) == false)
+						{
+							s->RegistryErrorOccured = true;
+						}
+					}
+
+					ReleaseList(o);
+				}
 			}
 		}
 
