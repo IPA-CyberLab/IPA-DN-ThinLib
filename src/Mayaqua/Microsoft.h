@@ -974,6 +974,8 @@ typedef struct MS_EVENTREADER_SESSION
 	void *SessionHandle;
 	LIST *MsSidCache;
 	LIST *ProviderMetadataCache;
+	char EventWatcherInstanceId[64];
+	bool RegistryErrorOccured;
 } MS_EVENTREADER_SESSION;
 
 typedef struct MS_EVENTITEM
@@ -984,6 +986,7 @@ typedef struct MS_EVENTITEM
 	wchar_t ProviderName[MAX_PATH];
 	wchar_t Username[64];
 	wchar_t DomainName[64];
+	wchar_t EventLogName[128];
 	wchar_t Message[2048];
 } MS_EVENTITEM;
 
@@ -1030,6 +1033,9 @@ wchar_t *MsRegReadStrW(UINT root, char *keyname, char *valuename);
 wchar_t *MsRegReadStrExW(UINT root, char *keyname, char *valuename, bool force32bit);
 wchar_t *MsRegReadStrEx2W(UINT root, char *keyname, char *valuename, bool force32bit, bool force64bit);
 
+UINT64 MsRegReadInt64Str(UINT root, char *keyname, char *valuename);
+UINT64 MsRegReadInt64StrEx2(UINT root, char *keyname, char *valuename, bool force32bit, bool force64bit);
+
 UINT MsRegReadInt(UINT root, char *keyname, char *valuename);
 UINT MsRegReadIntEx(UINT root, char *keyname, char *valuename, bool force32bit);
 UINT MsRegReadIntEx2(UINT root, char *keyname, char *valuename, bool force32bit, bool force64bit);
@@ -1064,6 +1070,9 @@ bool MsRegWriteStrEx2W(UINT root, char *keyname, char *valuename, wchar_t *str, 
 bool MsRegWriteStrExpandW(UINT root, char *keyname, char *valuename, wchar_t *str);
 bool MsRegWriteStrExpandExW(UINT root, char *keyname, char *valuename, wchar_t *str, bool force32bit);
 bool MsRegWriteStrExpandEx2W(UINT root, char *keyname, char *valuename, wchar_t *str, bool force32bit, bool force64bit);
+
+bool MsRegWriteInt64Str(UINT root, char *keyname, char *valuename, UINT64 value);
+bool MsRegWriteInt64StrEx2(UINT root, char *keyname, char *valuename, UINT64 value, bool force32bit, bool force64bit);
 
 bool MsRegWriteInt(UINT root, char *keyname, char *valuename, UINT value);
 bool MsRegWriteIntEx(UINT root, char *keyname, char *valuename, UINT value, bool force32bit);
@@ -1638,8 +1647,9 @@ void MsFreeConvertDosDevicePathToFullPathCache(LIST *cache);
 
 MS_EVENTREADER_SESSION *MsNewEventReaderSession();
 void MsFreeEventReaderSession(MS_EVENTREADER_SESSION *s);
-LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return, UINT last_index);
+LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return);
 bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *render_context, void *event_handle);
+LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT max_fetch_per_eventlog);
 
 
 // Inner functions

@@ -407,6 +407,18 @@ MS_EVENTREADER_SESSION *MsNewEventReaderSession()
 
 	s->ProviderMetadataCache = NewKvListW();
 
+	wchar_t *exe = MsGetExeFileNameW();
+	wchar_t exe2[MAX_PATH] = CLEAN;
+	UniStrCpy(exe2, sizeof(exe2), exe);
+	UniStrLower(exe2);
+	UniTrim(exe2);
+
+	UCHAR hash[SHA1_SIZE] = CLEAN;
+	HashSha1(hash, exe2, UniStrSize(exe2));
+
+	BinToStr(s->EventWatcherInstanceId, sizeof(s->EventWatcherInstanceId), hash, 12);
+	StrLower(s->EventWatcherInstanceId);
+
 	return s;
 }
 
@@ -466,6 +478,149 @@ void *MsGetProviderMetadataWithCache(MS_EVENTREADER_SESSION *s, wchar_t *provide
 	UnlockList(s->ProviderMetadataCache);
 
 	return handle;
+}
+
+int MsEventCmpForSortByDateTime(void *p1, void *p2)
+{
+	MS_EVENTITEM *t1, *t2;
+	if (p1 == NULL || p2 == NULL)
+	{
+		return 0;
+	}
+	t1 = *((MS_EVENTITEM **)p1);
+	t2 = *((MS_EVENTITEM **)p2);
+	if (t1 == NULL || t2 == NULL)
+	{
+		return 0;
+	}
+
+	int r = COMPARE_RET(t1->SystemTime64, t2->SystemTime64);
+	if (r != 0)
+	{
+		return r;
+	}
+
+	r = COMPARE_RET(t1->Index, t2->Index);
+	if (r != 0)
+	{
+		return r;
+	}
+
+	return UniStrCmpi(t1->EventLogName, t2->EventLogName);
+}
+
+LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT max_fetch_per_eventlog)
+{
+	if (s == NULL || event_log_names == NULL)
+	{
+		return NULL;
+	}
+
+	if (s->RegistryErrorOccured)
+	{
+		// To prevent log flood due to registry state write failure
+		return NULL;
+	}
+
+	if (max_fetch_per_eventlog == 0)
+	{
+		max_fetch_per_eventlog = 100;
+	}
+
+	char reg_key_str[MAX_PATH] = CLEAN;
+
+	Format(reg_key_str, sizeof(reg_key_str),
+		"%s\\Windows_EventWatcher_States\\Instance_%s\\LastIndex",
+		"Software\\" DESK_PUBLISHER_NAME_ANSI "\\" DESK_PRODUCT_NAME_SUITE,
+		s->EventWatcherInstanceId);
+
+	wchar_t exe_path[MAX_PATH] = CLEAN;
+	UniStrCpy(exe_path, sizeof(exe_path), MsGetExeFileNameW());
+
+	wchar_t *current_exe_path = MsRegReadStrW(REG_CURRENT_USER, reg_key_str, "_ExePath");
+
+	if (UniStrCmpi(current_exe_path, exe_path) != 0)
+	{
+		if (MsRegWriteStrW(REG_CURRENT_USER, reg_key_str, "_ExePath", exe_path) == false)
+		{
+			s->RegistryErrorOccured = true;
+		}
+	}
+
+	Free(current_exe_path);
+
+	LIST *ret = NewListFast(NULL);
+
+	UNI_TOKEN_LIST *event_log_names_tokens = UniParseTokenWithoutNullStr(event_log_names, L";");
+
+	if (event_log_names_tokens != NULL)
+	{
+		UINT i;
+		for (i = 0;i < event_log_names_tokens->NumTokens;i++)
+		{
+			wchar_t *event_log_name = event_log_names_tokens->Token[i];
+
+			char event_log_name_ansi[MAX_PATH] = CLEAN;
+			UniToStr(event_log_name_ansi, sizeof(event_log_name_ansi), event_log_name);
+
+			UINT64 last_index_current_reg_value = MsRegReadInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi);
+			UINT64 last_index = last_index_current_reg_value;
+
+			LIST *o = MsReadEvents(s, event_log_name, max_fetch_per_eventlog);
+			if (o != NULL)
+			{
+				UINT i;
+				UINT64 max_index = 0;
+
+				for (i = 0;i < LIST_NUM(o);i++)
+				{
+					MS_EVENTITEM *e = LIST_DATA(o, i);
+
+					max_index = MAX(max_index, e->Index);
+				}
+
+				if (max_index < last_index)
+				{
+					// System event log database might be reset!!!
+					last_index = 0;
+				}
+
+				UINT64 new_last_index = last_index;
+
+				for (i = 0;i < LIST_NUM(o);i++)
+				{
+					MS_EVENTITEM *e = LIST_DATA(o, i);
+
+					if (e->Index > last_index)
+					{
+						new_last_index = MAX(e->Index, new_last_index);
+
+						Add(ret, e);
+					}
+					else
+					{
+						Free(e);
+					}
+				}
+
+				if (new_last_index != last_index_current_reg_value)
+				{
+					if (MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, event_log_name_ansi, new_last_index) == false)
+					{
+						s->RegistryErrorOccured = true;
+					}
+				}
+
+				ReleaseList(o);
+			}
+		}
+
+		UniFreeToken(event_log_names_tokens);
+	}
+
+	SortEx(ret, MsEventCmpForSortByDateTime);
+
+	return ret;
 }
 
 bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *render_context, void *event_handle)
@@ -567,7 +722,7 @@ bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *rende
 	return ret;
 }
 
-LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return, UINT last_index)
+LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return)
 {
 	if (s == NULL || log_name == NULL || max_return == 0)
 	{
@@ -631,6 +786,8 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 
 							if (MsFillEventMetadata(s, &e, render_context, event_handle))
 							{
+								UniStrCpy(e.EventLogName, sizeof(e.EventLogName), log_name);
+
 								bool ok = true;
 
 								if ((e.EventId == 1 || e.EventId == 24) && UniStrCmpi(e.ProviderName, L"Microsoft-Windows-Kernel-General") == 0)
@@ -17143,6 +17300,19 @@ bool MsRegWriteStrExpandEx2W(UINT root, char *keyname, char *valuename, wchar_t 
 	return MsRegWriteValueEx2W(root, keyname, valuename, REG_EXPAND_SZ, str, UniStrSize(str), force32bit, force64bit);
 }
 
+bool MsRegWriteInt64Str(UINT root, char *keyname, char *valuename, UINT64 value)
+{
+	return MsRegWriteInt64StrEx2(root, keyname, valuename, value, false, false);
+}
+bool MsRegWriteInt64StrEx2(UINT root, char *keyname, char *valuename, UINT64 value, bool force32bit, bool force64bit)
+{
+	char tmp[64] = CLEAN;
+
+	ToStr64(tmp, value);
+
+	return MsRegWriteStrEx2(root, keyname, valuename, tmp, force32bit, force64bit);
+}
+
 bool MsRegWriteStr(UINT root, char *keyname, char *valuename, char *str)
 {
 	return MsRegWriteStrEx(root, keyname, valuename, str, false);
@@ -17445,6 +17615,25 @@ LIST *MsRegReadStrListEx2(UINT root, char *keyname, char *valuename, bool force3
 	Free(ret);
 
 	return o;
+}
+
+UINT64 MsRegReadInt64Str(UINT root, char *keyname, char *valuename)
+{
+	return MsRegReadInt64StrEx2(root, keyname, valuename, false, false);
+}
+UINT64 MsRegReadInt64StrEx2(UINT root, char *keyname, char *valuename, bool force32bit, bool force64bit)
+{
+	UINT64 ret = 0;
+	char *s = MsRegReadStrEx2(root, keyname, valuename, force32bit, force64bit);
+
+	if (IsFilledStr(s))
+	{
+		ret = ToInt64(s);
+	}
+
+	Free(s);
+
+	return ret;
 }
 
 // Get a string
