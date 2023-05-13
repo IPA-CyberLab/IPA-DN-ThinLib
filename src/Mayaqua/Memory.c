@@ -3460,6 +3460,24 @@ void FreeBufList(LIST* o)
 	ReleaseList(o);
 }
 
+void FreeListMemItemsAndReleaseList(LIST *o)
+{
+	if (o == NULL)
+	{
+		return;
+	}
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(o);i++)
+	{
+		void *ptr = LIST_DATA(o, i);
+
+		Free(ptr);
+	}
+
+	ReleaseList(o);
+}
+
 // Create a list with an item
 LIST *NewListSingle(void *p)
 {

@@ -897,6 +897,29 @@ typedef struct MS_WTS_LOCK_STATE_RET_EX
 	UINT Reversed;
 } MS_WTS_LOCK_STATE_RET_EX;
 
+typedef struct MS_EVENTREADER_SESSION
+{
+	void *SessionHandle;
+	LIST *MsSidCache;
+	LIST *ProviderMetadataCache;
+} MS_EVENTREADER_SESSION;
+
+typedef struct MS_EVENTITEM
+{
+	UINT64 Index;
+	UINT EventId;
+	UINT64 SystemTime64;
+	wchar_t ProviderName[MAX_PATH];
+	wchar_t Username[64];
+	wchar_t DomainName[64];
+	wchar_t Message[2048];
+} MS_EVENTITEM;
+
+typedef struct MS_EVENTREADER_PROVIDER_METADATA
+{
+	void *MetadataHandle;
+} MS_EVENTREADER_PROVIDER_METADATA;
+
 // Function prototype
 void MsInit();
 void MsFree();
@@ -1538,6 +1561,14 @@ bool MsConvertDosDevicePathToFullPath(wchar_t *dst, UINT dst_size, wchar_t *src)
 bool MsConvertDosDevicePathToFullPathWithCache(LIST *cache, wchar_t *dst, UINT dst_size, wchar_t *src);
 LIST *MsNewConvertDosDevicePathToFullPathCache();
 void MsFreeConvertDosDevicePathToFullPathCache(LIST *cache);
+
+#define MS_READ_EVENT_BATCH_SIZE		64
+
+MS_EVENTREADER_SESSION *MsNewEventReaderSession();
+void MsFreeEventReaderSession(MS_EVENTREADER_SESSION *s);
+LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return, UINT last_index);
+bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *render_context, void *event_handle);
+
 
 // Inner functions
 #ifdef	MICROSOFT_C

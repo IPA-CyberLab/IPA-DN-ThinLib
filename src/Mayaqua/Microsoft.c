@@ -126,6 +126,11 @@ typedef enum    _PNP_VETO_TYPE {
 #include <security.h>
 #include <Msi.h>
 #include <Msiquery.h>
+#undef	WINVER
+#define	WINVER				0x0600
+#include <WinEvt.h>
+#undef	WINVER
+#define	WINVER				0x0502
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -344,7 +349,7 @@ void MsInitProcessCallOnce(bool restricted_mode)
 		{
 			_SetDllDirectoryA("");
 		}
-
+		
 		if (_SetDllDirectoryW != NULL)
 		{
 			_SetDllDirectoryW(L"");
@@ -375,6 +380,293 @@ void MsTestFunc1(HWND hWnd)
 		DWORD err = GetLastError();
 		Print("err = %u\n", err);
 	}
+}
+
+// todo: remove me!!!
+#pragma comment(lib, "Wevtapi.lib")
+
+MS_EVENTREADER_SESSION *MsNewEventReaderSession()
+{
+	MS_EVENTREADER_SESSION *s = ZeroMalloc(sizeof(MS_EVENTREADER_SESSION));
+
+	s->MsSidCache = MsNewSidToUsernameCache();
+
+	s->ProviderMetadataCache = NewKvListW();
+
+	return s;
+}
+
+void MsFreeEventReaderSession(MS_EVENTREADER_SESSION *s)
+{
+	if (s == NULL)
+	{
+		return;
+	}
+
+	MsFreeSidToUsernameCache(s->MsSidCache);
+
+	UINT i;
+	for (i = 0;i < LIST_NUM(s->ProviderMetadataCache);i++)
+	{
+		KV_LISTW *item = LIST_DATA(s->ProviderMetadataCache, i);
+
+		MS_EVENTREADER_PROVIDER_METADATA *d = (MS_EVENTREADER_PROVIDER_METADATA *)&item->Data;
+
+		EvtClose(d->MetadataHandle);
+	}
+
+	FreeKvListW(s->ProviderMetadataCache);
+
+	Free(s);
+}
+
+void *MsGetProviderMetadataWithCache(MS_EVENTREADER_SESSION *s, wchar_t *provider_name)
+{
+	if (s == NULL || provider_name == NULL)
+	{
+		return NULL;
+	}
+
+	MS_EVENTREADER_PROVIDER_METADATA *d = NULL;
+
+	LockList(s->ProviderMetadataCache);
+	{
+		d = SearchKvListDataW(s->ProviderMetadataCache, provider_name, 0);
+	}
+	UnlockList(s->ProviderMetadataCache);
+
+	if (d != NULL)
+	{
+		return d->MetadataHandle;
+	}
+
+	void *handle = EvtOpenPublisherMetadata(s->SessionHandle, provider_name, NULL, 0, 0);
+
+	MS_EVENTREADER_PROVIDER_METADATA d2 = CLEAN;
+	d2.MetadataHandle = handle;
+
+	LockList(s->ProviderMetadataCache);
+	{
+		AddKvListW(s->ProviderMetadataCache, provider_name, &d2, sizeof(d2), 0, 0, true);
+	}
+	UnlockList(s->ProviderMetadataCache);
+
+	return handle;
+}
+
+bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *render_context, void *event_handle)
+{
+	Zero(e, sizeof(MS_EVENTITEM));
+	if (s == NULL || e == NULL || render_context == NULL || event_handle == NULL)
+	{
+		return false;
+	}
+
+	bool ret = false;
+
+	UINT need_size = 0;
+	UINT property_count = 0;
+
+	bool r = EvtRender(render_context, event_handle, EvtRenderEventValues, 0, 0, &need_size, &property_count);
+
+	if (r == false && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	{
+		UINT alloc_size = need_size + 256;
+
+		UCHAR *buf = ZeroMalloc(alloc_size);
+
+		UINT buf_size = 0;
+
+		property_count = 0;
+
+		if (EvtRender(render_context, event_handle, EvtRenderEventValues, alloc_size, buf, &buf_size, &property_count))
+		{
+			EVT_VARIANT *vars = (EVT_VARIANT *)buf;
+			if ((property_count >= 18) && (buf_size >= sizeof(vars) * 18))
+			{
+				EVT_VARIANT *v;
+
+				UINT ok_count = 0;
+
+				v = &vars[EvtSystemEventRecordId];
+				if (v->Type == EvtVarTypeUInt64)
+				{
+					e->Index = v->UInt64Val;
+					ok_count++;
+				}
+
+				v = &vars[EvtSystemEventID];
+				if (v->Type == EvtVarTypeUInt16)
+				{
+					e->EventId = v->UInt16Val;
+					ok_count++;
+				}
+
+				v = &vars[EvtSystemTimeCreated];
+				if (v->Type == EvtVarTypeFileTime)
+				{
+					FILETIME ft = CLEAN;
+					Copy(&ft, &v->FileTimeVal, sizeof(FILETIME));
+					SYSTEMTIME st = CLEAN;
+					if (FileTimeToSystemTime(&ft, &st))
+					{
+						e->SystemTime64 = SystemToUINT64(&st);
+						ok_count++;
+					}
+				}
+
+				v = &vars[EvtSystemUserID];
+				if (v->Type == EvtVarTypeSid)
+				{
+					void *sid = v->SidVal;
+
+					MS_SID_INFO *user_info = MsGetUsernameFromSid2(s->MsSidCache, sid);
+					if (user_info != NULL)
+					{
+						UniStrCpy(e->Username, sizeof(e->Username), user_info->Username);
+						UniStrCpy(e->DomainName, sizeof(e->DomainName), user_info->DomainName);
+					}
+					else
+					{
+						UniStrCpy(e->Username, sizeof(e->Username), L"(unknown user)");
+						UniStrCpy(e->DomainName, sizeof(e->DomainName), L".");
+					}
+				}
+
+				v = &vars[EvtSystemProviderName];
+				if (v->Type == EvtVarTypeString)
+				{
+					Copy(e->ProviderName, (void *)v->StringVal, MIN(sizeof(e->ProviderName) - sizeof(wchar_t), v->Count * sizeof(wchar_t)));
+					ok_count++;
+				}
+
+				if (ok_count >= 4)
+				{
+					ret = true;
+				}
+			}
+		}
+
+		Free(buf);
+	}
+
+	return ret;
+}
+
+LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return, UINT last_index)
+{
+	if (s == NULL || log_name == NULL || max_return == 0)
+	{
+		return NULL;
+	}
+
+	LIST *ret = NULL;
+
+	void *query_handle = EvtQuery(s->SessionHandle, log_name, L"*", EvtQueryChannelPath);
+
+	if (query_handle != NULL)
+	{
+		void *render_context = EvtCreateRenderContext(0, NULL, EvtRenderContextSystem);
+
+		if (render_context != NULL)
+		{
+			LONGLONG position = (LONGLONG)max_return * (LONGLONG)-1;
+
+			if (EvtSeek(query_handle, position, NULL, 0, EvtSeekRelativeToLast))
+			{
+				ret = NewListFast(NULL);
+
+				while (true)
+				{
+					UINT remain = max_return - LIST_NUM(ret);
+					if (LIST_NUM(ret) >= max_return)
+					{
+						remain = 0;
+					}
+
+					remain = MIN(remain, MS_READ_EVENT_BATCH_SIZE);
+
+					if (remain == 0)
+					{
+						break;
+					}
+
+					void *event_array[MS_READ_EVENT_BATCH_SIZE] = CLEAN;
+
+					UINT num_returned = 0;
+					if (EvtNext(query_handle, remain, event_array, 0, INFINITE, &num_returned) == false)
+					{
+						// Get next: error. Give up.
+						break;
+					}
+
+					if (num_returned == 0)
+					{
+						// No more
+						break;
+					}
+
+					UINT i;
+					for (i = 0;i < num_returned;i++)
+					{
+						void *event_handle = event_array[i];
+
+						if (event_handle != NULL)
+						{
+							MS_EVENTITEM e = CLEAN;
+
+							if (MsFillEventMetadata(s, &e, render_context, event_handle))
+							{
+								bool ok = true;
+
+								if ((e.EventId == 1 || e.EventId == 24) && UniStrCmpi(e.ProviderName, L"Microsoft-Windows-Kernel-General") == 0)
+								{
+									// Windows Time kernel message: skip it
+									ok = false;
+								}
+
+								if (ok)
+								{
+									void *provider_metadata = MsGetProviderMetadataWithCache(s, e.ProviderName);
+
+									if (provider_metadata != NULL)
+									{
+										wchar_t dummy[4] = CLEAN;
+										UINT msg_needed = 0;
+										if (EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent, 0, dummy, &msg_needed) == false &&
+											GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+										{
+											wchar_t *buf = ZeroMalloc(sizeof(wchar_t) * (msg_needed + 8));
+
+											UINT dummy2 = 0;
+
+											if (EvtFormatMessage(provider_metadata, event_handle, 0, 0, NULL, EvtFormatMessageEvent,
+												msg_needed + 4, buf, &dummy2))
+											{
+												UniStrCpy(e.Message, sizeof(e.Message), buf);
+
+												Add(ret, Clone(&e, sizeof(e)));
+											}
+
+											Free(buf);
+										}
+									}
+								}
+							}
+
+							EvtClose(event_handle);
+						}
+					}
+				}
+			}
+
+			EvtClose(render_context);
+		}
+
+		EvtClose(query_handle);
+	}
+
+	return ret;
 }
 
 typedef struct MS_DOSPATH_TO_FULLPATH_DATA
@@ -1373,7 +1665,7 @@ MS_SID_INFO *MsGetUsernameFromSid(LIST *cache_list, void *sid_data, UINT sid_siz
 		return ret;
 	}
 
-	if (LIST_NUM(cache_list) >= 256)
+	if (LIST_NUM(cache_list) >= 512)
 	{
 		// Cache is full
 		return NULL;
