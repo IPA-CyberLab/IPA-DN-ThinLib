@@ -6080,6 +6080,8 @@ void TfMain(TF_SERVICE *svc)
 
 	INTERRUPT_MANAGER *im = NewInterruptManager();
 
+	bool ever_enabled = false;
+
 	bool cfg_Enable = false;
 	UINT cfg_SettingReloadIntervalMsec = 10000;
 	UINT cfg_WatchPollingIntervalMsec = 250;
@@ -6311,6 +6313,11 @@ void TfMain(TF_SERVICE *svc)
 			AddInterrupt(im, now + (UINT64)cfg_SettingReloadIntervalMsec);
 		}
 
+		if (cfg_Enable)
+		{
+			ever_enabled = true;
+		}
+
 		if (lastState_Enable != cfg_Enable)
 		{
 			lastState_Enable = cfg_Enable;
@@ -6454,7 +6461,7 @@ void TfMain(TF_SERVICE *svc)
 			}
 		}
 
-		if (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec))
+		if (ever_enabled && (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec)))
 		{
 			last_poll = now;
 			AddInterrupt(im, now + (UINT64)cfg_WatchPollingIntervalMsec);
