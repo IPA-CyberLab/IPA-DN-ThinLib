@@ -307,7 +307,7 @@ UINT FwApplyAllRulesFromLinesBuf(HANDLE hEngine, GUID *provider, GUID *sublayer,
 
 void TfMain(TF_SERVICE *svc);
 void TfReportThreadProc(THREAD *thread, void *param);
-void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e);
+void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e, UINT64* ret_systemtime);
 
 void TfThreadProc(THREAD *thread, void *param);
 void TfLog(TF_SERVICE *w, char *format, ...);

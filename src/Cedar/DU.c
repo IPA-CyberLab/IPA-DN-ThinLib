@@ -5395,10 +5395,11 @@ void TfReportThreadProc(THREAD *thread, void *param)
 		char category[64] = CLEAN;
 		wchar_t tmp[THINFW_MAX_LINE_SIZE] = CLEAN;
 		wchar_t tmp2[THINFW_MAX_LINE_SIZE] = CLEAN;
+		UINT64 systemtime_value = 0;
 
 		if (ok)
 		{
-			TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e);
+			TfGetStr(category, sizeof(category), tmp, sizeof(tmp), e, &systemtime_value);
 		}
 
 		if (UniIsFilledUniStr(tmp))
@@ -5417,17 +5418,44 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			wchar_t mac_str_w[48] = CLEAN;
 			char date_str[64] = CLEAN;
 			char time_str[64] = CLEAN;
+			char timezone_str[16] = CLEAN;
 
 			BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
 			StrToUni(mac_str_w, sizeof(mac_str_w), mac_str);
 
-			UINT64 time	= SystemToLocal64(TickToTime(e->Tick));
+			UINT64 time;
+			
+			if (systemtime_value != 0)
+			{
+				time = SystemToLocal64(systemtime_value);
+			}
+			else
+			{
+				time = SystemToLocal64(TickToTime(e->Tick));
+			}
+
 			GetDateStr64(date_str, sizeof(date_str), time);
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
+			if (st.ReportAppendTimeZone)
+			{
+				TIME_ZONE_INFORMATION tzinfo = CLEAN;
+				GetTimeZoneInformation(&tzinfo);
+
+				UINT bias_positive = tzinfo.Bias >= 0 ? tzinfo.Bias : -tzinfo.Bias;
+				bool bias_sign = tzinfo.Bias >= 0 ? false : true;
+
+				UINT hour = bias_positive / 60;
+				UINT minute = bias_positive % 60;
+
+				Format(timezone_str, sizeof(timezone_str), " %s%02u:%02u",
+					bias_sign ? "+" : "-",
+					hour, minute);
+			}
+
 			if (st.ReportSaveToDir)
 			{
-				TfLogEx(svc, category, "%s", tmp);
+				TfLogEx(svc, category, "(%S %S%S) %s", date_str, time_str, timezone_str, tmp);
 			}
 
 			if (st.ReportSyslogOnlyWhenLocked == false || (e->Flags & MS_THINFW_ENTRY_FLAG_LOCKED))
@@ -5447,8 +5475,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 						L"$macaddress", mac_str_w, false);
 
-					UniFormat(tmp2, sizeof(tmp2), L"%S %S %s [%S] %s",
-						date_str, time_str, prefix_tmp, category, tmp);
+					UniFormat(tmp2, sizeof(tmp2), L"%S %S%S %s [%S] %s",
+						date_str, time_str, timezone_str, prefix_tmp, category, tmp);
 
 					SendSysLog(syslog, tmp2);
 				}
@@ -5461,9 +5489,9 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					current_mail_element_index++;
 
 					UniFormat(tmp2, sizeof(tmp2),
-						L"Event #%u: %S %S\n[%S] %s\n\n",
+						L"Event #%u: %S %S%S\n[%S] %s\n\n",
 						current_mail_element_index,
-						date_str, time_str,
+						date_str, time_str, timezone_str,
 						category, tmp);
 
 					char *utf8 = CopyUniToUtf(tmp2);
@@ -5714,13 +5742,18 @@ bool TfGetCurrentMacAddress(UCHAR *mac)
 	return ret;
 }
 
-void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e)
+void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, DIFF_ENTRY *e, UINT64 *ret_systemtime)
 {
+	static UINT64 _dummy = 0;
 	ClearUniStr(dst, 0);
 	ClearStr(category, category_size);
 	if (dst == NULL || e == NULL || category == NULL)
 	{
 		return;
+	}
+	if (ret_systemtime == NULL)
+	{
+		ret_systemtime = &_dummy;
 	}
 
 	wchar_t ep_info[768] = CLEAN;
@@ -5744,6 +5777,22 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
 		UniFormat(dst, dst_size, L"(Hostname: %S, IPv%u_Address: %r)",
 			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_WINEVENT:
+		StrCpy(category, category_size, "WIN_EVENTLOG");
+		MS_EVENTITEM *winevent = (MS_EVENTITEM *)&e->Data;
+		*ret_systemtime = winevent->SystemTime64;
+		wchar_t user[256] = CLEAN;
+
+		if (UniIsFilledStr(winevent->Username) || UniIsFilledStr(winevent->DomainName))
+		{
+			UniFormat(user, sizeof(user), L"%s\\%s", winevent->DomainName, winevent->Username);
+		}
+
+		UniFormat(dst, dst_size, L"EVENT_ID=%u;Src=%s;Index=%I64u;Msg=%s;User=%s;EventLogName=%s;",
+			winevent->EventId, winevent->ProviderName, winevent->Index,
+			winevent->Message, user, winevent->EventLogName);
 		break;
 
 	case MS_THINFW_ENTRY_TYPE_BLOCK:
@@ -5802,7 +5851,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		UniFormat(proc_info, sizeof(proc_info),
 			L" ProcessInfo=(AppPath: %s, User: %s\\%s)",
-			block->ProcessExeName,
+			UniIsFilledStr(block->ProcessExeName) ? block->ProcessExeName : L"(unknown)",
 			block->DomainName,
 			block->Username);
 
@@ -6021,6 +6070,7 @@ void TfMain(TF_SERVICE *svc)
 	UINT64 last_cfg_read = 0;
 	UINT64 last_poll = 0;
 	UINT64 last_netinfo = 0;
+	UINT64 last_eventlog_read = 0;
 
 	BUF *cfg_file_content = NewBuf();
 
@@ -6035,6 +6085,7 @@ void TfMain(TF_SERVICE *svc)
 	UINT cfg_WatchPollingIntervalMsec = 250;
 	bool cfg_EnableWatchRdp = false;
 	bool cfg_EnableWatchDns = false;
+	bool cfg_EnableWatchWindowsEventLog = false;
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchTcp = false;
 	bool cfg_EnableWatchFwBlock = false;
@@ -6046,6 +6097,9 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_IgnoreDNSoverTCPSession = false;
 	UINT cfg_ReportMaxQueueLength = 1024;
 	UINT cfg_InputIdleTimerMsec = 15 * 60 * 1000;
+	UINT cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
+
+	wchar_t cfg_WindowsEventLogNames[1024] = CLEAN;
 
 	bool wfp_log_start_failed = false;
 
@@ -6062,7 +6116,7 @@ void TfMain(TF_SERVICE *svc)
 
 	UINT current_process_id = MsGetCurrentProcessId();
 
-	UINT config_revision = 1;
+	UINT config_revision = 0;
 
 	DU_WFP_LOG_SETTINGS wfp_log_settings = CLEAN;
 
@@ -6095,8 +6149,11 @@ void TfMain(TF_SERVICE *svc)
 
 					config_revision++;
 
-					UniFormat(tmp, sizeof(tmp), L"Config file reloaded. Revision: %u", config_revision);
-					TfInsertStrEvent(svc, tmp);
+					if (config_revision >= 2)
+					{
+						UniFormat(tmp, sizeof(tmp), L"Config file reloaded. Revision: %u", config_revision);
+						TfInsertStrEvent(svc, tmp);
+					}
 
 					FreeIni(ini);
 
@@ -6114,12 +6171,14 @@ void TfMain(TF_SERVICE *svc)
 					{
 						cfg_SettingReloadIntervalMsec = 10000;
 					}
+					cfg_SettingReloadIntervalMsec = MAX(cfg_SettingReloadIntervalMsec, 1000);
 					cfg_SettingReloadIntervalMsec = MIN(cfg_SettingReloadIntervalMsec, 60 * 5 * 1000);
 					cfg_WatchPollingIntervalMsec = IniIntValue(ini, "WatchPollingIntervalMsec");
 					if (cfg_WatchPollingIntervalMsec == 0)
 					{
 						cfg_WatchPollingIntervalMsec = 250;
 					}
+					cfg_WatchPollingIntervalMsec = MAX(cfg_WatchPollingIntervalMsec, 100);
 					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
 					cfg_EnableWatchDns = IniBoolValue(ini, "EnableWatchDns");
 					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
@@ -6133,6 +6192,7 @@ void TfMain(TF_SERVICE *svc)
 					{
 						cfg_GetNetworkInfoIntervalMsec = 300000;
 					}
+					cfg_GetNetworkInfoIntervalMsec = MAX(cfg_GetNetworkInfoIntervalMsec, 5 * 1000);
 
 					cfg_ReportMaxQueueLength = IniIntValue(ini, "ReportMaxQueueLength");
 					if (cfg_ReportMaxQueueLength == 0)
@@ -6145,6 +6205,18 @@ void TfMain(TF_SERVICE *svc)
 					{
 						cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 					}
+
+					cfg_EnableWatchWindowsEventLog = IniBoolValue(ini, "EnableWatchWindowsEventLog");
+
+					UniStrCpy(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames),
+						IniUniStrValue(ini, "WindowsEventLogNames"));
+
+					cfg_WindowsEventLogPollIntervalMsec = IniIntValue(ini, "WindowsEventLogPollIntervalMsec");
+					if (cfg_WindowsEventLogPollIntervalMsec == 0)
+					{
+						cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
+					}
+					cfg_WindowsEventLogPollIntervalMsec = MAX(cfg_WindowsEventLogPollIntervalMsec, 1000);
 
 					cfg_IgnoreDNSoverTCPSession = IniBoolValue(ini, "IgnoreDNSoverTCPSession");
 
@@ -6194,6 +6266,7 @@ void TfMain(TF_SERVICE *svc)
 
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
 					rep.ReportAppendUniqueId = IniBoolValue(ini, "ReportAppendUniqueId");
+					rep.ReportAppendTimeZone = IniBoolValue(ini, "ReportAppendTimeZone");
 
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 
@@ -6226,6 +6299,9 @@ void TfMain(TF_SERVICE *svc)
 				cfg_EnableFirewallOnlyWhenLocked = false;
 				cfg_ReportMaxQueueLength = 1024;
 				cfg_InputIdleTimerMsec = 15 * 60 * 1000;
+				cfg_EnableWatchWindowsEventLog = false;
+				cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
+				ClearUniStr(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames));
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
 				lastState_firewall = INFINITE;
@@ -6340,6 +6416,39 @@ void TfMain(TF_SERVICE *svc)
 						TfLog(svc, "This computer's MAC address: %S", mac_str);
 
 						Copy(svc->MacAddress, mac, 6);
+					}
+				}
+			}
+		}
+
+		if (cfg_Enable && cfg_EnableWatchWindowsEventLog)
+		{
+			if (last_eventlog_read == 0 || now >= (last_eventlog_read + (UINT64)cfg_WindowsEventLogPollIntervalMsec))
+			{
+				last_eventlog_read = now;
+				AddInterrupt(im, now + (UINT64)cfg_WindowsEventLogPollIntervalMsec);
+
+				if (svc->ReportQueue->num_item < cfg_ReportMaxQueueLength)
+				{
+					LIST *new_events = MsWatchEvents(event_reader, cfg_WindowsEventLogNames, 100);
+
+					if (new_events != NULL)
+					{
+						LockQueue(svc->ReportQueue);
+						{
+							UINT i;
+							for (i = 0;i < LIST_NUM(new_events);i++)
+							{
+								MS_EVENTITEM *e = LIST_DATA(new_events, i);
+
+								DIFF_ENTRY *entry = NewDiffEntry(L"", e, sizeof(MS_EVENTITEM), MS_THINFW_ENTRY_TYPE_WINEVENT, now);
+
+								InsertQueue(svc->ReportQueue, entry);
+							}
+						}
+						UnlockQueue(svc->ReportQueue);
+
+						FreeListMemItemsAndReleaseList(new_events);
 					}
 				}
 			}
@@ -6658,8 +6767,12 @@ void TfMain(TF_SERVICE *svc)
 			if (lastState_firewall != fw_new_state)
 			{
 				lastState_firewall = fw_new_state;
-				TfLog(svc, "Firewall active state is changed. New state is '%S' (Config revision: %u).",
-					is_firewall_active ? "Active" : "Inactive", config_revision);
+
+				if (cfg_Enable)
+				{
+					TfLog(svc, "Firewall active state is changed. New state is '%S' (Config revision: %u).",
+						is_firewall_active ? "Active" : "Inactive", config_revision);
+				}
 
 				if (is_firewall_active == false)
 				{

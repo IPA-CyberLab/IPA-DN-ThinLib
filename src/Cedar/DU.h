@@ -117,6 +117,7 @@ struct TF_REPORT_SETTINGS
 
 	bool ReportSaveToDir;
 	bool ReportAppendUniqueId;
+	bool ReportAppendTimeZone;
 };
 
 struct TF_SERVICE
