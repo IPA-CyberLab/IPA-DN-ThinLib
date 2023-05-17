@@ -6386,6 +6386,8 @@ L_BOOT_ERROR:
 					if (Cmp(mac, lastState_mac, 6) != 0)
 					{
 						BinToStr(mac_str, sizeof(mac_str), mac, 6);
+
+						Copy(svc->MacAddress, mac, 6);
 					}
 				}
 

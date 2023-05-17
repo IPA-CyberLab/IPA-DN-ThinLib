@@ -911,6 +911,8 @@ bool MsConvertDosDevicePathToFullPathWithCache(LIST *cache, wchar_t *dst, UINT d
 	}
 	UnlockList(cache);
 
+	UniStrCpy(dst, dst_size, tmp);
+
 	return r;
 }
 
