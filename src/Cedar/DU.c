@@ -6070,6 +6070,10 @@ void TfMain(TF_SERVICE *svc)
 		return;
 	}
 
+	char *single_instance_name = "dn_thinfw_single_instance";
+
+	INSTANCE *current_single_instance = NULL;
+
 	UINT64 last_cfg_read = 0;
 	UINT64 last_poll = 0;
 	UINT64 last_netinfo = 0;
@@ -6136,6 +6140,8 @@ void TfMain(TF_SERVICE *svc)
 	svc->ReportThreadHaltEvent = NewEvent();
 	svc->ReportThread = NewThread(TfReportThreadProc, svc);
 
+	bool another_instance_error_show_flag = false;
+
 	while (svc->HaltFlag == false)
 	{
 		UINT64 now = Tick64();
@@ -6151,6 +6157,38 @@ void TfMain(TF_SERVICE *svc)
 				{
 					// Reload settings
 					LIST *new_ini = ReadIni(new_content);
+
+					if (IniBoolValue(new_ini, "Enable"))
+					{
+						if (current_single_instance == NULL)
+						{
+							current_single_instance = NewSingleInstanceEx(single_instance_name, false);
+
+							if (current_single_instance == NULL)
+							{
+								if (another_instance_error_show_flag == false)
+								{
+									TfLog(svc, "Error: While 'Enable' is set to 'true' on the configuration file, another instance of Thin Firewall System has been already running on this computer. This Thin Firewall System instance will suspend until another instance will be stopped.");
+									another_instance_error_show_flag = true;
+								}
+
+								FreeIni(new_ini);
+								FreeBuf(new_content);
+
+								goto L_BOOT_ERROR;
+							}
+							else
+							{
+								if (another_instance_error_show_flag)
+								{
+									TfLog(svc, "Information: Another Thin Firewall instance stopped. So this instance of Thin Firewall started.");
+									another_instance_error_show_flag = false;
+								}
+							}
+						}
+					}
+
+					another_instance_error_show_flag = false;
 
 					config_revision++;
 
@@ -6290,6 +6328,7 @@ void TfMain(TF_SERVICE *svc)
 			}
 			else
 			{
+L_BOOT_ERROR:
 				cfg_Enable = false;
 				cfg_SettingReloadIntervalMsec = 10000;
 				cfg_WatchPollingIntervalMsec = 250;
@@ -6319,6 +6358,15 @@ void TfMain(TF_SERVICE *svc)
 		if (cfg_Enable)
 		{
 			ever_enabled = true;
+		}
+
+		if (cfg_Enable == false)
+		{
+			if (current_single_instance != NULL)
+			{
+				FreeSingleInstance(current_single_instance);
+				current_single_instance = NULL;
+			}
 		}
 
 		if (lastState_Enable != cfg_Enable)
@@ -6879,6 +6927,12 @@ void TfMain(TF_SERVICE *svc)
 	DuWfpStopLog2(wfp_log);
 
 	MsFreeEventReaderSession(event_reader);
+
+	if (current_single_instance != NULL)
+	{
+		FreeSingleInstance(current_single_instance);
+		current_single_instance = NULL;
+	}
 
 	if (cfg_Enable)
 	{
