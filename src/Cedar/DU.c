@@ -5206,7 +5206,10 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 			GetLastLocalIp(&my_ip, false);
 
-			BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
+			if (IsZero(svc->MacAddress, 6) == false)
+			{
+				BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
+			}
 
 			UINT64 time = LocalTime64();
 			GetDateStr64(date_str, sizeof(date_str), time);
@@ -6324,6 +6327,20 @@ void TfMain(TF_SERVICE *svc)
 
 			if (cfg_Enable)
 			{
+				// Get current MAC address
+				char mac_str[24] = CLEAN;
+				UCHAR mac[6] = CLEAN;
+
+				StrCpy(mac_str, sizeof(mac_str), "(unknown)");
+
+				if (TfGetCurrentMacAddress(mac))
+				{
+					if (Cmp(mac, lastState_mac, 6) != 0)
+					{
+						BinToStr(mac_str, sizeof(mac_str), mac, 6);
+					}
+				}
+
 				char ssl_lib_ver[MAX_PATH] = CLEAN;
 
 				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
@@ -6350,6 +6367,7 @@ void TfMain(TF_SERVICE *svc)
 					TfLog(svc, "OsVersion: %S", os->OsVersion);
 					TfLog(svc, "KernelName: %S", os->KernelName);
 					TfLog(svc, "KernelVersion: %S", os->KernelVersion);
+					TfLog(svc, "ComputerMacAddress: %S", mac_str);
 				}
 
 				MEMINFO mem = CLEAN;
@@ -6371,6 +6389,7 @@ void TfMain(TF_SERVICE *svc)
 					L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
 					L"OsVersion: %S, "
 					L"ComputerName: %s, "
+					L"ComputerMacAddress: %S, "
 					L"UserName: %s, "
 					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessAppPath: %s",
 					svc->StartupSettings.AppTitle, svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
@@ -6381,6 +6400,7 @@ void TfMain(TF_SERVICE *svc)
 					os->OsSystemName, os->OsProductName, os->OsVendorName,
 					os->OsVersion,
 					computer_name,
+					mac_str,
 					MsGetUserNameExW(),
 					mem.TotalPhys, mem.UsedPhys, mem.FreePhys,
 					MsGetExeFileNameW()
