@@ -6090,7 +6090,7 @@ void TfMain(TF_SERVICE *svc)
 	bool ever_enabled = false;
 
 	bool cfg_Enable = false;
-	UINT cfg_SettingReloadIntervalMsec = 10000;
+	UINT cfg_SettingReloadIntervalMsec = 15 * 1000;
 	UINT cfg_WatchPollingIntervalMsec = 250;
 	bool cfg_EnableWatchRdp = false;
 	bool cfg_EnableWatchDns = false;
@@ -6212,7 +6212,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
 					if (cfg_SettingReloadIntervalMsec == 0)
 					{
-						cfg_SettingReloadIntervalMsec = 10000;
+						cfg_SettingReloadIntervalMsec = 5 * 1000;
 					}
 					cfg_SettingReloadIntervalMsec = MAX(cfg_SettingReloadIntervalMsec, 1000);
 					cfg_SettingReloadIntervalMsec = MIN(cfg_SettingReloadIntervalMsec, 60 * 5 * 1000);
@@ -6313,7 +6313,7 @@ void TfMain(TF_SERVICE *svc)
 
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 
-					if (rep.HostnameLookupTimeoutMsec == 0) rep.HostnameLookupTimeoutMsec = 1000;
+					if (rep.HostnameLookupTimeoutMsec == 0) rep.HostnameLookupTimeoutMsec = 500;
 
 					Lock(svc->CurrentReportSettingsLock);
 					{
@@ -6330,7 +6330,7 @@ void TfMain(TF_SERVICE *svc)
 			{
 L_BOOT_ERROR:
 				cfg_Enable = false;
-				cfg_SettingReloadIntervalMsec = 10000;
+				cfg_SettingReloadIntervalMsec = 15 * 1000;
 				cfg_WatchPollingIntervalMsec = 250;
 				cfg_EnableWatchRdp = false;
 				cfg_EnableWatchDns = false;
@@ -6383,12 +6383,9 @@ L_BOOT_ERROR:
 
 				if (TfGetCurrentMacAddress(mac))
 				{
-					if (Cmp(mac, lastState_mac, 6) != 0)
-					{
-						BinToStr(mac_str, sizeof(mac_str), mac, 6);
+					BinToStr(mac_str, sizeof(mac_str), mac, 6);
 
-						Copy(svc->MacAddress, mac, 6);
-					}
+					Copy(svc->MacAddress, mac, 6);
 				}
 
 				char ssl_lib_ver[MAX_PATH] = CLEAN;
