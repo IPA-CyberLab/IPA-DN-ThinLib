@@ -5155,6 +5155,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 	UINT current_mail_element_index = 0;
 	UINT64 last_mail_sent_tick = 0;
 	UINT64 mail_sleep_until_tick = 0;
+	UINT64 mail_first_eventid = 0;
+	UINT64 mail_last_eventid = 0;
 
 	wchar_t prefix_tmp[MAX_PATH] = CLEAN;
 
@@ -5215,7 +5217,21 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			GetDateStr64(date_str, sizeof(date_str), time);
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
-			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s\n", svc->StartupSettings.AppTitle, date_str, time_str);
+			char timezone_str[16] = CLEAN;
+			TIME_ZONE_INFORMATION tzinfo = CLEAN;
+			GetTimeZoneInformation(&tzinfo);
+
+			UINT bias_positive = tzinfo.Bias >= 0 ? tzinfo.Bias : -tzinfo.Bias;
+			bool bias_sign = tzinfo.Bias >= 0 ? false : true;
+
+			UINT hour = bias_positive / 60;
+			UINT minute = bias_positive % 60;
+
+			Format(timezone_str, sizeof(timezone_str), " %s%02u:%02u",
+				bias_sign ? "+" : "-",
+				hour, minute);
+
+			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s%s\n", svc->StartupSettings.AppTitle, date_str, time_str, timezone_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
@@ -5232,6 +5248,19 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
 				IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
 			{
+				UINT64 mail_id = 0;
+
+				wchar_t mail_id_w[64] = CLEAN;
+
+				Lock(svc->EventIdEtcLock);
+				{
+					svc->LastMailId++;
+					mail_id = svc->LastMailId;
+				}
+				Unlock(svc->EventIdEtcLock);
+
+				UniFormat(mail_id_w, sizeof(mail_id_w), L"%I64u", mail_id);
+
 				wchar_t mac_str_w[48] = CLEAN;
 				StrToUni(mac_str_w, sizeof(mac_str_w), mac_str);
 
@@ -5240,6 +5269,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					L"$hostname", computer_name_short, false);
 				UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 					L"$macaddress", mac_str_w, false);
+				UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+					L"$mailid", mail_id_w, false);
 
 				Sort(mail_category_list);
 
@@ -5263,6 +5294,18 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				}
 
 				UniStrCatA(prefix_tmp, sizeof(prefix_tmp), ")");
+
+				char range[128] = CLEAN;
+				if (mail_first_eventid != mail_last_eventid)
+				{
+					Format(range, sizeof(range), " (#%I64u-#%I64u)", mail_first_eventid, mail_last_eventid);
+				}
+				else
+				{
+					Format(range, sizeof(range), " (#%I64u)", mail_first_eventid);
+				}
+
+				UniStrCatA(prefix_tmp, sizeof(prefix_tmp), range);
 
 				TOKEN_LIST *to_list = ParseToken(st.ReportMailTo, "/, \t");
 					
@@ -5407,6 +5450,19 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 		if (UniIsFilledUniStr(tmp))
 		{
+			UINT64 event_id = 0;
+
+			wchar_t event_id_w[64] = CLEAN;
+
+			Lock(svc->EventIdEtcLock);
+			{
+				svc->LastEventId++;
+				event_id = svc->LastEventId;
+			}
+			Unlock(svc->EventIdEtcLock);
+
+			UniFormat(event_id_w, sizeof(event_id_w), L"%I64u", event_id);
+
 			if (st.ReportAppendUniqueId)
 			{
 				UCHAR rand[20] = CLEAN;
@@ -5477,23 +5533,36 @@ void TfReportThreadProc(THREAD *thread, void *param)
 						L"$hostname", computer_name, false);
 					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 						L"$macaddress", mac_str_w, false);
+					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+						L"$eventid", event_id_w, false);
 
 					UniFormat(tmp2, sizeof(tmp2), L"%S %S%S %s [%S] %s",
 						date_str, time_str, timezone_str, prefix_tmp, category, tmp);
 
 					SendSysLog(syslog, tmp2);
-				}
 
+				}
+			}
+
+			if (st.ReportMailOnlyWhenLocked == false || (e->Flags & MS_THINFW_ENTRY_FLAG_LOCKED))
+			{
 				if (IsFilledStr(st.ReportMailHost) && st.ReportMailPort != 0 &&
 					IsFilledStr(st.ReportMailFrom) && IsFilledStr(st.ReportMailTo))
 				{
 					ClearUniStr(tmp2, sizeof(tmp2));
 
+					if (current_mail_element_index == 0)
+					{
+						mail_first_eventid = event_id;
+					}
+
+					mail_last_eventid = event_id;
+
 					current_mail_element_index++;
 
 					UniFormat(tmp2, sizeof(tmp2),
-						L"Event #%u: %S %S%S\n[%S] %s\n\n",
-						current_mail_element_index,
+						L"Event #%I64u: %S %S%S\n[%S] %s\n\n",
+						event_id,
 						date_str, time_str, timezone_str,
 						category, tmp);
 
@@ -6063,6 +6132,50 @@ void TfInsertStrEvent(TF_SERVICE *svc, wchar_t *str)
 	UnlockQueue(svc->ReportQueue);
 }
 
+void TfUpdateReg(TF_SERVICE *svc, bool read)
+{
+	if (svc == NULL)
+	{
+		return;
+	}
+
+	wchar_t *exe = MsGetExeFileNameW();
+	wchar_t exe2[MAX_PATH] = CLEAN;
+	UniStrCpy(exe2, sizeof(exe2), exe);
+	UniStrLower(exe2);
+	UniTrim(exe2);
+
+	UCHAR hash[SHA1_SIZE] = CLEAN;
+	HashSha1(hash, exe2, UniStrSize(exe2));
+
+	char instance_id[64] = CLEAN;
+
+	BinToStr(instance_id, sizeof(instance_id), hash, 12);
+	StrLower(instance_id);
+
+	char reg_key_str[MAX_PATH] = CLEAN;
+
+	Format(reg_key_str, sizeof(reg_key_str),
+		"Software\\Thin Firewall System\\RunningInstances\\Instance_%s",
+		instance_id);
+
+	MsRegWriteStrW(REG_CURRENT_USER, reg_key_str, "ExePath", exe);
+	MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, "LastUpdate", SystemTime64());
+
+	Lock(svc->EventIdEtcLock);
+	{
+		if (read)
+		{
+			svc->LastEventId = MsRegReadInt64Str(REG_CURRENT_USER, reg_key_str, "LastEventId");
+			svc->LastMailId = MsRegReadInt64Str(REG_CURRENT_USER, reg_key_str, "LastMailId");
+		}
+
+		MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, "LastEventId", svc->LastEventId);
+		MsRegWriteInt64Str(REG_CURRENT_USER, reg_key_str, "LastMailId", svc->LastMailId);
+	}
+	Unlock(svc->EventIdEtcLock);
+}
+
 void TfMain(TF_SERVICE *svc)
 {
 	if (svc == NULL)
@@ -6133,12 +6246,16 @@ void TfMain(TF_SERVICE *svc)
 
 	MS_EVENTREADER_SESSION *event_reader = MsNewEventReaderSession();
 
+	UINT64 last_regupdate = 0;
+
 	wchar_t tmp[2048];
 
 	// Init report thread
 	svc->ReportQueue = NewQueue();
 	svc->ReportThreadHaltEvent = NewEvent();
 	svc->ReportThread = NewThread(TfReportThreadProc, svc);
+
+	TfUpdateReg(svc, true);
 
 	bool another_instance_error_show_flag = false;
 
@@ -6506,7 +6623,7 @@ L_BOOT_ERROR:
 				{
 					LIST *new_events = MsWatchEvents(event_reader, cfg_WindowsEventLogNames, 100);
 
-					if (new_events != NULL)
+					if (new_events != NULL && LIST_NUM(new_events) >= 1)
 					{
 						LockQueue(svc->ReportQueue);
 						{
@@ -6517,13 +6634,15 @@ L_BOOT_ERROR:
 
 								DIFF_ENTRY *entry = NewDiffEntry(L"", e, sizeof(MS_EVENTITEM), MS_THINFW_ENTRY_TYPE_WINEVENT, now);
 
+								entry->Flags |= MS_THINFW_ENTRY_FLAG_LOCKED;
+
 								InsertQueue(svc->ReportQueue, entry);
 							}
 						}
 						UnlockQueue(svc->ReportQueue);
-
-						FreeListMemItemsAndReleaseList(new_events);
 					}
+
+					FreeListMemItemsAndReleaseList(new_events);
 				}
 			}
 		}
@@ -6874,6 +6993,15 @@ L_BOOT_ERROR:
 			}
 		}
 
+		if (cfg_Enable)
+		{
+			if (last_regupdate == 0 || now >= (last_regupdate + (UINT64)THINFW_REG_UPDATE_INTERVAL))
+			{
+				TfUpdateReg(svc, false);
+				last_regupdate = now;
+			}
+		}
+
 		UINT wait_interval = GetNextIntervalForInterrupt(im);
 
 		if (wait_interval == 0)
@@ -6900,6 +7028,11 @@ L_BOOT_ERROR:
 	WaitThread(svc->ReportThread, INFINITE);
 	ReleaseThread(svc->ReportThread);
 	ReleaseEvent(svc->ReportThreadHaltEvent);
+
+	if (cfg_Enable)
+	{
+		TfUpdateReg(svc, false);
+	}
 
 	while (true)
 	{
@@ -7029,6 +7162,7 @@ void TfStopService(TF_SERVICE *svc)
 	ReleaseEvent(svc->HaltEvent);
 
 	DeleteLock(svc->CurrentReportSettingsLock);
+	DeleteLock(svc->EventIdEtcLock);
 
 	FreeLog(svc->Log);
 
@@ -7056,6 +7190,7 @@ TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 	svc->Log->Flush = true;
 
 	svc->CurrentReportSettingsLock = NewLock();
+	svc->EventIdEtcLock = NewLock();
 
 	svc->HaltEvent = NewEvent();
 

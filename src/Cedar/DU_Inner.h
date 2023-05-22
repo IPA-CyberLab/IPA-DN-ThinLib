@@ -297,6 +297,8 @@ bool DuGovFw1Main(bool mandate);
 
 #define	THINFW_MAX_LINE_SIZE					4096
 
+#define THINFW_REG_UPDATE_INTERVAL				(1 * 1000)
+
 
 bool FwParseRuleStr(ACCESS *a, char *str);
 void FwParseIpAndMask(IP *ip, IP *mask, char *str);

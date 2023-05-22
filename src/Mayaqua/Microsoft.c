@@ -530,8 +530,7 @@ LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT ma
 	char reg_key_str[MAX_PATH] = CLEAN;
 
 	Format(reg_key_str, sizeof(reg_key_str),
-		"%s\\Windows_EventWatcher_States\\Instance_%s\\LastIndex",
-		"Software\\" DESK_PUBLISHER_NAME_ANSI "\\" DESK_PRODUCT_NAME_SUITE,
+		"Software\\Thin Firewall System\\Windows_EventWatcher_States\\Instance_%s\\LastIndex",
 		s->EventWatcherInstanceId);
 
 	wchar_t exe_path[MAX_PATH] = CLEAN;

@@ -277,6 +277,8 @@ struct DIFF_ENTRY
 	UINT64 Tick;
 	bool IsAdded, IsRemoved;
 	UINT64 Param;
+	UINT64 Param2;
+	UINT Param3, Param4;
 	UINT Flags;
 	UINT DataSize;
 	UCHAR Data[16]; // Dummy: size may vary

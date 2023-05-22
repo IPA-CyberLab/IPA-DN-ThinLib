@@ -3078,7 +3078,7 @@ KV_LIST *AddKvList(LIST *o, char *key, void *data, UINT size, UINT type, UINT64 
 
 	if (key == NULL) key = "";
 
-	KV_LIST *k = Malloc(sizeof(KV_LIST) + size);
+	KV_LIST *k = ZeroMalloc(sizeof(KV_LIST) + size);
 
 	StrCpy(k->Key, sizeof(k->Key), key);
 	Copy(k->Data, data, size);
@@ -6192,7 +6192,7 @@ DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param,
 	if (key == NULL) key = L"";
 	if (tick == 0) tick = Tick64();
 
-	DIFF_ENTRY *e = Malloc(sizeof(DIFF_ENTRY) + data_size);
+	DIFF_ENTRY *e = ZeroMalloc(sizeof(DIFF_ENTRY) + data_size);
 
 	Copy(e->Data, data, data_size);
 	e->Data[data_size] = 0;
