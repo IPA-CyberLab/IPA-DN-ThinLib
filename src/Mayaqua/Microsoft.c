@@ -131,6 +131,7 @@ typedef enum    _PNP_VETO_TYPE {
 #include <WinEvt.h>
 #undef	WINVER
 #define	WINVER				0x0502
+#include <Lm.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -380,6 +381,79 @@ void MsTestFunc1(HWND hWnd)
 		DWORD err = GetLastError();
 		Print("err = %u\n", err);
 	}
+}
+
+void MsGetTimezoneSuffixStr(char *dst, UINT size)
+{
+	if (dst == NULL)
+	{
+		return;
+	}
+
+	char timezone_str[16] = CLEAN;
+	TIME_ZONE_INFORMATION tzinfo = CLEAN;
+	GetTimeZoneInformation(&tzinfo);
+
+	UINT bias_positive = tzinfo.Bias >= 0 ? tzinfo.Bias : -tzinfo.Bias;
+	bool bias_sign = tzinfo.Bias >= 0 ? false : true;
+
+	UINT hour = bias_positive / 60;
+	UINT minute = bias_positive % 60;
+
+	Format(timezone_str, sizeof(timezone_str), " %s%02u:%02u",
+		bias_sign ? "+" : "-",
+		hour, minute);
+
+	StrCpy(dst, size, timezone_str);
+}
+
+static UINT64 ms_windows_boottime_cache = 1;
+
+UINT64 MsGetWindowsBootSystemTime()
+{
+	if (ms_windows_boottime_cache == 1)
+	{
+		ms_windows_boottime_cache = MsGetWindowsBootSystemTimeInternal();
+	}
+
+	return ms_windows_boottime_cache;
+}
+
+UINT64 MsGetWindowsBootSystemTimeInternal()
+{
+	UINT64 ret = 0;
+
+	STAT_WORKSTATION_0 *workstation_info = NULL;
+	STAT_SERVER_0 *server_info = NULL;
+
+	if (NetStatisticsGet(NULL, (LPTSTR)L"LanmanWorkstation", 0, 0, (void *)&workstation_info) == NERR_Success)
+	{
+		FILETIME *ft = (FILETIME *)&workstation_info->StatisticsStartTime;
+		SYSTEMTIME st = CLEAN;
+		if (FileTimeToSystemTime(ft, &st))
+		{
+			ret = SystemToUINT64(&st);
+		}
+		NetApiBufferFree(workstation_info);
+	}
+
+	if (ret == 0)
+	{
+		if (NetStatisticsGet(NULL, (LPTSTR)L"LanmanServer", 0, 0, (void *)&server_info) == NERR_Success)
+		{
+			ret = TimeToSystem64(server_info->sts0_start);
+			NetApiBufferFree(server_info);
+		}
+	}
+
+	if (ret == 0)
+	{
+		UINT64 system_boottime = MsGetTickCount64();
+
+		ret = SystemTime64() - system_boottime;
+	}
+
+	return ret;
 }
 
 MS_EVENTREADER_SESSION *MsNewEventReaderSession()
@@ -13121,6 +13195,9 @@ bool MsInstallVLanWithoutLock(char *tag_name, char *connection_tag_name, char *i
 // Test function
 void MsTest()
 {
+	HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION, false, 4);
+	Print("%u\n", (UINT)h);
+	CloseHandle(h);
 }
 
 // Install a virtual LAN card (by calling Win32 API)
@@ -16275,6 +16352,11 @@ NT_API *MsLoadNtApiFunctions()
 	nt->hWevtapi = LoadLibrary("Wevtapi.dll");
 
 	// Read the function
+
+	nt->GetTickCount64 =
+		(ULONGLONG(__stdcall *)(void))
+		GetProcAddress(nt->hKernel32, "GetTickCount64");
+
 	nt->GetComputerNameExW =
 		(BOOL(__stdcall *)(COMPUTER_NAME_FORMAT, LPWSTR, LPDWORD))
 		GetProcAddress(nt->hKernel32, "GetComputerNameExW");
@@ -16841,6 +16923,18 @@ void MsFreeNtApiFunctions(NT_API *nt)
 	FreeLibrary(nt->hKernel32);
 
 	Free(nt);
+}
+
+UINT64 MsGetTickCount64()
+{
+	if (MsIsNt() && ms->nt->GetTickCount64 != NULL)
+	{
+		return ms->nt->GetTickCount64();
+	}
+	else
+	{
+		return GetTickCount();
+	}
 }
 
 UINT64 MsGetIdleTick()

@@ -1777,7 +1777,7 @@ void GetSpanStrMilli(char *str, UINT size, UINT64 sec64)
 	StrCpy(tmp, sizeof(tmp), "");
 	if (sec64 >= (UINT64)(1000 * 3600 * 24))
 	{
-		Format(tmp, sizeof(tmp), "%u:", (UINT)(sec64 / (UINT64)(1000 * 3600 * 24)));
+		Format(tmp, sizeof(tmp), "%ud+", (UINT)(sec64 / (UINT64)(1000 * 3600 * 24)));
 	}
 
 	Format(tmp, sizeof(tmp), "%s%02u:%02u:%02u.%03u", tmp,

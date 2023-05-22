@@ -5218,18 +5218,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
 			char timezone_str[16] = CLEAN;
-			TIME_ZONE_INFORMATION tzinfo = CLEAN;
-			GetTimeZoneInformation(&tzinfo);
-
-			UINT bias_positive = tzinfo.Bias >= 0 ? tzinfo.Bias : -tzinfo.Bias;
-			bool bias_sign = tzinfo.Bias >= 0 ? false : true;
-
-			UINT hour = bias_positive / 60;
-			UINT minute = bias_positive % 60;
-
-			Format(timezone_str, sizeof(timezone_str), " %s%02u:%02u",
-				bias_sign ? "+" : "-",
-				hour, minute);
+			MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
 
 			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s%s\n", svc->StartupSettings.AppTitle, date_str, time_str, timezone_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
@@ -5477,6 +5466,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			wchar_t mac_str_w[48] = CLEAN;
 			char date_str[64] = CLEAN;
 			char time_str[64] = CLEAN;
+
 			char timezone_str[16] = CLEAN;
 
 			BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
@@ -5498,18 +5488,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 			if (st.ReportAppendTimeZone)
 			{
-				TIME_ZONE_INFORMATION tzinfo = CLEAN;
-				GetTimeZoneInformation(&tzinfo);
-
-				UINT bias_positive = tzinfo.Bias >= 0 ? tzinfo.Bias : -tzinfo.Bias;
-				bool bias_sign = tzinfo.Bias >= 0 ? false : true;
-
-				UINT hour = bias_positive / 60;
-				UINT minute = bias_positive % 60;
-
-				Format(timezone_str, sizeof(timezone_str), " %s%02u:%02u",
-					bias_sign ? "+" : "-",
-					hour, minute);
+				char timezone_str[16] = CLEAN;
+				MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
 			}
 
 			if (st.ReportSaveToDir)
@@ -6259,6 +6239,8 @@ void TfMain(TF_SERVICE *svc)
 
 	bool another_instance_error_show_flag = false;
 
+	char *eof_tag = "[END_OF_FILE]";
+
 	while (svc->HaltFlag == false)
 	{
 		UINT64 now = Tick64();
@@ -6267,8 +6249,9 @@ void TfMain(TF_SERVICE *svc)
 		{
 			// Config file reload
 			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
-			if (new_content != NULL)
+			if (new_content != NULL && SearchBin(new_content->Buf, 0, new_content->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
 			{
+				WHERE;
 				// Compare
 				if (CmpBuf(new_content, cfg_file_content) != 0)
 				{
@@ -6441,10 +6424,13 @@ void TfMain(TF_SERVICE *svc)
 				else
 				{
 					FreeBuf(new_content);
+					new_content = NULL;
 				}
 			}
 			else
 			{
+				FreeBuf(new_content);
+				new_content = NULL;
 L_BOOT_ERROR:
 				cfg_Enable = false;
 				cfg_SettingReloadIntervalMsec = 15 * 1000;
@@ -6507,6 +6493,15 @@ L_BOOT_ERROR:
 
 				char ssl_lib_ver[MAX_PATH] = CLEAN;
 
+				char timezone_str[16] = CLEAN;
+				MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
+
+				char system_boot_datetime[128] = CLEAN;
+				GetDateTimeStr64(system_boot_datetime, sizeof(system_boot_datetime), SystemToLocal64(MsGetWindowsBootSystemTime()));
+
+				char system_boot_span[128] = CLEAN;
+				GetSpanStrMilli(system_boot_span, sizeof(system_boot_span), MsGetTickCount64());
+
 				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
 
 				TfLog(svc, "-------------------- Start %S --------------------", svc->StartupSettings.AppTitle);
@@ -6531,8 +6526,9 @@ L_BOOT_ERROR:
 					TfLog(svc, "OsVersion: %S", os->OsVersion);
 					TfLog(svc, "KernelName: %S", os->KernelName);
 					TfLog(svc, "KernelVersion: %S", os->KernelVersion);
-					TfLog(svc, "ComputerMacAddress: %S", mac_str);
 				}
+
+				TfLog(svc, "ComputerMacAddress: %S", mac_str);
 
 				MEMINFO mem = CLEAN;
 				GetMemInfo(&mem);
@@ -6544,31 +6540,38 @@ L_BOOT_ERROR:
 				TfLog(svc, "Memory - UsedPhys: %I64u", mem.UsedPhys);
 				TfLog(svc, "Memory - FreePhys: %I64u", mem.FreePhys);
 
+				TfLog(svc, "Operating System Boot DateTime: %S%S", system_boot_datetime, timezone_str);
+				TfLog(svc, "Operating System Uptime: %S", system_boot_span);
+
 				wchar_t computer_name[128] = CLEAN;
 				MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
 
-				UniFormat(tmp, sizeof(tmp), L"%S is started. Mode: %S, CEDAR_VER: %u, "
-					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
-					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S, SSL_LIB_VER: %S, "
+				UniFormat(tmp, sizeof(tmp), L"%S is started. Mode: %S, "
 					L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
 					L"OsVersion: %S, "
 					L"ComputerName: %s, "
 					L"ComputerMacAddress: %S, "
 					L"UserName: %s, "
-					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessAppPath: %s",
+					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessAppPath: %s, "
+					L"OsBootDateTime: %S%S, OsUptime: %S"
+					L"CEDAR_VER: %u, "
+					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
+					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S, SSL_LIB_VER: %S"
+					,
 					svc->StartupSettings.AppTitle, svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
-					CEDAR_VER,
-					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
-					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
-					THINLIB_COMMIT_ID, THINLIB_VER_LABEL, ssl_lib_ver,
 					os->OsSystemName, os->OsProductName, os->OsVendorName,
 					os->OsVersion,
 					computer_name,
 					mac_str,
 					MsGetUserNameExW(),
 					mem.TotalPhys, mem.UsedPhys, mem.FreePhys,
-					MsGetExeFileNameW()
-				);
+					MsGetExeFileNameW(),
+					system_boot_datetime, timezone_str, system_boot_span,
+					CEDAR_VER,
+					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
+					THINLIB_COMMIT_ID, THINLIB_VER_LABEL, ssl_lib_ver
+					);
 
 				TfInsertStrEvent(svc, tmp);
 			}

@@ -685,6 +685,12 @@ typedef struct NT_API
 		__out PDWORD BufferUsed
 		);
 
+	ULONGLONG(
+		WINAPI *
+		GetTickCount64)(
+			VOID
+		);
+
 } NT_API;
 
 typedef struct MS_EVENTLOG
@@ -1638,6 +1644,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();
+UINT64 MsGetTickCount64();
 
 bool MsConvertDosDevicePathToFullPath(wchar_t *dst, UINT dst_size, wchar_t *src);
 bool MsConvertDosDevicePathToFullPathWithCache(LIST *cache, wchar_t *dst, UINT dst_size, wchar_t *src);
@@ -1652,6 +1659,9 @@ LIST *MsReadEvents(MS_EVENTREADER_SESSION *s, wchar_t *log_name, UINT max_return
 bool MsFillEventMetadata(MS_EVENTREADER_SESSION *s, MS_EVENTITEM *e, void *render_context, void *event_handle);
 LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT max_fetch_per_eventlog);
 
+UINT64 MsGetWindowsBootSystemTimeInternal();
+UINT64 MsGetWindowsBootSystemTime();
+void MsGetTimezoneSuffixStr(char *dst, UINT size);
 
 // Inner functions
 #ifdef	MICROSOFT_C
