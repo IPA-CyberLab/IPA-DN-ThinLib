@@ -4401,47 +4401,50 @@ bool MsGetPhysicalMacAddressFromApi(void *address)
 
 	o = MsCreateAdapterList();
 
-	for (i = 0;i < o->Num;i++)
+	if (o != NULL)
 	{
-		MS_ADAPTER *a = o->Adapters[i];
-
-		if (a->AddressSize == 6 && a->Mtu == 1500)
+		for (i = 0;i < o->Num;i++)
 		{
-			bool b = false;
-			switch (a->Type)
+			MS_ADAPTER *a = o->Adapters[i];
+
+			if (a->AddressSize == 6 && a->Mtu == 1500)
 			{
-			case MIB_IF_TYPE_OTHER:
-			case MIB_IF_TYPE_ETHERNET:
-				b = true;
-				break;
-
-			case MIB_IF_TYPE_TOKENRING:
-			case MIB_IF_TYPE_FDDI:
-			case MIB_IF_TYPE_PPP:
-			case MIB_IF_TYPE_LOOPBACK:
-			case MIB_IF_TYPE_SLIP:
-				b = false;
-				break;
-
-			default:
-				b = true;
-				break;
-			}
-
-			if (b)
-			{
-				if (SearchStrEx(a->Title, "WAN", 0, false) == INFINITE)
+				bool b = false;
+				switch (a->Type)
 				{
-					if (a->Status == MIB_IF_OPER_STATUS_CONNECTED || a->Status == MIB_IF_OPER_STATUS_OPERATIONAL)
+				case MIB_IF_TYPE_OTHER:
+				case MIB_IF_TYPE_ETHERNET:
+					b = true;
+					break;
+
+				case MIB_IF_TYPE_TOKENRING:
+				case MIB_IF_TYPE_FDDI:
+				case MIB_IF_TYPE_PPP:
+				case MIB_IF_TYPE_LOOPBACK:
+				case MIB_IF_TYPE_SLIP:
+					b = false;
+					break;
+
+				default:
+					b = true;
+					break;
+				}
+
+				if (b)
+				{
+					if (SearchStrEx(a->Title, "WAN", 0, false) == INFINITE)
 					{
-						if (a->AddressSize == 6)
+						if (a->Status == MIB_IF_OPER_STATUS_CONNECTED || a->Status == MIB_IF_OPER_STATUS_OPERATIONAL)
 						{
-							if (IsZero(a->Address, 6) == false)
+							if (a->AddressSize == 6)
 							{
-								if (Cmp(address, a->Address, 6) <= 0)
+								if (IsZero(a->Address, 6) == false)
 								{
-									Copy(address, a->Address, 6);
-									ret = true;
+									if (Cmp(address, a->Address, 6) <= 0)
+									{
+										Copy(address, a->Address, 6);
+										ret = true;
+									}
 								}
 							}
 						}
@@ -4449,9 +4452,9 @@ bool MsGetPhysicalMacAddressFromApi(void *address)
 				}
 			}
 		}
-	}
 
-	MsFreeAdapterList(o);
+		MsFreeAdapterList(o);
+	}
 
 	return ret;
 }

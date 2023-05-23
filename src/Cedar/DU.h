@@ -145,6 +145,9 @@ struct TF_SERVICE
 	LOCK *EventIdEtcLock;
 	UINT64 LastEventId;
 	UINT64 LastMailId;
+
+	UINT64 BootTick;
+	UINT64 BootLocalTime;
 };
 
 void DUExec();
@@ -152,6 +155,7 @@ void DUExec();
 TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings);
 void TfStopService(TF_SERVICE *svc);
 void TfThreadProc(THREAD *thread, void *param);
+void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup);
 
 bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied);
 void TfUpdateReg(TF_SERVICE *svc, bool read);

@@ -6200,6 +6200,8 @@ void TfMain(TF_SERVICE *svc)
 	UINT cfg_ReportMaxQueueLength = 1024;
 	UINT cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 	UINT cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
+	bool cfg_EnableDailyAliveMessage = false;
+	UINT cfg_SendDailyAliveNoticeHhmmss = 0;
 
 	wchar_t cfg_WindowsEventLogNames[1024] = CLEAN;
 
@@ -6239,7 +6241,12 @@ void TfMain(TF_SERVICE *svc)
 
 	bool another_instance_error_show_flag = false;
 
+	UINT last_past_days_since_base = 0;
+
 	char *eof_tag = "[END_OF_FILE]";
+
+	svc->BootTick = Tick64();
+	svc->BootLocalTime = LocalTime64();
 
 	while (svc->HaltFlag == false)
 	{
@@ -6251,7 +6258,6 @@ void TfMain(TF_SERVICE *svc)
 			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
 			if (new_content != NULL && SearchBin(new_content->Buf, 0, new_content->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
 			{
-				WHERE;
 				// Compare
 				if (CmpBuf(new_content, cfg_file_content) != 0)
 				{
@@ -6307,6 +6313,10 @@ void TfMain(TF_SERVICE *svc)
 
 					// Interpret ini
 					cfg_Enable = IniBoolValue(ini, "Enable");
+
+					cfg_EnableDailyAliveMessage = IniBoolValue(ini, "EnableDailyAliveMessage");
+					cfg_SendDailyAliveNoticeHhmmss = IniIntValue(ini, "SendDailyAliveNoticeHhmmss");
+
 					cfg_EnableFirewall = IniBoolValue(ini, "EnableFirewall");
 					cfg_EnableFirewallOnlyWhenLocked = IniBoolValue(ini, "EnableFirewallOnlyWhenLocked");
 					cfg_SettingReloadIntervalMsec = IniIntValue(ini, "SettingReloadIntervalMsec");
@@ -6448,6 +6458,8 @@ L_BOOT_ERROR:
 				cfg_InputIdleTimerMsec = 15 * 60 * 1000;
 				cfg_EnableWatchWindowsEventLog = false;
 				cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
+				cfg_EnableDailyAliveMessage = false;
+				cfg_SendDailyAliveNoticeHhmmss = 0;
 				ClearUniStr(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames));
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
@@ -6474,106 +6486,16 @@ L_BOOT_ERROR:
 
 		if (lastState_Enable != cfg_Enable)
 		{
+			TfUpdateReg(svc, cfg_Enable);
+
 			lastState_Enable = cfg_Enable;
 
 			if (cfg_Enable)
 			{
-				// Get current MAC address
-				char mac_str[24] = CLEAN;
-				UCHAR mac[6] = CLEAN;
+				svc->BootTick = Tick64();
+				svc->BootLocalTime = LocalTime64();
 
-				StrCpy(mac_str, sizeof(mac_str), "(unknown)");
-
-				if (TfGetCurrentMacAddress(mac))
-				{
-					BinToStr(mac_str, sizeof(mac_str), mac, 6);
-
-					Copy(svc->MacAddress, mac, 6);
-				}
-
-				char ssl_lib_ver[MAX_PATH] = CLEAN;
-
-				char timezone_str[16] = CLEAN;
-				MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
-
-				char system_boot_datetime[128] = CLEAN;
-				GetDateTimeStr64(system_boot_datetime, sizeof(system_boot_datetime), SystemToLocal64(MsGetWindowsBootSystemTime()));
-
-				char system_boot_span[128] = CLEAN;
-				GetSpanStrMilli(system_boot_span, sizeof(system_boot_span), MsGetTickCount64());
-
-				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
-
-				TfLog(svc, "-------------------- Start %S --------------------", svc->StartupSettings.AppTitle);
-				TfLog(svc, "APP_NAME: %S", svc->StartupSettings.AppTitle);
-				TfLog(svc, "THINFW_MODE: %S", svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode");
-				TfLog(svc, "CEDAR_VER: %u", CEDAR_VER);
-				TfLog(svc, "CEDAR_BUILD: %u", CEDAR_BUILD);
-				TfLog(svc, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
-					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
-				TfLog(svc, "THINLIB_COMMIT_ID: %S", THINLIB_COMMIT_ID);
-				TfLog(svc, "THINLIB_VER_LABEL: %S", THINLIB_VER_LABEL);
-				TfLog(svc, "SSL_LIB_VER: %S", ssl_lib_ver);
-
-				OS_INFO *os = GetOsInfo();
-				if (os != NULL)
-				{
-					TfLog(svc, "OsType: %u", os->OsType);
-					TfLog(svc, "OsServicePack: %u", os->OsServicePack);
-					TfLog(svc, "OsSystemName: %S", os->OsSystemName);
-					TfLog(svc, "OsProductName: %S", os->OsProductName);
-					TfLog(svc, "OsVendorName: %S", os->OsVendorName);
-					TfLog(svc, "OsVersion: %S", os->OsVersion);
-					TfLog(svc, "KernelName: %S", os->KernelName);
-					TfLog(svc, "KernelVersion: %S", os->KernelVersion);
-				}
-
-				TfLog(svc, "ComputerMacAddress: %S", mac_str);
-
-				MEMINFO mem = CLEAN;
-				GetMemInfo(&mem);
-
-				TfLog(svc, "Memory - TotalMemory: %I64u", mem.TotalMemory);
-				TfLog(svc, "Memory - UsedMemory: %I64u", mem.UsedMemory);
-				TfLog(svc, "Memory - FreeMemory: %I64u", mem.FreeMemory);
-				TfLog(svc, "Memory - TotalPhys: %I64u", mem.TotalPhys);
-				TfLog(svc, "Memory - UsedPhys: %I64u", mem.UsedPhys);
-				TfLog(svc, "Memory - FreePhys: %I64u", mem.FreePhys);
-
-				TfLog(svc, "Operating System Boot DateTime: %S%S", system_boot_datetime, timezone_str);
-				TfLog(svc, "Operating System Uptime: %S", system_boot_span);
-
-				wchar_t computer_name[128] = CLEAN;
-				MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
-
-				UniFormat(tmp, sizeof(tmp), L"%S is started. Mode: %S, "
-					L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
-					L"OsVersion: %S, "
-					L"ComputerName: %s, "
-					L"ComputerMacAddress: %S, "
-					L"UserName: %s, "
-					L"TotalPhysMemory: %I64u, UsedPhysMemory: %I64u, FreePhysMemory: %I64u, ProcessAppPath: %s, "
-					L"OsBootDateTime: %S%S, OsUptime: %S"
-					L"CEDAR_VER: %u, "
-					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
-					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S, SSL_LIB_VER: %S"
-					,
-					svc->StartupSettings.AppTitle, svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
-					os->OsSystemName, os->OsProductName, os->OsVendorName,
-					os->OsVersion,
-					computer_name,
-					mac_str,
-					MsGetUserNameExW(),
-					mem.TotalPhys, mem.UsedPhys, mem.FreePhys,
-					MsGetExeFileNameW(),
-					system_boot_datetime, timezone_str, system_boot_span,
-					CEDAR_VER,
-					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
-					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
-					THINLIB_COMMIT_ID, THINLIB_VER_LABEL, ssl_lib_ver
-					);
-
-				TfInsertStrEvent(svc, tmp);
+				TfRaiseAliveEvent(svc, true);
 			}
 			else
 			{
@@ -7005,6 +6927,45 @@ L_BOOT_ERROR:
 			}
 		}
 
+		if (cfg_Enable)
+		{
+			if (cfg_EnableDailyAliveMessage)
+			{
+				UINT hh = (cfg_SendDailyAliveNoticeHhmmss % 1000000) / 10000;
+				UINT mm = (cfg_SendDailyAliveNoticeHhmmss % 10000) / 100;
+				UINT ss = (cfg_SendDailyAliveNoticeHhmmss % 100);
+
+				SYSTEMTIME base_time_plus_hhmmss = CLEAN;
+				base_time_plus_hhmmss.wYear = 1980;
+				base_time_plus_hhmmss.wMonth = 1;
+				base_time_plus_hhmmss.wDay = 1;
+				base_time_plus_hhmmss.wHour = hh;
+				base_time_plus_hhmmss.wMinute = mm;
+				base_time_plus_hhmmss.wSecond = ss;
+
+				UINT64 base_time_plus_hhmmss_64 = SystemToUINT64(&base_time_plus_hhmmss);
+
+				UINT64 current_time_64 = LocalTime64();
+
+				if (current_time_64 > base_time_plus_hhmmss_64)
+				{
+					UINT past_days_since_base = (UINT)((current_time_64 - base_time_plus_hhmmss_64) / (UINT64)(24 * 60 * 60 * 1000));
+
+					if (last_past_days_since_base == 0)
+					{
+						last_past_days_since_base = past_days_since_base;
+					}
+
+					if (last_past_days_since_base != past_days_since_base)
+					{
+						last_past_days_since_base = past_days_since_base;
+
+						TfRaiseAliveEvent(svc, false);
+					}
+				}
+			}
+		}
+
 		UINT wait_interval = GetNextIntervalForInterrupt(im);
 
 		if (wait_interval == 0)
@@ -7073,6 +7034,194 @@ L_BOOT_ERROR:
 	{
 		TfLog(svc, "-------------------- Stop Thin Firewall System --------------------");
 	}
+}
+
+void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
+{
+	if (svc == NULL)
+	{
+		return;
+	}
+
+	UINT64 total_send_packets = 0;
+	UINT64 total_send_bytes = 0;
+	UINT64 total_recv_packets = 0;
+	UINT64 total_recv_bytes = 0;
+	char total_send_packets_str[32] = CLEAN;
+	char total_send_bytes_str[32] = CLEAN;
+	char total_recv_packets_str[32] = CLEAN;
+	char total_recv_bytes_str[32] = CLEAN;
+
+	UINT i;
+
+	wchar_t tmp[2048];
+
+	MS_ADAPTER_LIST *o;
+	o = MsCreateAdapterList();
+
+	if (o != NULL)
+	{
+		for (i = 0;i < o->Num;i++)
+		{
+			MS_ADAPTER *a = o->Adapters[i];
+
+			total_send_packets += a->SendPacketsBroadcast + a->SendPacketsUnicast;
+			total_send_bytes += a->SendBytes;
+
+			total_recv_packets += a->RecvPacketsBroadcast + a->RecvPacketsUnicast;
+			total_recv_bytes += a->RecvBytes;
+		}
+
+		MsFreeAdapterList(o);
+	}
+
+	ToStr3(total_send_packets_str, sizeof(total_send_packets_str), total_send_packets);
+	ToStr3(total_send_bytes_str, sizeof(total_send_bytes_str), total_send_bytes);
+	ToStr3(total_recv_packets_str, sizeof(total_recv_packets_str), total_recv_packets);
+	ToStr3(total_recv_bytes_str, sizeof(total_recv_bytes_str), total_recv_bytes);
+
+	// Get current MAC address
+	char mac_str[24] = CLEAN;
+	UCHAR mac[6] = CLEAN;
+
+	UINT64 disk_free = 0;
+	UINT64 disk_used = 0;
+	UINT64 disk_total = 0;
+	char disk_free_str[64] = CLEAN;
+	char disk_used_str[64] = CLEAN;
+	char disk_total_str[64] = CLEAN;
+
+	Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);
+	ToStr3(disk_free_str, sizeof(disk_free_str), disk_free);
+	ToStr3(disk_used_str, sizeof(disk_used_str), disk_used);
+	ToStr3(disk_total_str, sizeof(disk_total_str), disk_total);
+
+	StrCpy(mac_str, sizeof(mac_str), "(unknown)");
+
+	if (TfGetCurrentMacAddress(mac))
+	{
+		BinToStr(mac_str, sizeof(mac_str), mac, 6);
+
+		Copy(svc->MacAddress, mac, 6);
+	}
+
+	char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+	char timezone_str[16] = CLEAN;
+	MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
+
+	char system_boot_datetime[128] = CLEAN;
+	GetDateTimeStr64(system_boot_datetime, sizeof(system_boot_datetime), SystemToLocal64(MsGetWindowsBootSystemTime()));
+
+	char system_boot_span[128] = CLEAN;
+	GetSpanStrMilli(system_boot_span, sizeof(system_boot_span), MsGetTickCount64());
+
+	char svc_boot_datetime[128] = CLEAN;
+	GetDateTimeStr64(svc_boot_datetime, sizeof(svc_boot_datetime), svc->BootLocalTime);
+
+	char svc_boot_span[128] = CLEAN;
+	GetSpanStrMilli(svc_boot_span, sizeof(svc_boot_span), Tick64() - svc->BootTick);
+
+	GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
+	if (is_startup)
+	{
+		TfLog(svc, "-------------------- Start %S --------------------", svc->StartupSettings.AppTitle);
+	}
+	else
+	{
+		TfLog(svc, "--- Daily Alive Message of %S ---", svc->StartupSettings.AppTitle);
+	}
+
+	TfLog(svc, "APP_NAME: %S", svc->StartupSettings.AppTitle);
+	TfLog(svc, "THINFW_MODE: %S", svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode");
+	TfLog(svc, "THINFW_BOOT_DATETIME: %S%S", svc_boot_datetime, timezone_str);
+	TfLog(svc, "THINFW_BOOT_UPTIME: %S", svc_boot_span);
+	TfLog(svc, "CEDAR_VER: %u", CEDAR_VER);
+	TfLog(svc, "CEDAR_BUILD: %u", CEDAR_BUILD);
+	TfLog(svc, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
+	TfLog(svc, "THINLIB_COMMIT_ID: %S", THINLIB_COMMIT_ID);
+	TfLog(svc, "THINLIB_VER_LABEL: %S", THINLIB_VER_LABEL);
+	TfLog(svc, "SSL_LIB_VER: %S", ssl_lib_ver);
+
+	OS_INFO *os = GetOsInfo();
+	if (os != NULL)
+	{
+		TfLog(svc, "OsType: %u", os->OsType);
+		TfLog(svc, "OsServicePack: %u", os->OsServicePack);
+		TfLog(svc, "OsSystemName: %S", os->OsSystemName);
+		TfLog(svc, "OsProductName: %S", os->OsProductName);
+		TfLog(svc, "OsVendorName: %S", os->OsVendorName);
+		TfLog(svc, "OsVersion: %S", os->OsVersion);
+		TfLog(svc, "KernelName: %S", os->KernelName);
+		TfLog(svc, "KernelVersion: %S", os->KernelVersion);
+	}
+
+	TfLog(svc, "ComputerMacAddress: %S", mac_str);
+
+	MEMINFO mem = CLEAN;
+	GetMemInfo(&mem);
+
+	TfLog(svc, "Memory - TotalVirtualMemory: %S bytes", mem.TotalMemory_Str);
+	TfLog(svc, "Memory - UsedVirtualMemory: %S bytes", mem.UsedMemory_Str);
+	TfLog(svc, "Memory - FreeVirtualMemory: %S bytes", mem.FreeMemory_Str);
+	TfLog(svc, "Memory - TotalPhysMemory: %S bytes", mem.TotalPhys_Str);
+	TfLog(svc, "Memory - UsedPhysMemory: %S bytes", mem.UsedPhys_Str);
+	TfLog(svc, "Memory - FreePhysMemory: %S bytes", mem.FreePhys_Str);
+
+	TfLog(svc, "SystemDisk - Free: %S bytes", disk_free_str);
+	TfLog(svc, "SystemDisk - Used: %S bytes", disk_used_str);
+	TfLog(svc, "SystemDisk - Total: %S bytes", disk_total_str);
+
+	TfLog(svc, "Network - Total sent packets: %S packets", total_send_packets_str);
+	TfLog(svc, "Network - Total sent data: %S bytes", total_send_bytes_str);
+	TfLog(svc, "Network - Total received packets: %S packets", total_recv_packets_str);
+	TfLog(svc, "Network - Total received data: %S bytes", total_recv_bytes_str);
+
+	TfLog(svc, "Operating System Boot DateTime: %S%S", system_boot_datetime, timezone_str);
+	TfLog(svc, "Operating System Uptime: %S", system_boot_span);
+
+	wchar_t computer_name[128] = CLEAN;
+	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
+
+	UniFormat(tmp, sizeof(tmp), L"%S is %S. Mode: %S, "
+		L"THINFW_BOOT_DATETIME: %S%S, THINFW_BOOT_UPTIME: %S, "
+		L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
+		L"OsVersion: %S, "
+		L"ComputerName: %s, "
+		L"ComputerMacAddress: %S, "
+		L"UserName: %s, "
+		L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes, "
+		L"NetworkTotalSentPackets: %S packets, NetworkTotalSentData: %S bytes, NetworkTotalReceivedPackets: %S packets, NetworkTotalReceivedData: %S bytes, "
+		L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, TotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, ProcessAppPath: %s, "
+		L"OsBootDateTime: %S%S, OsUptime: %S, "
+		L"CEDAR_VER: %u, "
+		L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
+		L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S"
+		,
+		svc->StartupSettings.AppTitle,
+		is_startup ? "started" : "working normally. This Daily Alive Message is sent by the EnableDailyAliveMessage flag",
+		svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE ? "System Mode" : "User Mode",
+		svc_boot_datetime, timezone_str, svc_boot_span,
+		os->OsSystemName, os->OsProductName, os->OsVendorName,
+		os->OsVersion,
+		computer_name,
+		mac_str,
+		MsGetUserNameExW(),
+		disk_free_str, disk_used_str, disk_total_str,
+		total_send_packets_str, total_send_bytes_str, total_recv_packets_str, total_recv_bytes_str,
+		mem.TotalMemory_Str, mem.UsedMemory_Str, mem.FreeMemory_Str,
+		mem.TotalPhys_Str, mem.UsedPhys_Str, mem.FreePhys_Str,
+		MsGetExeFileNameW(),
+		system_boot_datetime, timezone_str, system_boot_span,
+		CEDAR_VER,
+		CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
+		THINLIB_COMMIT_ID, THINLIB_VER_LABEL
+	);
+
+	TfInsertStrEvent(svc, tmp);
 }
 
 void TfThreadProc(THREAD *thread, void *param)

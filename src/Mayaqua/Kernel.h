@@ -83,6 +83,13 @@ struct MEMINFO
 	UINT64 TotalPhys;
 	UINT64 UsedPhys;
 	UINT64 FreePhys;
+
+	char TotalMemory_Str[32];
+	char UsedMemory_Str[32];
+	char FreeMemory_Str[32];
+	char TotalPhys_Str[32];
+	char UsedPhys_Str[32];
+	char FreePhys_Str[32];
 };
 
 // Locale information

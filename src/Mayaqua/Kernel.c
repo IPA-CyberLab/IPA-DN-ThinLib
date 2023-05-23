@@ -656,6 +656,13 @@ bool GetEnvW_ForUnix(wchar_t *name, wchar_t *data, UINT size)
 void GetMemInfo(MEMINFO *info)
 {
 	OSGetMemInfo(info);
+
+	ToStr3(info->TotalMemory_Str, sizeof(info->TotalMemory_Str), info->TotalMemory);
+	ToStr3(info->UsedMemory_Str, sizeof(info->UsedMemory_Str), info->UsedMemory);
+	ToStr3(info->FreeMemory_Str, sizeof(info->FreeMemory_Str), info->FreeMemory);
+	ToStr3(info->TotalPhys_Str, sizeof(info->TotalPhys_Str), info->TotalPhys);
+	ToStr3(info->UsedPhys_Str, sizeof(info->UsedPhys_Str), info->UsedPhys);
+	ToStr3(info->FreePhys_Str, sizeof(info->FreePhys_Str), info->FreePhys);
 }
 
 bool IsSingleInstanceExists(char *instance_name, bool user_local)
