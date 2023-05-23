@@ -146,6 +146,7 @@ bool UnixFileRead(void *pData, void *buf, UINT size);
 void UnixFileClose(void *pData, bool no_flush);
 void UnixFileFlush(void *pData);
 UINT64 UnixFileSize(void *pData);
+bool UnixFileSetSize(void *pData, UINT size);
 bool UnixFileSeek(void *pData, UINT mode, int offset);
 bool UnixFileDelete(char *name);
 bool UnixFileDeleteW(wchar_t *name);
