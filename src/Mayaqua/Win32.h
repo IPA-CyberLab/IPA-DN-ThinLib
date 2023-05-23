@@ -117,6 +117,7 @@ void Win32FileClose(void *pData, bool no_flush);
 void Win32FileFlush(void *pData);
 UINT64 Win32FileSize(void *pData);
 bool Win32FileSeek(void *pData, UINT mode, int offset);
+bool Win32FileSetSize(void *pData, UINT size);
 bool Win32FileDelete(char *name);
 bool Win32FileDeleteW(wchar_t *name);
 bool Win32MakeDir(char *name);

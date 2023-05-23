@@ -2549,6 +2549,25 @@ bool FileDeleteInnerW(wchar_t *name)
 	return OSFileDeleteW(name2);
 }
 
+// Set the file size
+bool FileSetSize(IO *o, UINT size)
+{
+	// Validate arguments
+	if (o == NULL)
+	{
+		return false;
+	}
+
+	if (o->HamMode == false)
+	{
+		return OSFileSetSize(o->pData, size);
+	}
+	else
+	{
+		return false;
+	}
+}
+
 // Seek the file
 bool FileSeek(IO *o, UINT mode, int offset)
 {

@@ -112,6 +112,7 @@ void OSFileClose(void *pData, bool no_flush);
 void OSFileFlush(void *pData);
 UINT64 OSFileSize(void *pData);
 bool OSFileSeek(void *pData, UINT mode, int offset);
+bool OSFileSetSize(void *pData, UINT size);
 bool OSFileDelete(char *name);
 bool OSFileDeleteW(wchar_t *name);
 bool OSMakeDir(char *name);
@@ -196,6 +197,7 @@ typedef struct OS_DISPATCH_TABLE
 	void (*FreeSingleInstance)(void *data);
 	void (*GetMemInfo)(MEMINFO *info);
 	void (*Yield)();
+	bool (*FileSetSize)(void *pData, UINT size);
 } OS_DISPATCH_TABLE;
 
 // Include the OS-specific header

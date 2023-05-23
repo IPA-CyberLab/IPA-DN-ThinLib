@@ -258,6 +258,7 @@ bool FileDeleteInnerW(wchar_t *name);
 bool FileDelete(char *name);
 bool FileDeleteW(wchar_t *name);
 bool FileSeek(IO *o, UINT mode, int offset);
+bool FileSetSize(IO *o, UINT size);
 UINT FileSize(IO *o);
 UINT64 FileSize64(IO *o);
 UINT FileSizeEx(char *name);

@@ -5164,6 +5164,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 	LIST *mail_category_list = NewKvList();
 
+	UINT64 last_update_tick = 0;
+
 	while (true)
 	{
 		TF_REPORT_SETTINGS st = CLEAN;
@@ -5349,6 +5351,100 @@ void TfReportThreadProc(THREAD *thread, void *param)
 		{
 			// break after sending the final mail
 			break;
+		}
+
+		if (st.EnableConfigAutoUpdate && st.ConfigAutoUpdateIntervalMsec != 0 &&
+			IsFilledStr(st.ConfigAutoUpdateUrl) && (last_update_tick == 0 || now >= (last_update_tick + st.ConfigAutoUpdateIntervalMsec)))
+		{
+			last_update_tick = now;
+
+			char url[1024] = CLEAN;
+
+			wchar_t computer_name_w[128] = CLEAN;
+
+			StrCpy(url, sizeof(url), st.ConfigAutoUpdateUrl);
+
+			MsGetComputerNameFullEx(computer_name_w, sizeof(computer_name_w), false);
+
+			char hostname[128] = CLEAN;
+
+			UniToStr(hostname, sizeof(hostname), computer_name_w);
+
+			ReplaceStr(url, sizeof(url), url, "$hostname", hostname);
+
+			UCHAR mac[6] = CLEAN;
+			TfGetCurrentMacAddress(mac);
+
+			char mac_str[36] = CLEAN;
+			BinToStr(mac_str, sizeof(mac_str), mac, 6);
+
+			ReplaceStr(url, sizeof(url), url, "$macaddress", mac_str);
+
+			char build_str[12] = CLEAN;
+			ToStr(build_str, CEDAR_BUILD);
+
+			char mode_str[12] = CLEAN;
+			ToStr(mode_str, svc->StartupSettings.Mode);
+
+			ReplaceStr(url, sizeof(url), url, "$build", build_str);
+
+			ReplaceStr(url, sizeof(url), url, "$mode", mode_str);
+
+			ReplaceStr(url, sizeof(url), url, "$app", svc->StartupSettings.AppTitle);
+
+			ReplaceStr(url, sizeof(url), url, " ", "_");
+
+			BUF *downloaded_buf = HttpDownload(url, st.ConfigAutoUpdateAuthUsername, st.ConfigAutoUpdateAuthPassword,
+				NULL, 0, 0, NULL, false, NULL, 0, &svc->HaltFlag, 40 * 1024 * 1024);
+			char *eof_tag = "[END_OF_FILE]";
+
+			if (downloaded_buf != NULL)
+			{
+				if (SearchBin(downloaded_buf->Buf, 0, downloaded_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+				{
+					wchar_t real_filename[MAX_PATH] = CLEAN;
+					InnerFilePathW(real_filename, sizeof(real_filename), svc->StartupSettings.SettingFileName);
+
+					BUF *current_buf = ReadDumpW(real_filename);
+
+					if (current_buf == NULL || CmpBuf(current_buf, downloaded_buf) != 0)
+					{
+						UINT64 free_size = 0;
+						if (Win32GetDiskFreeW(real_filename, &free_size, NULL, NULL))
+						{
+							if (free_size < 100000000)
+							{
+								TfLog(svc, "ConfigAutoUpdate: Update failed. The free disk space (%I64u bytes) is less than 100MB.", free_size);
+							}
+							else
+							{
+								//UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
+
+								if (DumpBufSafeW(downloaded_buf, real_filename) == false)
+								{
+									TfLog(svc, "ConfigAutoUpdate: Update filed. Cannot write to localdisk file '%s'.", real_filename);
+								}
+								else
+								{
+									TfLog(svc, "ConfigAutoUpdate: The localdisk file '%s' is updated from the URL '%S'. Old size = %u bytes, New size = %u bytes.", real_filename, url,
+										current_buf->Size, downloaded_buf->Size);
+
+									svc->ConfigUpdatedReloadFlag = true;
+								}
+							}
+						}
+					}
+
+					FreeBuf(current_buf);
+				}
+				else
+				{
+					TfLog(svc, "ConfigAutoUpdate: The downloaded file contents from the URL '%S' has no '%S' tag in the body. The contents is ignored.",
+						url, eof_tag);
+				}
+
+				FreeBuf(downloaded_buf);
+			}
 		}
 
 		DIFF_ENTRY *e = NULL;
@@ -6252,8 +6348,10 @@ void TfMain(TF_SERVICE *svc)
 	{
 		UINT64 now = Tick64();
 
-		if (last_cfg_read == 0 || now >= (last_cfg_read + (UINT64)cfg_SettingReloadIntervalMsec))
+		if (last_cfg_read == 0 || now >= (last_cfg_read + (UINT64)cfg_SettingReloadIntervalMsec) || svc->ConfigUpdatedReloadFlag)
 		{
+			svc->ConfigUpdatedReloadFlag = false;
+
 			// Config file reload
 			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
 			if (new_content != NULL && SearchBin(new_content->Buf, 0, new_content->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
@@ -6420,6 +6518,15 @@ void TfMain(TF_SERVICE *svc)
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
 					rep.ReportAppendUniqueId = IniBoolValue(ini, "ReportAppendUniqueId");
 					rep.ReportAppendTimeZone = IniBoolValue(ini, "ReportAppendTimeZone");
+
+					rep.EnableConfigAutoUpdate = IniBoolValue(ini, "EnableConfigAutoUpdate");
+					rep.ConfigAutoUpdateIntervalMsec = IniIntValue(ini, "ConfigAutoUpdateIntervalMsec");
+
+					rep.ConfigAutoUpdateIntervalMsec = MAX(rep.ConfigAutoUpdateIntervalMsec, 5 * 1000);
+
+					StrCpy(rep.ConfigAutoUpdateUrl, sizeof(rep.ConfigAutoUpdateUrl), IniStrValue(ini, "ConfigAutoUpdateUrl"));
+					StrCpy(rep.ConfigAutoUpdateAuthUsername, sizeof(rep.ConfigAutoUpdateAuthUsername), IniStrValue(ini, "ConfigAutoUpdateAuthUsername"));
+					StrCpy(rep.ConfigAutoUpdateAuthPassword, sizeof(rep.ConfigAutoUpdateAuthPassword), IniStrValue(ini, "ConfigAutoUpdateAuthPassword"));
 
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 

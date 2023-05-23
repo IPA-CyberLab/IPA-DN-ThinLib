@@ -312,6 +312,12 @@ bool OSFileSeek(void *pData, UINT mode, int offset)
 	return os->FileSeek(pData, mode, offset);
 }
 
+// Set the file size
+bool OSFileSetSize(void *pData, UINT size)
+{
+	return os->FileSetSize(pData, size);
+}
+
 // Delete the file
 bool OSFileDelete(char *name)
 {

@@ -443,6 +443,7 @@ bool DumpBufAppendToFile(BUF *b, char *filename);
 bool DumpBuf(BUF *b, char *filename);
 bool DumpBufW(BUF *b, wchar_t *filename);
 bool DumpBufWIfNecessary(BUF *b, wchar_t *filename);
+bool DumpBufSafeW(BUF *b, wchar_t *filename);
 bool DumpData(void *data, UINT size, char *filename);
 bool DumpDataW(void *data, UINT size, wchar_t *filename);
 BUF *ReadDump(char *filename);

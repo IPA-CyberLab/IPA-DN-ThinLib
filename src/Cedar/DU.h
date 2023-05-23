@@ -118,6 +118,12 @@ struct TF_REPORT_SETTINGS
 	bool ReportSaveToDir;
 	bool ReportAppendUniqueId;
 	bool ReportAppendTimeZone;
+
+	bool EnableConfigAutoUpdate;
+	UINT ConfigAutoUpdateIntervalMsec;
+	char ConfigAutoUpdateUrl[512];
+	char ConfigAutoUpdateAuthUsername[128];
+	char ConfigAutoUpdateAuthPassword[128];
 };
 
 struct TF_SERVICE
@@ -137,6 +143,8 @@ struct TF_SERVICE
 	THREAD *ReportThread;
 	EVENT *ReportThreadHaltEvent;
 	bool ReportThreadHaltFlag;
+
+	bool ConfigUpdatedReloadFlag;
 
 	LOG *Log;
 

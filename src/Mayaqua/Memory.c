@@ -4163,6 +4163,51 @@ bool DumpBufW(BUF *b, wchar_t *filename)
 
 	return true;
 }
+bool DumpBufSafeW(BUF *b, wchar_t *filename)
+{
+	IO *o;
+	// Validate arguments
+	if (b == NULL || filename == NULL)
+	{
+		return false;
+	}
+
+	o = FileOpenW(filename, true);
+	if (o != NULL)
+	{
+		if (FileSeek(o, 0, 0) == false)
+		{
+			FileClose(o);
+			return false;
+		}
+
+		if (FileWrite(o, b->Buf, b->Size) == false)
+		{
+			FileClose(o);
+			return false;
+		}
+
+		if (FileSetSize(o, b->Size) == false)
+		{
+			FileClose(o);
+			return false;
+		}
+
+		FileClose(o);
+
+		return true;
+	}
+
+	o = FileCreateW(filename);
+	if (o == NULL)
+	{
+		return false;
+	}
+	FileWrite(o, b->Buf, b->Size);
+	FileClose(o);
+
+	return true;
+}
 
 // Write to the file only if the contents of the file is different
 bool DumpBufWIfNecessary(BUF *b, wchar_t *filename)

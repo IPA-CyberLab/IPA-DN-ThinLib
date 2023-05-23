@@ -277,6 +277,7 @@ OS_DISPATCH_TABLE *UnixGetDispatchTable()
 		UnixFreeSingleInstance,
 		UnixGetMemInfo,
 		UnixYield,
+		UnixFileSetSize,
 	};
 
 	return &t;
@@ -1432,6 +1433,27 @@ bool UnixFileDelete(char *name)
 	}
 
 	if (remove(name) != 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+// Set file size
+bool UnixFileSetSize(void *pData, UINT size)
+{
+	UNIXIO *p;
+	// Validate arguments
+	if (pData == NULL)
+	{
+		return false;
+	}
+
+	p = (UNIXIO *)pData;
+
+	UINT ret = ftruncate(p->fd, size);
+	if (ret == -1)
 	{
 		return false;
 	}

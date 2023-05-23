@@ -124,9 +124,9 @@ void SendSysLog(SLOG *g, wchar_t *str)
 	buf = ZeroMalloc(buf_size);
 	UniToUtf8(buf, buf_size, str);
 
-	if (buf_size >= 1024)
+	if (buf_size >= 4096)
 	{
-		buf_size = 1023;
+		buf_size = 4095;
 	}
 
 	Lock(g->lock);

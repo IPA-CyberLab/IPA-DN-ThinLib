@@ -209,6 +209,7 @@ OS_DISPATCH_TABLE *Win32GetDispatchTable()
 		Win32FreeSingleInstance,
 		Win32GetMemInfo,
 		Win32Yield,
+		Win32FileSetSize,
 	};
 
 	return &t;
@@ -2380,6 +2381,45 @@ bool Win32FileDelete(char *name)
 	{
 		return false;
 	}
+	return true;
+}
+
+// Set file size
+bool Win32FileSetSize(void *pData, UINT size)
+{
+	WIN32IO *p;
+	// Validate arguments
+	if (pData == NULL)
+	{
+		return false;
+	}
+
+	p = (WIN32IO *)pData;
+
+	UINT current_pos = SetFilePointer(p->hFile, 0, NULL, FILE_CURRENT);
+	if (current_pos == INVALID_SET_FILE_POINTER)
+	{
+		return false;
+	}
+
+	UINT r = SetFilePointer(p->hFile, size, NULL, FILE_BEGIN);
+	if (r == INVALID_SET_FILE_POINTER)
+	{
+		return false;
+	}
+
+	if (SetEndOfFile(p->hFile) == false)
+	{
+		SetFilePointer(p->hFile, current_pos, NULL, FILE_BEGIN);
+		return false;
+	}
+
+	r = SetFilePointer(p->hFile, current_pos, NULL, FILE_BEGIN);
+	if (r == INVALID_SET_FILE_POINTER)
+	{
+		return false;
+	}
+
 	return true;
 }
 
