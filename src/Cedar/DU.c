@@ -5430,6 +5430,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 										current_buf->Size, downloaded_buf->Size);
 
 									svc->ConfigUpdatedReloadFlag = true;
+									Set(svc->HaltEvent);
 								}
 							}
 						}
