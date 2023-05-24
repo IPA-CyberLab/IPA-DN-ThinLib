@@ -28,31 +28,33 @@
 ## 「thinfirewall_log」ディレクトリに自動的にログファイルとして出力されます
 ## ので、当該ログファイルをご確認ください。
 ## 
-## ★☆ 非常に重要なフラグです。必ず true に変更してください。
+## 【解説】★☆ 非常に重要なフラグです。必ず true に変更してください。
 ## false のままの場合、以下の一切の設定は意味をなしません。
 ## この値が false の場合、この動作設定ファイルのすべての設定
 ## は何らの意味も有さなくなります。
 
-Enable                          true
+Enable                          false
 
 
-## 動作設定ファイル再読込間隔 (ミリ秒)
+## この動作設定ファイル自身の再読込間隔 (ミリ秒)
 ## この動作設定ファイルが何ミリ秒ごとに自動再読込されるかを指定
 ## します。再読込されると、内容がシン・ファイアウォールシステム機能
 ## に直ちに設定され、動作やルールに反映されます。
 ## ミリ秒とは、1000 分の 1 秒のことです。たとえば、15000 と指定すると
 ## 15 秒ごとに 1 回、動作設定ファイルの再読込が実施されることになります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 SettingReloadIntervalMsec       15000
 
 
-## ネットワーク情報検出時間間隔 (ミリ秒)
+## ネットワーク情報検出の時間間隔 (ミリ秒)
 ## シン・ファイアウォールシステムは、ログにこのコンピュータの MAC アドレス等
 ## を記載することができます。そのためのネットワーク情報は Windows の API
 ## を用いて取得します。しかし、その API の呼び出しには若干の CPU 時間
 ## がかかります。そこで、デフォルトでは 300000 ミリ秒 (300 秒 = 5 分)
 ## ごとに 1 回だけ API を呼び出します。大抵の環境ではデフォルト値
 ## のままで問題無いと考えられます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 GetNetworkInfoIntervalMsec      300000
 
@@ -70,6 +72,7 @@ GetNetworkInfoIntervalMsec      300000
 ## 管理されている場合、送付されるメールまたは syslog を集計すれば、
 ## 各端末が正常に稼働しているかどうかを簡単に確認することが
 ## できるようになります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableDailyAliveMessage         true
 
@@ -82,6 +85,7 @@ EnableDailyAliveMessage         true
 ## デフォルト値 (000000) の場合、午前 0 時ちょうどを意味します。
 ## なお、指定された時刻に端末がスリープ状態であった場合は、
 ## 次回スリープから復帰した際に指定した時刻に到達したとみなされます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 SendDailyAliveNoticeHhmmss      000000
 
@@ -125,14 +129,16 @@ SendDailyAliveNoticeHhmmss      000000
 ## ことができます。この場合、ふるまいウォッチ機能は常時稼働します
 ## ので、コンピュータの CPU は若干消費しますが、メールまたは syslog で
 ## の送信により一々煩わされることを避けることができます。
+## 【解説】★ お好みに応じて設定を変更してください。
 
-WatchOnlyWhenLocked             true
+WatchOnlyWhenLocked             false
 
 
 ## 一定時間画面無操作時に画面ロックと同様とみなすための無操作時間閾値 (ミリ秒)
 ## ふるまいウォッチ機能の画面ロック連動機能において画面操作の一定時間無操作
 ## 状態が続くと画面ロックがなされていなくてもロックされている状態と同様
 ## にみなすことができます。WatchOnlyWhenLocked が true の場合のみ有意です。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 InputIdleTimerMsec              900000
 
@@ -145,6 +151,7 @@ InputIdleTimerMsec              900000
 ## 間隔を長くすると、CPU 消費時間が減りますが、わずかな時間間隔で起動・終了
 ## するプロセスの検出等が困難になります。間隔を短くすると、常時 CPU を
 ## 消費するその消費割合が増加します。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 WatchPollingIntervalMsec        250
 
@@ -156,6 +163,7 @@ WatchPollingIntervalMsec        250
 ## RDP の接続があったり、接続中のセッションが増減したり、接続元の IP アドレス
 ## が変化したりすると、検出され、後に設定する方法によって、
 ## ログファイル、電子メールまたは syslog で通知がなされます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchRdp                  true
 
@@ -178,6 +186,7 @@ EnableWatchRdp                  true
 ## を無効にしている際のクエリは追跡されません。
 ## 注意事項: この機能を無効にすると、他の機能の逆引き名前解決において
 ## 監視対象プログラムが意図したホスト名へのマッピングが行なわれなくなります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchDns                  true
 
@@ -192,6 +201,7 @@ EnableWatchDns                  true
 ## syslog で通知します。
 ## 可能な場合は、通信を発信または着信したプロセスの情報
 ## (プロセスの EXE ファイル等) も取得して通知します。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchTcp                  true
 
@@ -207,6 +217,7 @@ EnableWatchTcp                  true
 ## 制約事項: シン・ファイアウォールシステムのプロセスがシステムサービス
 ## として管理者権限で動作している場合のみ稼働します。それ以外の場合は
 ## 本機能は稼働しません。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchFwBlock              true
 
@@ -218,6 +229,7 @@ EnableWatchFwBlock              true
 ## しかし、逆引きにはそれ用に DNS 通信が発生し、また時間も要するという
 ## デメリットがあるため、大量の通信がある場合には無効にしたほうが良いかも
 ## 知れません。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableTcpHostnameLookup         true
 
@@ -226,6 +238,7 @@ EnableTcpHostnameLookup         true
 ## 短くすると、逆引きにしばしば失敗する場合の処理時間が短縮されます。
 ## しかし、DNS サーバー等での逆引きにある程度の時間を要しているとき
 ## に、早期に諦めてしまうことになります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 HostnameLookupTimeoutMsec       500
 
@@ -238,6 +251,7 @@ HostnameLookupTimeoutMsec       500
 ## しないようになります。デメリットとして、宛先ポートが 53 の TCP
 ## 通信が通知されなくなるため、マルウェア等の通信がその条件に
 ## 合致している場合のその通信の検出ができなくなります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 IgnoreDNSoverTCPSession         true
 
@@ -251,6 +265,7 @@ IgnoreDNSoverTCPSession         true
 ## として管理者権限で動作している場合は、すべてのユーザーのプロセスの増減
 ## を検出可能です。そうでない場合は、自らのユーザーのプロセスのみを検出
 ## 可能です。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchProcess              true
 
@@ -269,6 +284,7 @@ EnableWatchProcess              true
 ## や従業員) がその情報に理論上アクセスできてしまうという問題があります。
 ## そのため、これを true にするか false にするかは、十分に検討する
 ## 必要があります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 IncludeProcessCommandLine       true
 
@@ -282,6 +298,7 @@ IncludeProcessCommandLine       true
 ## 注意事項: WatchOnlyWhenLocked が true の場合でも、画面ロック時以外の
 ## アクティブ時においても、Windows イベントログは、常にウォッチの対象と
 ## なります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 EnableWatchWindowsEventLog      true
 
@@ -290,6 +307,7 @@ EnableWatchWindowsEventLog      true
 ## Windows イベントログのウォッチ間隔は、WatchPollingIntervalMsec とは別に
 ## 以下の設定値で設定をします。通常は 10000 ミリ秒 (10 秒) 間隔で問題
 ## ないと思います。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 WindowsEventLogPollIntervalMsec 10000
 
@@ -298,6 +316,7 @@ WindowsEventLogPollIntervalMsec 10000
 ## デフォルトの設定の場合、システムログ、アプリケーションログ、
 ## Windows Defender ウイルス対策の動作ログの 3 つがウォッチされます。
 ## 増加、減少させることもできます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 WindowsEventLogNames            System;Application;Microsoft-Windows-Windows Defender/Operational
 
@@ -350,6 +369,8 @@ WindowsEventLogNames            System;Application;Microsoft-Windows-Windows Def
 
 
 ## 宛先メールアドレス (複数指定したい場合は、スペースで区切って複数指定可能)
+## 【解説】★ お使いのメールアドレスを入力してください。
+##            (メール送信のためには、コメントアウトを解除する必要があります。)
 
 #ReportMailTo                    a@gmail.com
 
@@ -358,6 +379,9 @@ WindowsEventLogNames            System;Application;Microsoft-Windows-Windows Def
 ## 最初から設定されているメールアドレスは動作確認のサンプル用である。
 ## 自分のメールアドレスに変更すること。
 ## (送信元と宛先が同じでも、大抵の場合、問題はない)
+## 【解説】★ お使いのメールアドレスを入力してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。
 
 ReportMailFrom                  example@example-smtp.thintele-oss.arpanet.jp
 
@@ -375,6 +399,7 @@ ReportMailFrom                  example@example-smtp.thintele-oss.arpanet.jp
 ## なお、WatchOnlyWhenLocked (上掲) が true の場合は、コンピュータ画面がロック
 ## されていない場合 (アクティブな場合) は、そもそもイベントがウォッチされま
 ## せんので、このフラグには意味がありません。
+## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportMailOnlyWhenLocked        false
 
@@ -383,6 +408,7 @@ ReportMailOnlyWhenLocked        false
 ## 変数 $hostname の部分はコンピュータ名に置換される。
 ## 変数 $macaddress と書くと、その部分は MAC アドレスに置換される。
 ## 変数 $mailid と書くと、その部分はメール連番数字に置換される。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 ReportMailSubjectPrefix         [ThinFirewall: $hostname #$mailid]
 
@@ -394,8 +420,9 @@ ReportMailSubjectPrefix         [ThinFirewall: $hostname #$mailid]
 ##  1 つのイベントで必ず 1 通のメールが送付される。メールの件数が膨大
 ##  となり、海外系大手クラウドメールサーバーに SPAM と誤解されて
 ##  遮断されてしまうリスクが高まります。)
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
-ReportMailIntervalMsec          7000
+ReportMailIntervalMsec          60000
 
 
 ## 上記の「ReportMailIntervalMsec」でメールをまとめる設定としている
@@ -405,6 +432,7 @@ ReportMailIntervalMsec          7000
 ## この値をあまりに大きな値にし過ぎると、届くメールが大きくなり、
 ## 文字数が増え、表示に時間を要します。小さな値にし過ぎると、大量の
 ## イベントが発生する際に、メールが細切れに送付されることになります。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 ReportMailMaxSize               200000
 
@@ -412,8 +440,9 @@ ReportMailMaxSize               200000
 ## SMTP サーバーにおける何らかのエラーでメールの送信に失敗した場合
 ## 何秒間かメール送信試行を休止することができる。その秒数をミリ秒単位
 ## で指定します。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
-ReportMailFailSleepIntervalMsec 30000
+ReportMailFailSleepIntervalMsec 60000
 
 
 ## 使用する送信 SMTP サーバーのホスト名 (LAN 上やインターネット上のメール
@@ -440,6 +469,11 @@ ReportMailFailSleepIntervalMsec 30000
 ## 
 ## 米国 Microsoft 社の 「Office 365 (Hotmail, Outlook)」 を使用する場合:
 ## https://docs.microsoft.com/ja-jp/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365
+## 
+## 【解説】★ 必ず、お使いの SMTP サーバーの情報を設定してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。その場合は、上掲の ReportMailFrom の
+##            値も初期値のままにしてください。
 
 ReportMailHost                  smtp01.example-smtp.thintele-oss.arpanet.jp
 
@@ -449,6 +483,9 @@ ReportMailHost                  smtp01.example-smtp.thintele-oss.arpanet.jp
 ## は 587 である場合があり、SMTPS (TCP 接続時から SSL で暗号化する) の
 ## ポート番号は 465 である場合があります。詳しくはお使いの SMTP サーバー
 ## の管理者が公開している案内をご参照ください。
+## 【解説】★ 必ず、お使いの SMTP サーバーの情報を設定してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。
 
 ReportMailPort                  587
 
@@ -460,6 +497,9 @@ ReportMailPort                  587
 ## システム機能のログファイルでその原因が記録されていますので、ログ
 ## ファイルを確認してください。メールがうまく届かない場合は、たいてい
 ## SMTP サーバーの設定に誤りがあります。
+## 【解説】★ 必ず、お使いの SMTP サーバーの情報を設定してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。
 
 ReportMailUsername              example
 ReportMailPassword              example
@@ -475,12 +515,18 @@ ReportMailPassword              example
 ## は SSL/TLS を有効にしてください。多くの SMTP サーバーは STARTTLS
 ## 方式の暗号化に対応していますが、SMTPS 暗号化にしか対応していない
 ## ケースも存在します。
+## 【解説】★ 必ず、お使いの SMTP サーバーの情報を設定してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。
 
 ReportMailSslType               2
 
 
 ## SMTP 認証の種類を 0 または 1 で指定します。
 ## 0 は LOGIN 認証、1 は PLAIN 認証を意味します。
+## 【解説】★ 必ず、お使いの SMTP サーバーの情報を設定してください。
+##         ※ ただし、サンプルの SMTP サーバーを使用して実験する場合は、
+##            初期値のままにしてください。
 
 ReportMailAuthType              0
 
@@ -492,11 +538,14 @@ ReportMailAuthType              0
 
 
 ## 送信先 syslog サーバーの IP アドレスまたはホスト名
+## 【解説】★ お好みに応じて設定を変更してください。
+##            (syslog 送信のためには、コメントアウトを解除する必要があります。)
 
 #ReportSyslogHost                192.168.0.1
 
 
 ## 送信先 syslog サーバーのポート番号
+## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportSyslogPort                514
 
@@ -514,6 +563,7 @@ ReportSyslogPort                514
 ## なお、WatchOnlyWhenLocked (上掲) が true の場合は、コンピュータ画面がロック
 ## されていない場合 (アクティブな場合) は、そもそもイベントがウォッチされま
 ## せんので、このフラグには意味がありません。
+## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportSyslogOnlyWhenLocked      false
 
@@ -522,6 +572,8 @@ ReportSyslogOnlyWhenLocked      false
 ## 変数 $hostname の部分はコンピュータ名に置換される。
 ## 変数 $macaddress と書くと、その部分は MAC アドレスに置換される。
 ## 変数 $eventid と書くと、その部分はイベント ID (連番) に置換される。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
+
 ReportSyslogPrefix              $hostname:$macaddress ThinFirewall: Event #$eventid:
 
 
@@ -529,6 +581,9 @@ ReportSyslogPrefix              $hostname:$macaddress ThinFirewall: Event #$even
 
 ## 「thinfirewall_log」というディレクトリにイベントを保存する
 ##  true: 有効、false: 無効
+## ディスク容量に空きがない場合は、古いログは自動的に削除されます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
+##            ただし、ローカルディスク容量を消費しますのでご注意ください。
 
 ReportSaveToDir                 true
 
@@ -537,6 +592,7 @@ ReportSaveToDir                 true
 
 ## 時刻にタイムゾーン情報を含めるか否かのフラグ
 ## (true: 有効、false: 無効)
+## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportAppendTimeZone            false
 
@@ -551,17 +607,20 @@ ReportAppendTimeZone            false
 ## のログ 1 行を抽出することができるようになる。
 ## ただし、ログの行の文字数が毎回少し増加するので、
 ## 容量を余分に消費することになる。
+## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportAppendUniqueId            false
 
 
 ## 内部的な非同期キューの長さ (デフォルト: 1024)
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 ReportMaxQueueLength            1024
 
 
 ## シン・ファイアウォールシステムそのものの動作途中状態に関する
 ## イベントも送付するか否かのフラグ (true: 有効、false: 無効)
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 ReportSendEngineEvent           true
 
@@ -637,6 +696,9 @@ ReportSendEngineEvent           true
 ## として管理者権限で動作している場合のみ稼働します。それ以外の場合は
 ## 本機能は稼働しません。
 ## 
+## 【解説】★ お好みに応じて設定を変更してください。
+## 「ロックダウン・ファイアウォール機能」を無効化する場合は false、
+## 有効化する場合は true に設定してください。
 ## この値が false の場合、この動作設定ファイルのここより下の部分の設定
 ## は何らの意味も有さなくなります。
 
@@ -663,6 +725,7 @@ EnableFirewall                  true
 ## 脆弱性を突かれる可能性がある外部からの通信や、脆弱性を発動するトリガー
 ## となり得る端末上のアプリケーションや Windows システムの通信
 ## (例: アップデート通信) 等を遮断できるためです。
+## 【解説】★ お好みに応じて設定を変更してください。
 
 EnableFirewallOnlyWhenLocked    true
 
@@ -1276,6 +1339,7 @@ icmp        out        all   permit  any6
 ## この項目を有効にすると、動作設定ファイルを定期的に指定した HTTP サーバー
 ## からダウンロードし、変更点がある場合は自動的にローカルの
 ## 動作設定ファイルに上書きし、その内容をリロードして適用します。
+## 【解説】★ お好みに応じて設定を変更してください。
 
 EnableConfigAutoUpdate          false
 
@@ -1287,6 +1351,7 @@ EnableConfigAutoUpdate          false
 ## シン・ファイアウォールシステムのログファイルに記録されます。
 ## 正常に更新がなされない場合は、ログファイルをチェックしてみてください。
 ## 値が指定されていない場合は、デフォルト値として、3600 秒が使用されます。
+## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 ConfigAutoUpdateIntervalMsec    3600000
 
@@ -1294,10 +1359,13 @@ ConfigAutoUpdateIntervalMsec    3600000
 ## 動作設定ファイルの HTTP/HTTPS 経由の更新チェック先の URL
 ## ここで指定した URL に対してアクセスが行なわれます。
 ## URL は、http または https のアドレスが指定可能です。
+## 【解説】★ 自動更新機能を利用する際には、必ず設定を行なってください。
+##            初期状態の example.org は例であり、このままでは意味はありません。
 
 ConfigAutoUpdateUrl             https://example.org/thinfw-policy/policy.txt?hostname=$hostname&macaddress=$macaddress&build=$build&app=$app&mode=$mode
 
-## 【ConfigAutoUpdateUrl に関する高度な管理者のためのヒント】
+
+## 【README: ConfigAutoUpdateUrl に関する高度な管理者のためのヒント】
 ## URL 上に任意の CGI プログラムを置いて置くと、クライアント端末ごとに
 ## 異なる動作設定ファイルを応答したり、動的にその内容を生成したり
 ## することも可能です。たとえば、サーバー用にはサーバー用のファイアウォール
@@ -1316,6 +1384,7 @@ ConfigAutoUpdateUrl             https://example.org/thinfw-policy/policy.txt?hos
 ## HTTP/HTTPS で ConfigAutoUpdateUrl の URL にアクセスする際に
 ## BASIC ユーザー認証を必要とする場合のユーザー名の指定
 ## (空欄の場合、BASIC 認証なし)
+## 【解説】★ 必要に応じて設定を変更してください。
 
 ConfigAutoUpdateAuthUsername    
 
@@ -1323,6 +1392,7 @@ ConfigAutoUpdateAuthUsername
 ## HTTP/HTTPS で ConfigAutoUpdateUrl の URL にアクセスする際に
 ## BASIC ユーザー認証を必要とする場合のパスワード名の指定
 ## (空欄の場合、BASIC 認証なし)
+## 【解説】★ 必要に応じて設定を変更してください。
 
 ConfigAutoUpdateAuthPassword    
 
@@ -1335,12 +1405,14 @@ ConfigAutoUpdateAuthPassword
 ## インターネット上に HTTPS サーバーを設置し、中間者攻撃を受ける可能性
 ## が高い場合 (例: 外国のインターネット回線等を経由する) は、利用する
 ## ことを推奨。LAN や信頼できる WAN の場合は、一般的には、設定不要。
+## 【解説】★ 必要に応じて設定を変更してください。
 
 ConfigAutoUpdateServerCertSha1  
 
 
 
-
+## 大変お疲れ様でした。
+## 
 ## 以下の定型文字列は、この動作設定ファイルの最後に記載したまま
 ## 残してください。
 ## この文字列が含まれていない場合、動作設定ファイルの読み込みは
@@ -1353,6 +1425,8 @@ ConfigAutoUpdateServerCertSha1
 ## 以下の定型文字列を記載してください。以下の定型文字列が記載されて
 ## いないファイルが取得された場合は、無視され、動作設定ファイル
 ## の更新は実施されません。
+## 
+## 糸冬了！！
 
 [END_OF_FILE]
 
