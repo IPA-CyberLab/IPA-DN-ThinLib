@@ -6353,6 +6353,11 @@ void TfMain(TF_SERVICE *svc)
 
 	wchar_t tmp[2048];
 
+	// Get MAC address
+	UCHAR mac[6] = CLEAN;
+	TfGetCurrentMacAddress(mac);
+	Copy(svc->MacAddress, mac, 6);
+
 	// Init report thread
 	svc->ReportQueue = NewQueue();
 	svc->ReportThreadHaltEvent = NewEvent();
@@ -6546,6 +6551,11 @@ void TfMain(TF_SERVICE *svc)
 
 					rep.EnableConfigAutoUpdate = IniBoolValue(ini, "EnableConfigAutoUpdate");
 					rep.ConfigAutoUpdateIntervalMsec = IniIntValue(ini, "ConfigAutoUpdateIntervalMsec");
+
+					if (rep.ConfigAutoUpdateIntervalMsec == 0)
+					{
+						rep.ConfigAutoUpdateIntervalMsec = 3600 * 1000;
+					}
 
 					rep.ConfigAutoUpdateIntervalMsec = MAX(rep.ConfigAutoUpdateIntervalMsec, 5 * 1000);
 
