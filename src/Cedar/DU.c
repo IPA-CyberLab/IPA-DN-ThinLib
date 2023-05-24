@@ -7494,5 +7494,114 @@ TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 	return svc;
 }
 
+bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF *template_buf)
+{
+	bool free_template_buf = false;
+
+	char *eof_tag = "[END_OF_FILE]";
+
+	if (filename == NULL)
+	{
+		return false;
+	}
+
+	wchar_t fullpath[MAX_PATH] = CLEAN;
+	
+	InnerFilePathW(fullpath, sizeof(fullpath), filename);
+
+	bool exists = false;
+
+	BUF *current_buf = ReadDumpW(fullpath);
+	if (current_buf != NULL)
+	{
+		if (SearchBin(current_buf->Buf, 0, current_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+		{
+			exists = true;
+		}
+		FreeBuf(current_buf);
+	}
+
+	if (overwrite == false && exists)
+	{
+		return false;
+	}
+
+	if (template_buf == NULL)
+	{
+		template_buf = ReadDump("|ThinFwDefaultConfig.txt");
+
+		if (template_buf == NULL)
+		{
+			return false;
+		}
+
+		free_template_buf = true;
+	}
+
+	bool ret = false;
+
+	BufSkipUtf8Bom(template_buf);
+
+	BUF *template_buf2 = ReadRemainBuf(template_buf);
+
+	if (template_buf2 != NULL)
+	{
+		SeekBufToEnd(template_buf2);
+		WriteBufChar(template_buf2, 0);
+
+		char *original_body = CopyStr(template_buf2->Buf);
+		UINT original_body_size = StrSize(original_body);
+		UINT tmp_body_size = original_body_size + 30000;
+
+		char *tmp_body = ZeroMalloc(tmp_body_size);
+
+		StrCpy(tmp_body, tmp_body_size, original_body);
+
+		UINT rdp_port = DsGetRdpPortFromRegistry();
+		if (rdp_port == 0)
+		{
+			rdp_port = DS_RDP_PORT;
+		}
+
+		char rdp_port_str[32] = CLEAN;
+		ToStr(rdp_port_str, rdp_port);
+
+		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$RDP_PORT$", rdp_port_str, false);
+
+		UCHAR bom_data[] = { 0xef, 0xbb, 0xbf, };
+
+		BUF *new_buf = NewBuf();
+		WriteBuf(new_buf, bom_data, 3);
+		WriteBuf(new_buf, tmp_body, StrLen(tmp_body));
+
+		wchar_t dir[MAX_PATH] = CLEAN;
+		GetDirNameFromFilePathW(dir, sizeof(dir), fullpath);
+
+		MakeDirExW(dir);
+
+		ret = DumpBufSafeW(new_buf, fullpath);
+
+		if (ret)
+		{
+			if (set_acl)
+			{
+				MsSetFileSecureAclEverone(fullpath);
+			}
+		}
+
+		FreeBuf(template_buf2);
+		Free(original_body);
+		Free(tmp_body);
+		FreeBuf(new_buf);
+	}
+
+	if (free_template_buf)
+	{
+		FreeBuf(template_buf);
+	}
+
+	return ret;
+}
+
 #endif	// _WIN32
 

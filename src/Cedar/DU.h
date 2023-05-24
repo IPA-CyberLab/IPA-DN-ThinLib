@@ -166,6 +166,8 @@ void TfStopService(TF_SERVICE *svc);
 void TfThreadProc(THREAD *thread, void *param);
 void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup);
 
+bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF *template_buf);
+
 bool TfSetFirewall(TF_SERVICE *svc, BUF *rules_text, UINT *num_rules_applied);
 void TfUpdateReg(TF_SERVICE *svc, bool read);
 
