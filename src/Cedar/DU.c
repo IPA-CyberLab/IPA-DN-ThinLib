@@ -5394,8 +5394,22 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 			ReplaceStr(url, sizeof(url), url, " ", "_");
 
-			BUF *downloaded_buf = HttpDownload(url, st.ConfigAutoUpdateAuthUsername, st.ConfigAutoUpdateAuthPassword,
-				NULL, 0, 0, NULL, false, NULL, 0, &svc->HaltFlag, 40 * 1024 * 1024);
+			BUF *sha1_hash = StrToBin(st.ConfigAutoUpdateServerCertSha1);
+
+			UCHAR *sha1_hash_ptr = NULL;
+			UINT sha1_hash_count = 0;
+			if (sha1_hash != NULL && sha1_hash->Size == SHA1_SIZE)
+			{
+				sha1_hash_ptr = sha1_hash->Buf;
+				sha1_hash_count = 1;
+			}
+
+			BUF *http_error = NewBuf();
+			UINT err_code = 0;
+
+			BUF *downloaded_buf = HttpDownloadEx(url, st.ConfigAutoUpdateAuthUsername, st.ConfigAutoUpdateAuthPassword,
+				NULL, 0, 0, &err_code, false, sha1_hash_ptr, sha1_hash_count, &svc->HaltFlag, 40 * 1024 * 1024,
+				http_error, NULL, 0, NULL, 0);
 			char *eof_tag = "[END_OF_FILE]";
 
 			if (downloaded_buf != NULL)
@@ -5418,7 +5432,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 							}
 							else
 							{
-								//UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
+								UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
 
 								if (DumpBufSafeW(downloaded_buf, real_filename) == false)
 								{
@@ -5446,6 +5460,16 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 				FreeBuf(downloaded_buf);
 			}
+			else
+			{
+				SeekBufToEnd(http_error);
+				WriteBufChar(http_error, 0);
+				TfLog(svc, "ConfigAutoUpdate: HTTP download error from the URL '%S'. Error code = %u, Error string = '%s'. Error detail: '%S'",
+					url, err_code, _E(err_code), http_error->Buf);
+			}
+
+			FreeBuf(sha1_hash);
+			FreeBuf(http_error);
 		}
 
 		DIFF_ENTRY *e = NULL;
@@ -6528,6 +6552,7 @@ void TfMain(TF_SERVICE *svc)
 					StrCpy(rep.ConfigAutoUpdateUrl, sizeof(rep.ConfigAutoUpdateUrl), IniStrValue(ini, "ConfigAutoUpdateUrl"));
 					StrCpy(rep.ConfigAutoUpdateAuthUsername, sizeof(rep.ConfigAutoUpdateAuthUsername), IniStrValue(ini, "ConfigAutoUpdateAuthUsername"));
 					StrCpy(rep.ConfigAutoUpdateAuthPassword, sizeof(rep.ConfigAutoUpdateAuthPassword), IniStrValue(ini, "ConfigAutoUpdateAuthPassword"));
+					StrCpy(rep.ConfigAutoUpdateServerCertSha1, sizeof(rep.ConfigAutoUpdateServerCertSha1), IniStrValue(ini, "ConfigAutoUpdateServerCertSha1"));
 
 					rep.HostnameLookupTimeoutMsec = IniIntValue(ini, "HostnameLookupTimeoutMsec");
 

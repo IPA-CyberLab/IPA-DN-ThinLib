@@ -124,6 +124,7 @@ struct TF_REPORT_SETTINGS
 	char ConfigAutoUpdateUrl[512];
 	char ConfigAutoUpdateAuthUsername[128];
 	char ConfigAutoUpdateAuthPassword[128];
+	char ConfigAutoUpdateServerCertSha1[80];
 };
 
 struct TF_SERVICE

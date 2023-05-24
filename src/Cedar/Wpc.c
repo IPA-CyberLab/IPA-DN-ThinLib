@@ -254,11 +254,25 @@ void GenerateHttpBasicAuthHeaderValue(char* dst, UINT dst_size, char* username, 
 	Free(tmp);
 }
 
-BUF* HttpDownload(char* url, char* basic_auth_username, char* basic_auth_password,
-	INTERNET_SETTING* setting, UINT timeout_connect, UINT timeout_comm,
-	UINT* error_code, bool check_ssl_trust,
-	void* sha1_cert_hash, UINT num_hashes,
-	bool* cancel, UINT max_recv_size)
+BUF *HttpDownload(char *url, char *basic_auth_username, char *basic_auth_password,
+	INTERNET_SETTING *setting, UINT timeout_connect, UINT timeout_comm,
+	UINT *error_code, bool check_ssl_trust,
+	void *sha1_cert_hash, UINT num_hashes,
+	bool *cancel, UINT max_recv_size)
+{
+	return HttpDownloadEx(url, basic_auth_username, basic_auth_password,
+		setting, timeout_connect, timeout_comm,
+		error_code, check_ssl_trust,
+		sha1_cert_hash, num_hashes,
+		cancel, max_recv_size,
+		NULL, NULL, 0, NULL, 0);
+}
+BUF *HttpDownloadEx(char *url, char *basic_auth_username, char *basic_auth_password,
+	INTERNET_SETTING *setting, UINT timeout_connect, UINT timeout_comm,
+	UINT *error_code, bool check_ssl_trust,
+	void *sha1_cert_hash, UINT num_hashes,
+	bool *cancel, UINT max_recv_size,
+	BUF *result_buf_if_error, bool *is_server_error, UINT flags, char *redirect_url, UINT redirect_url_size)
 {
 	static UINT _dummy = 0;
 	if (error_code == NULL)
@@ -286,10 +300,11 @@ BUF* HttpDownload(char* url, char* basic_auth_username, char* basic_auth_passwor
 			basic_auth_username, basic_auth_password);
 	}
 
-	BUF* recv = HttpRequestEx5(&url_data, setting, timeout_connect, timeout_comm,
+	BUF* recv = HttpRequestEx6(&url_data, setting, timeout_connect, timeout_comm,
 		error_code, check_ssl_trust, NULL, NULL, NULL,
 		sha1_cert_hash, num_hashes, cancel, max_recv_size,
-		"Authorization", basic_auth_value, NULL, false, false);
+		"Authorization", basic_auth_value, NULL, false, false,
+		result_buf_if_error, is_server_error, flags, redirect_url, redirect_url_size);
 
 	return recv;
 }

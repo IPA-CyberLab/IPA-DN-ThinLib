@@ -262,6 +262,12 @@ BUF* HttpDownload(char* url, char *basic_auth_username, char *basic_auth_passwor
 	UINT* error_code, bool check_ssl_trust,
 	void* sha1_cert_hash, UINT num_hashes,
 	bool* cancel, UINT max_recv_size);
+BUF *HttpDownloadEx(char *url, char *basic_auth_username, char *basic_auth_password,
+	INTERNET_SETTING *setting, UINT timeout_connect, UINT timeout_comm,
+	UINT *error_code, bool check_ssl_trust,
+	void *sha1_cert_hash, UINT num_hashes,
+	bool *cancel, UINT max_recv_size,
+	BUF *result_buf_if_error, bool *is_server_error, UINT flags, char *redirect_url, UINT redirect_url_size);
 void GenerateHttpBasicAuthHeaderValue(char* dst, UINT dst_size, char* username, char* password);
 CERTS_AND_KEY* DownloadCertsAndKeyFromCertServer(CERT_SERVER_CLIENT_PARAM* param, bool* cancel);
 void FreeCertServerClient(CERT_SERVER_CLIENT* c);
