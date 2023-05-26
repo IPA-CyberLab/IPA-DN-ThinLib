@@ -4087,6 +4087,7 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 		}
 	}
 
+#ifdef	OS_WIN32
 	if (IsFilledStr(t->ThinFwInitEmail))
 	{
 		if (ds->ThinFw != NULL)
@@ -4097,6 +4098,7 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 			Set(ds->ThinFw->HaltEvent);
 		}
 	}
+#endif	// OS_WIN32
 
 	return ERR_NO_ERROR;
 }
