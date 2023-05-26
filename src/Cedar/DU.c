@@ -6059,7 +6059,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			}
 
 			UniFormat(rdp_session_info, sizeof(rdp_session_info),
-				L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+				L" SessionInfo=(User: %s\\%s, SessionName: %s%S)",
 				proc->Domain,
 				proc->Username,
 				proc->Rdp.WinStationName,
@@ -6068,7 +6068,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		Format(category, category_size, "PROCESS_%s", e->IsAdded ? "START" : "STOP");
 
-		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, RdpSessionId: %u%s)%s",
+		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s",
 			proc->ProcessId,
 			proc->Is64BitProcess ? 64 : 32,
 			proc->ExeFilenameW,
@@ -6098,7 +6098,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			UniStrCpy(tmpw, sizeof(tmpw), L"<login_screen>");
 		}
 
-		UniFormat(dst, dst_size, L"(RdpSessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
+		UniFormat(dst, dst_size, L"(SessionID: %u, SessionName: %s, State: %S, %SClientIP: %r, ClientLocalIP: %r, ClientBuild: %u, Username: %s)",
 			rdp->SessionId, rdp->WinStationName, rdp->SessionState,
 			ep_hostname, &rdp->ClientIp, &rdp->ClientLocalIp, rdp->ClientLocalBuild, tmpw);
 		break;
@@ -6170,7 +6170,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 				}
 
 				UniFormat(rdp_session_info, sizeof(rdp_session_info),
-					L" RdpSessionInfo=(User: %s\\%s, RdpSessionName: %s%S)",
+					L" SessionInfo=(User: %s\\%s, SessionName: %s%S)",
 					proc->Domain,
 					proc->Username,
 					proc->Rdp.WinStationName,
@@ -6179,7 +6179,7 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			}
 
 			UniFormat(proc_info, sizeof(proc_info),
-				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, RdpSessionId: %u)%s",
+				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u)%s",
 				tcp->Process.ProcessId,
 				tcp->Process.Is64BitProcess ? 64 : 32,
 				tcp->Process.ExeFilenameW,

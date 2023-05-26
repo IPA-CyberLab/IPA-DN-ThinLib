@@ -128,6 +128,7 @@ UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void
 		SetIcon(hWnd, 0, ICO_SHIELD);
 		SetFont(hWnd, E_MAIL, GetFont("Arial", 12, false, false, false, false));
 		DlgFont(hWnd, S_31, 10, true);
+		DlgFont(hWnd, S_35, 9, true);
 		break;
 
 	case WM_COMMAND:
