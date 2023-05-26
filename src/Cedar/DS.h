@@ -272,6 +272,8 @@ struct DS
 	THREAD *PeriodicHttpsPollingThread;
 	EVENT *PeriodicHttpsPollingThreadHaltEvent;
 	bool PeriodicHttpsPollingThreadHaltFlag;
+
+	TF_SERVICE *ThinFw;
 };
 
 struct DS_INFO

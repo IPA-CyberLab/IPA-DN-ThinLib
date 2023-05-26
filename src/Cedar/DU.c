@@ -6384,6 +6384,15 @@ void TfMain(TF_SERVICE *svc)
 
 			// Config file reload
 			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
+
+			if (new_content == NULL)
+			{
+				// Install default config and retry
+				TfInstallDefaultConfig(svc->StartupSettings.SettingFileName, false, true, NULL);
+
+				new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
+			}
+
 			if (new_content != NULL && SearchBin(new_content->Buf, 0, new_content->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
 			{
 				// Compare
@@ -7480,6 +7489,8 @@ TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 		StrCpy(svc->StartupSettings.AppTitle, sizeof(svc->StartupSettings.AppTitle),
 			"Thin Firewall System");
 	}
+
+	MakeDirEx(TF_LOG_DIR_NAME);
 
 	svc->Log = NewLogEx(TF_LOG_DIR_NAME, "thinfw", LOG_SWITCH_DAY, false);
 	svc->Log->Flush = true;

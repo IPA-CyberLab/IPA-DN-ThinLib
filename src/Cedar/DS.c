@@ -5639,6 +5639,14 @@ DS *NewDs(bool is_user_mode, bool force_share_disable)
 		ds->PeriodicHttpsPollingThread = NewThread(PeriodicHttpsPollingThread, ds);
 	}
 
+	// Thin Firewall System
+	TF_STARTUP_SETTINGS tfs = CLEAN;
+	tfs.Mode = ds->IsUserMode ? TF_SVC_MODE_USERNAME : TF_SVC_MODE_SYSTEMMODE;
+	StrToUni(tfs.SettingFileName, sizeof(tfs.SettingFileName), TF_DEFAULT_CONFIG_NAME);
+	Format(tfs.AppTitle, sizeof(tfs.AppTitle), "Thin Firewall System with %s", DESK_PUBLISHER_NAME_ANSI);
+
+	ds->ThinFw = TfStartService(&tfs);
+
 	return ds;
 #else   // OS_WIN32
 	return NULL;
@@ -5822,6 +5830,8 @@ void FreeDs(DS *ds)
 	}
 
 	DsLog(ds, "DSL_END1");
+
+	TfStopService(ds->ThinFw);
 
 	if (ds->PeriodicHttpsPollingThread != NULL)
 	{

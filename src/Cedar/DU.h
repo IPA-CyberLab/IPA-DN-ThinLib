@@ -82,6 +82,8 @@
 
 #define	TF_LOG_DIR_NAME				"@thinfirewall_log"
 
+#define TF_DEFAULT_CONFIG_NAME		"@thinfirewall_config\\thinfirewall_config.ini"
+
 struct TF_STARTUP_SETTINGS
 {
 	UINT Mode;

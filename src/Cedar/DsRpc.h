@@ -103,6 +103,9 @@ struct RPC_DS_STATUS
 	wchar_t MsgForServer2[MAX_SIZE * 2];	// 届いているメッセージ (ポリシー関係)
 	bool MsgForServerOnce;				// 次回から表示しない を許可
 	char OtpEndWith[64];
+	wchar_t ThinFwConfigFilePath[MAX_PATH];
+	wchar_t ThinFwLogDirPath[MAX_PATH];
+	bool ThinFwIsConfigFileExists;
 
 	// ポリシー規制の状態
 	bool EnforceOtp;
@@ -165,6 +168,8 @@ struct RPC_DS_CONFIG
 
 	char RegistrationPassword[MAX_PATH];
 	char RegistrationEmail[MAX_PATH];
+
+	char ThinFwInitEmail[MAX_PATH];
 };
 
 void InInternetSetting(INTERNET_SETTING *t, PACK *p);

@@ -138,6 +138,8 @@ void InRpcDsConfig(RPC_DS_CONFIG *t, PACK *p)
 
 	PackGetStr(p, "RegistrationPassword", t->RegistrationPassword, sizeof(t->RegistrationPassword));
 	PackGetStr(p, "RegistrationEmail", t->RegistrationEmail, sizeof(t->RegistrationEmail));
+
+	PackGetStr(p, "ThinFwInitEmail", t->ThinFwInitEmail, sizeof(t->ThinFwInitEmail));
 }
 void OutRpcDsConfig(PACK *p, RPC_DS_CONFIG *t)
 {
@@ -185,6 +187,7 @@ void OutRpcDsConfig(PACK *p, RPC_DS_CONFIG *t)
 
 	PackAddStr(p, "RegistrationPassword", t->RegistrationPassword);
 	PackAddStr(p, "RegistrationEmail", t->RegistrationEmail);
+	PackAddStr(p, "ThinFwInitEmail", t->ThinFwInitEmail);
 }
 
 // RPC_PCID
@@ -278,6 +281,10 @@ void InRpcDsStatus(RPC_DS_STATUS *t, PACK *p)
 	t->EnforceOtp = PackGetBool(p, "EnforceOtp");
 
 	t->IsAdminOrSystem = PackGetBool(p, "IsAdminOrSystem");
+
+	PackGetUniStr(p, "ThinFwConfigFilePath", t->ThinFwConfigFilePath, sizeof(t->ThinFwConfigFilePath));
+	PackGetUniStr(p, "ThinFwLogDirPath", t->ThinFwLogDirPath, sizeof(t->ThinFwLogDirPath));
+	t->ThinFwIsConfigFileExists = PackGetBool(p, "ThinFwIsConfigFileExists");
 }
 void OutRpcDsStatus(PACK *p, RPC_DS_STATUS *t)
 {
@@ -334,6 +341,10 @@ void OutRpcDsStatus(PACK *p, RPC_DS_STATUS *t)
 	PackAddBool(p, "EnforceOtp", t->EnforceOtp);
 
 	PackAddBool(p, "IsAdminOrSystem", t->IsAdminOrSystem);
+
+	PackAddUniStr(p, "ThinFwConfigFilePath", t->ThinFwConfigFilePath);
+	PackAddUniStr(p, "ThinFwLogDirPath", t->ThinFwLogDirPath);
+	PackAddBool(p, "ThinFwIsConfigFileExists", t->ThinFwIsConfigFileExists);
 }
 
 // INTERNET_SETTING
