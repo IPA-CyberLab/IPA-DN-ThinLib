@@ -120,16 +120,61 @@ bool MsAppendMenu(HMENU hMenu, UINT flags, UINT_PTR id, wchar_t *str);
 UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param)
 {
 	DG *dg = (DG *)param;
+	RPC_DS_STATUS status = CLEAN;
 
 	switch (msg)
 	{
 	case WM_INITDIALOG:
+		SetIcon(hWnd, 0, ICO_SHIELD);
+		SetFont(hWnd, E_MAIL, GetFont("Arial", 12, false, false, false, false));
+		DlgFont(hWnd, S_31, 10, true);
 		break;
 
 	case WM_COMMAND:
 		switch (wParam)
 		{
 		case IDOK:
+			DoNothing();
+			char mail[MAX_PATH] = CLEAN;
+			GetTxtA(hWnd, E_MAIL, mail, sizeof(mail));
+
+			RPC_DS_CONFIG config = CLEAN;
+
+			if (CALL(hWnd, DtcGetConfig(dg->Rpc, &config)) == false)
+			{
+				EndDialog(hWnd, 0);
+				break;
+			}
+
+			if (IsEmptyStr(mail))
+			{
+				StrCpy(mail, sizeof(mail), "_");
+			}
+
+			StrCpy(config.ThinFwInitEmail, sizeof(config.ThinFwInitEmail), mail);
+
+			if (CALL(hWnd, DtcSetConfig(dg->Rpc, &config)) == false)
+			{
+				EndDialog(hWnd, 0);
+				break;
+			}
+
+			if (CALL(hWnd, DtcGetStatus(dg->Rpc, &status)) == false)
+			{
+				EndDialog(hWnd, 0);
+				break;
+			}
+
+			wchar_t dir[MAX_PATH] = CLEAN;
+			GetDirNameFromFilePathW(dir, sizeof(dir), status.ThinFwConfigFilePath);
+			void *handle = NULL;
+			MsExecuteExW(dir, L"", &handle);
+			MsCloseHandle(handle);
+
+			MsgBox(hWnd, MB_ICONINFORMATION, _UU("DG_THINFW_CONFIG_INIT_OK"));
+
+			EndDialog(hWnd, 1);
+
 			break;
 
 		case IDCANCEL:
@@ -151,16 +196,54 @@ UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void
 UINT DgThinFwDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param)
 {
 	DG *dg = (DG *)param;
+	RPC_DS_STATUS status = CLEAN;
 
 	switch (msg)
 	{
 	case WM_INITDIALOG:
+		SetIcon(hWnd, 0, ICO_SHIELD);
+		DlgFont(hWnd, S_28, 10, true);
+		DlgFont(hWnd, S_31, 10, true);
+		DlgFont(hWnd, S_34, 10, true);
+		DlgFont(hWnd, IDOK, 9, true);
 		break;
 
 	case WM_COMMAND:
 		switch (wParam)
 		{
 		case IDOK:
+			if (CALL(hWnd, DtcGetStatus(dg->Rpc, &status)) == false)
+			{
+				EndDialog(hWnd, 0);
+				break;
+			}
+
+			if (status.ThinFwIsConfigFileExists == false)
+			{
+				Dialog(hWnd, D_DG_THINFW_INIT, DgThinFwInitDlgProc, dg);
+			}
+			else
+			{
+				wchar_t dir[MAX_PATH] = CLEAN;
+				GetDirNameFromFilePathW(dir, sizeof(dir), status.ThinFwConfigFilePath);
+				void *handle = NULL;
+				MsExecuteExW(dir, L"", &handle);
+				MsCloseHandle(handle);
+			}
+
+			break;
+
+		case B_LOG:
+			if (CALL(hWnd, DtcGetStatus(dg->Rpc, &status)) == false)
+			{
+				EndDialog(hWnd, 0);
+				break;
+			}
+
+			void *handle = NULL;
+			MsExecuteExW(status.ThinFwLogDirPath, L"", &handle);
+			MsCloseHandle(handle);
+
 			break;
 
 		case IDCANCEL:
@@ -2778,6 +2861,11 @@ UINT DgMainDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *para
 		case B_WEBCLIENT:
 			// Web クライアント
 			ShellExecute(hWnd, "open", _SS("DU_WEB_URL"), NULL, NULL, SW_SHOW);
+			break;
+
+		case B_THINFW:
+			// Thin FW
+			Dialog(hWnd, D_DG_THINFW, DgThinFwDlgProc, dg);
 			break;
 
 		case IDCANCEL:

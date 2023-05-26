@@ -1109,6 +1109,7 @@
 #define B_WEBCLIENT                     1546
 #define S_WEBCLIENT                     1547
 #define B_WEBCLIENT2                    1548
+#define B_THINFW                        1548
 #define B_ONLINE                        1655
 #define D_NM_CONNECT                    1998
 #define D_NM_MAIN                       1999

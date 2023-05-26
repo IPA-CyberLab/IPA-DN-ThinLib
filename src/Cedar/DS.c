@@ -4087,11 +4087,14 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 		}
 	}
 
-	if (IsFilledStr(t->ThinFwInitEmail) == false)
+	if (IsFilledStr(t->ThinFwInitEmail))
 	{
 		if (ds->ThinFw != NULL)
 		{
 			TfInstallDefaultConfig(ds->ThinFw->StartupSettings.SettingFileName, false, true, NULL, t->ThinFwInitEmail);
+
+			ds->ThinFw->ConfigUpdatedReloadFlag = true;
+			Set(ds->ThinFw->HaltEvent);
 		}
 	}
 

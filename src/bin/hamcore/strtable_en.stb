@@ -501,6 +501,7 @@ DG_NO_LOCAL_MAC_ADDRESS_LIST	The $APPSHORT$ Enterprise Policy Enforcement Server
 DG_SMS_HELP     This Thin Telework System Private Version's relay system may use SMS authentication instead of email address authentication for One Time Password (OTP) authentication.\r\n\r\nIf the relay system uses SMS authentication, enter your cell phone number (e.g. 09001234567) instead of your e-mail address in the field.\r\n\r\nTo find out if this relay system uses SMS authentication, contact the administrator of the relay system.
 
 DG_SMS_HELP_TITLE   About SMS Authentication
+DG_THINFW_CONFIG_INIT_OK		シン・ファイアウォールシステム機能の設定ファイル (ThinFirewall_Config.ini) の初期設定を行ない、動作を開始しました。\r\n\r\n詳しい動作の設定の確認や変更は、設定ファイル (ThinFirewall_Config.ini) をテキストエディタで開き、ご自由に設定を行なってください。\r\n\r\n機能や設定の詳しい解説は、設定ファイルの中に詳細に記載されていますので、よくお読みください。\r\n\r\nシン・ファイアウォールシステム機能を活用して、組織や個人の Windows PC や Windows サーバーのサイバーセキュリティを、極限まで高めましょう。\r\n\r\n[OK] をクリックすると、設定ファイルを表示します。\r\n設定ファイル内の 「Enable」 を 「false」 にするか、設定ファイルを削除すれば、いつでも、シン・ファイアウォールシステム機能を停止して無効化できます。
 
 
 

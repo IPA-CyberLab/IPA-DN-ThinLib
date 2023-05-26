@@ -33,7 +33,7 @@
 ## この値が false の場合、この動作設定ファイルのすべての設定
 ## は何らの意味も有さなくなります。
 
-Enable                          false
+Enable                          true
 
 
 ## この動作設定ファイル自身の再読込間隔 (ミリ秒)
@@ -131,13 +131,15 @@ SendDailyAliveNoticeHhmmss      000000
 ## の送信により一々煩わされることを避けることができます。
 ## 【解説】★ お好みに応じて設定を変更してください。
 
-WatchOnlyWhenLocked             false
+WatchOnlyWhenLocked             true
 
 
 ## 一定時間画面無操作時に画面ロックと同様とみなすための無操作時間閾値 (ミリ秒)
 ## ふるまいウォッチ機能の画面ロック連動機能において画面操作の一定時間無操作
 ## 状態が続くと画面ロックがなされていなくてもロックされている状態と同様
 ## にみなすことができます。WatchOnlyWhenLocked が true の場合のみ有意です。
+## シン・ファイアウォールシステム機能がシステムモードで動作している場合は、
+## この値は適用されません。ユーザーモードの場合のみ適用されます。
 ## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
 InputIdleTimerMsec              900000
@@ -422,7 +424,7 @@ ReportMailSubjectPrefix         [ThinFirewall: $hostname #$mailid]
 ##  遮断されてしまうリスクが高まります。)
 ## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
-ReportMailIntervalMsec          60000
+ReportMailIntervalMsec          15000
 
 
 ## 上記の「ReportMailIntervalMsec」でメールをまとめる設定としている

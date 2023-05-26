@@ -7184,7 +7184,7 @@ L_BOOT_ERROR:
 
 	if (cfg_Enable)
 	{
-		TfLog(svc, "-------------------- Stop Thin Firewall System --------------------");
+		TfLog(svc, "-------------------- Stop %S --------------------", svc->StartupSettings.AppTitle);
 	}
 }
 
@@ -7337,7 +7337,7 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 	wchar_t computer_name[128] = CLEAN;
 	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
 
-	UniFormat(tmp, sizeof(tmp), L"%S is %S. Mode: %S, "
+	UniFormat(tmp, sizeof(tmp), L"--Informational message-- %S is %S. Mode: %S, "
 		L"THINFW_BOOT_DATETIME: %S%S, THINFW_BOOT_UPTIME: %S, "
 		L"OsSystemName: %S, OsProductName: %S, OsVendorName: %S, "
 		L"OsVersion: %S, "
