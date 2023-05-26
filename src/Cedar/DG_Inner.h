@@ -170,3 +170,7 @@ void DgRegDlgInit(HWND hWnd, DG* dg);
 void DgRegDlgOnOk(HWND hWnd, DG* dg);
 void DgRegDlgUpdate(HWND hWnd, DG* dg);
 
+UINT DgThinFwDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
+UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param);
+
+

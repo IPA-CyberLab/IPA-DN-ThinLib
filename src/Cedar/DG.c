@@ -116,6 +116,68 @@
 
 bool MsAppendMenu(HMENU hMenu, UINT flags, UINT_PTR id, wchar_t *str);
 
+// Thin FW config init dialog
+UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param)
+{
+	DG *dg = (DG *)param;
+
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		break;
+
+	case WM_COMMAND:
+		switch (wParam)
+		{
+		case IDOK:
+			break;
+
+		case IDCANCEL:
+			Close(hWnd);
+			break;
+		}
+
+		break;
+
+	case WM_CLOSE:
+		EndDialog(hWnd, 0);
+		break;
+	}
+
+	return 0;
+}
+
+// Thin FW main dialog
+UINT DgThinFwDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param)
+{
+	DG *dg = (DG *)param;
+
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		break;
+
+	case WM_COMMAND:
+		switch (wParam)
+		{
+		case IDOK:
+			break;
+
+		case IDCANCEL:
+			Close(hWnd);
+			break;
+		}
+
+		break;
+
+	case WM_CLOSE:
+		EndDialog(hWnd, 0);
+		break;
+	}
+
+	return 0;
+}
+
 // 登録ダイアログプロシージャ
 UINT DgRegDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void* param)
 {

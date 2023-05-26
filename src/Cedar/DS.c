@@ -3943,6 +3943,17 @@ UINT DtGetStatus(DS *ds, RPC_DS_STATUS *t)
 		}
 	}
 
+	wchar_t *exe_dir = MsGetExeDirNameW();
+	wchar_t tmp[MAX_PATH];
+
+	StrToUni(tmp, sizeof(tmp), TF_DEFAULT_CONFIG_NAME);
+	InnerFilePathW(t->ThinFwConfigFilePath, sizeof(t->ThinFwConfigFilePath), tmp);
+
+	StrToUni(tmp, sizeof(tmp), TF_LOG_DIR_NAME);
+	InnerFilePathW(t->ThinFwLogDirPath, sizeof(t->ThinFwLogDirPath), tmp);
+
+	t->ThinFwIsConfigFileExists = IsFileExistsW(t->ThinFwConfigFilePath);
+
 	return ERR_NO_ERROR;
 #else   // OS_WIN32
 	return ERR_NOT_SUPPORTED;
@@ -4073,6 +4084,14 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 		if (WideServerTryAutoReconnect(ds->Wide))
 		{
 			WideServerReconnect(ds->Wide);
+		}
+	}
+
+	if (IsFilledStr(t->ThinFwInitEmail) == false)
+	{
+		if (ds->ThinFw != NULL)
+		{
+			TfInstallDefaultConfig(ds->ThinFw->StartupSettings.SettingFileName, false, true, NULL, t->ThinFwInitEmail);
 		}
 	}
 
@@ -5831,8 +5850,6 @@ void FreeDs(DS *ds)
 
 	DsLog(ds, "DSL_END1");
 
-	TfStopService(ds->ThinFw);
-
 	if (ds->PeriodicHttpsPollingThread != NULL)
 	{
 		ds->PeriodicHttpsPollingThreadHaltFlag = true;
@@ -5911,6 +5928,9 @@ void FreeDs(DS *ds)
 	FreeLockout(ds->Lockout);
 
 	DeleteLock(ds->GuacdFileLock);
+
+	TfStopService(ds->ThinFw);
+	ds->ThinFw = NULL;
 
 	Free(ds);
 

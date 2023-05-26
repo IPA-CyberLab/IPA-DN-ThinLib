@@ -1108,6 +1108,7 @@
 #define D_SW_NWDETECT_BMP_NWDETECT      1545
 #define B_WEBCLIENT                     1546
 #define S_WEBCLIENT                     1547
+#define B_WEBCLIENT2                    1548
 #define B_ONLINE                        1655
 #define D_NM_CONNECT                    1998
 #define D_NM_MAIN                       1999
@@ -1419,7 +1420,6 @@
 #define D_SW_NWSELECT                   2657
 #define D_SW_NWDETECT                   2658
 #define D_DG_THINFW                     2659
-#define D_DEFAULT_DIALOG1               2660
 #define D_DG_THINFW_INIT                2660
 #define ID_Menu40011                    40011
 #define CMD_CONNECT                     40020

@@ -372,7 +372,7 @@ WindowsEventLogNames            System;Application;Microsoft-Windows-Windows Def
 ## 【解説】★ お使いのメールアドレスを入力してください。
 ##            (メール送信のためには、コメントアウトを解除する必要があります。)
 
-#ReportMailTo                    a@gmail.com
+$MAIL_ADDR_LINE$
 
 
 ## 送信元メールアドレス

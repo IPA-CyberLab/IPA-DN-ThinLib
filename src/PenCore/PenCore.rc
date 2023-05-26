@@ -5561,8 +5561,8 @@ BEGIN
     LTEXT           "@S8",IDC_STATIC,184,280,112,18
     PUSHBUTTON      "@B_PASSWORD",B_PASSWORD,184,301,108,16
     LTEXT           "@S_WEBCLIENT",S_WEBCLIENT,7,329,293,10
-    PUSHBUTTON      "@B_WEBCLIENT",B_WEBCLIENT,7,340,89,18
-    LTEXT           "@S9",IDC_STATIC,101,343,141,17
+    PUSHBUTTON      "@B_WEBCLIENT",B_WEBCLIENT,7,340,84,18
+    LTEXT           "@S9",IDC_STATIC,-2,376,141,17,NOT WS_VISIBLE
     PUSHBUTTON      "@IDCANCEL",IDCANCEL,244,340,56,18
     ICON            ICO_NONE,S_DENY,45,185,20,20
     ICON            ICO_PASS,S_LOCK,45,185,20,20
@@ -5570,6 +5570,9 @@ BEGIN
     EDITTEXT        E_SYSTEM,68,77,225,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER | NOT WS_TABSTOP
     ICON            ICO_KEY,S_REG_ICON,29,91,20,20
     LTEXT           "@S_REG_1",S_REG_1,54,91,144,31
+    ICON            ICO_SHIELD,IDC_STATIC,93,340,18,18
+    PUSHBUTTON      "シン・ファイアウォール機能",B_WEBCLIENT2,112,340,77,18
+    LTEXT           "不審アプリと通信を検出・遮断。",IDC_STATIC,192,342,47,18
 END
 
 D_DU_THEEND DIALOGEX 0, 0, 306, 221
@@ -5813,7 +5816,7 @@ BEGIN
     LTEXT           "「ふるまいウォッチ機能」 による検出イベントの自動送信先のメールアドレス:",S_31,36,155,291,11
     EDITTEXT        E_PASSWORD,35,170,163,14,ES_AUTOHSCROLL
     LTEXT           "(空欄可。後から設定できます。)",S_32,203,173,124,11
-    LTEXT           "多数の件数の振る舞い検出結果のメールが送信されることがあります。普段利用している業務用メールアドレスではなく、Gmail 等で、新しく無償のメールアドレスを作成し、そこに送付することをお勧めします。Gmail 等のクラウド型メールシステムは、検索性能や振り分け機能に優れているので、本来高価なログ蓄積・検索エンジンの代用として利用可能です。そして、スマートフォンに Gmail 等のアプリをインストールしておけば、スマートフォンで通知を受けることもできます。",S_33,35,192,292,45
+    LTEXT           "多数の件数の振る舞い検出結果のメールが相次いで送信されることがあります。普段利用している業務用メールアドレスではなく、Gmail 等で、新しく無償のメールアドレスを作成し、そこに送付することをお勧めします。Gmail 等のクラウド型メールシステムは、検索性能や振り分け機能に優れているので、本来高価なログ蓄積・検索エンジンの代用として利用可能です。そして、スマートフォンに Gmail 等のアプリをインストールしておけば、スマートフォンで通知を受けることもできます。",S_33,35,192,292,45
     DEFPUSHBUTTON   "&OK",IDOK,215,294,52,19
     PUSHBUTTON      "キャンセル",IDCANCEL,275,294,52,19
     LTEXT           "振る舞い情報や通信先情報には、ファイル本体や通信内容の機密情報は一切記載されないため、フリーの Gmail 等を利用することに向いています。\r\n一度動作を開始しても、うまくメールが送付されない場合、ログファイルを確認してみてください。サンプル設定ファイルの初期状態の SMTP サーバーは、一応動作すると思われますが、SPAM 判定されるおそれがあります。組織や、作成したフリーの Gmail 等の SMTP サーバーを使用するように設定されることをお勧めします。",S_34,35,240,292,44

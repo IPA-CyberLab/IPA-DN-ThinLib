@@ -6385,13 +6385,13 @@ void TfMain(TF_SERVICE *svc)
 			// Config file reload
 			BUF *new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
 
-			if (new_content == NULL)
-			{
-				// Install default config and retry
-				TfInstallDefaultConfig(svc->StartupSettings.SettingFileName, false, true, NULL);
+			//if (new_content == NULL)
+			//{
+			//	// Install default config and retry
+			//	TfInstallDefaultConfig(svc->StartupSettings.SettingFileName, false, true, NULL);
 
-				new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
-			}
+			//	new_content = ReadDumpW(svc->StartupSettings.SettingFileName);
+			//}
 
 			if (new_content != NULL && SearchBin(new_content->Buf, 0, new_content->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
 			{
@@ -7505,9 +7505,20 @@ TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 	return svc;
 }
 
-bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF *template_buf)
+bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF *template_buf, char *mail_addr)
 {
 	bool free_template_buf = false;
+
+	char init_mail_line[MAX_PATH] = CLEAN;
+
+	if (StrLen(mail_addr) <= 5)
+	{
+		StrCpy(init_mail_line, sizeof(init_mail_line), "#ReportMailTo                    a@gmail.com");
+	}
+	else
+	{
+		Format(init_mail_line, sizeof(init_mail_line), "ReportMailTo                    %s", mail_addr);
+	}
 
 	char *eof_tag = "[END_OF_FILE]";
 
@@ -7578,6 +7589,7 @@ bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF
 		ToStr(rdp_port_str, rdp_port);
 
 		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$RDP_PORT$", rdp_port_str, false);
+		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$MAIL_ADDR_LINE$", init_mail_line, false);
 
 		UCHAR bom_data[] = { 0xef, 0xbb, 0xbf, };
 
