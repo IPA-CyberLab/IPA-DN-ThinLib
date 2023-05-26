@@ -10,7 +10,7 @@
 ** BETA VERSION UNDER DEVELOPMENT, INCOMPLETE AND BUGGY. USE AT YOUR OWN RISK. Ver 1.0 is scheduled to be released during November 2021. We strongly recommend that you wait until Ver 1.0 is released. ** - This Git repository contains the source code and documentation for the open source version of the Thin Telework System which is under development. 2021-10-31 by Daiyuu Nobori.
 
 
-## [Current Version] rc1
+## [Current Version] beta9
 
 ## rc1 (Release Candidate 1: リリース直前の候補) - 2023/01/09
 1. 使用している OpenSSL のバージョンを、バージョン情報画面やログファイル等で表示・出力するようにしました。
