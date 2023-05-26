@@ -120,6 +120,7 @@ struct TF_REPORT_SETTINGS
 	bool ReportSaveToDir;
 	bool ReportAppendUniqueId;
 	bool ReportAppendTimeZone;
+	bool ReportAppendUserName;
 
 	bool EnableConfigAutoUpdate;
 	UINT ConfigAutoUpdateIntervalMsec;
@@ -132,6 +133,8 @@ struct TF_REPORT_SETTINGS
 struct TF_SERVICE
 {
 	TF_STARTUP_SETTINGS StartupSettings;
+
+	wchar_t Username[MAX_PATH];
 
 	EVENT *HaltEvent;
 	bool HaltFlag;

@@ -154,6 +154,12 @@ UINT DgThinFwInitDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void
 
 			StrCpy(config.ThinFwInitEmail, sizeof(config.ThinFwInitEmail), mail);
 
+			wchar_t *current_username = MsGetUserNameExW();
+			if (UniIsFilledStr(current_username))
+			{
+				UniStrCpy(config.LastUsername, sizeof(config.LastUsername), current_username);
+			}
+
 			if (CALL(hWnd, DtcSetConfig(dg->Rpc, &config)) == false)
 			{
 				EndDialog(hWnd, 0);
@@ -326,6 +332,12 @@ void DgRegDlgOnOk(HWND hWnd, DG* dg)
 		}
 	}
 
+	wchar_t *current_username = MsGetUserNameExW();
+	if (UniIsFilledStr(current_username))
+	{
+		UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+	}
+
 	if (CALL(hWnd, DtcSetConfig(dg->Rpc, &t)) == false)
 	{
 		return;
@@ -436,6 +448,12 @@ UINT DgWoLDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param
 				}
 			}
 
+			wchar_t *current_username = MsGetUserNameExW();
+			if (UniIsFilledStr(current_username))
+			{
+				UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+			}
+
 			if (CALL(hWnd, DtcSetConfig(dg->Rpc, &t)) == false)
 			{
 				break;
@@ -521,6 +539,12 @@ UINT DgMacDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *param
 				if (CALL(hWnd, DtcGetConfig(dg->Rpc, &t)))
 				{
 					StrCpy(t.MacAddressList, sizeof(t.MacAddressList), s);
+
+					wchar_t *current_username = MsGetUserNameExW();
+					if (UniIsFilledStr(current_username))
+					{
+						UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+					}
 
 					if (CALL(hWnd, DtcSetConfig(dg->Rpc, &t)))
 					{
@@ -803,6 +827,12 @@ void DgOptDlgOnOk(HWND hWnd, DG *dg)
 
 	GetTxtA(hWnd, E_EMERGENCY, t.EmergencyOtp, sizeof(t.EmergencyOtp));
 
+	wchar_t *current_username = MsGetUserNameExW();
+	if (UniIsFilledStr(current_username))
+	{
+		UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+	}
+
 	CALL(hWnd, DtcSetConfig(dg->Rpc, &t));
 
 	EndDialog(hWnd, 1);
@@ -996,6 +1026,12 @@ void DgPasswordDlgOnOk(HWND hWnd, DG *dg)
 	else
 	{
 		UniStrCpy(c.AdminUsername, sizeof(c.AdminUsername), L"");
+	}
+
+	wchar_t *current_username = MsGetUserNameExW();
+	if (UniIsFilledStr(current_username))
+	{
+		UniStrCpy(c.LastUsername, sizeof(c.LastUsername), current_username);
 	}
 
 	if (CALL(hWnd, DtcSetConfig(dg->Rpc, &c)) == false)
@@ -1219,6 +1255,12 @@ void DgOptionDlgOnOk(HWND hWnd, DG *dg)
 
 	c.ProcessWatcherEnabled = IsChecked(hWnd, C_PROCESSLOG1);
 	c.ProcessWatcherAlways = IsChecked(hWnd, C_PROCESSLOG2);
+
+	wchar_t *current_username = MsGetUserNameExW();
+	if (UniIsFilledStr(current_username))
+	{
+		UniStrCpy(c.LastUsername, sizeof(c.LastUsername), current_username);
+	}
 
 	if (CALL(hWnd, DtcSetConfig(dg->Rpc, &c)) == false)
 	{
@@ -1853,6 +1895,12 @@ void DgAuthDlgOnOk(HWND hWnd, DG *dg)
 
 	t.EnableInspection = IsChecked(hWnd, C_INSPECTION);
 	t.EnableMacCheck = IsChecked(hWnd, C_CHECKMAC);
+
+	wchar_t *current_username = MsGetUserNameExW();
+	if (UniIsFilledStr(current_username))
+	{
+		UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+	}
 
 	if (CALL(hWnd, DtcSetConfig(dg->Rpc, &t)) == false)
 	{
@@ -2606,6 +2654,13 @@ void DgMainDlgRefresh(HWND hWnd, DG *dg, bool startup)
 	if (UniIsEmptyStr(c.RdpGroupKeepUserName))
 	{
 		UniStrCpy(c.RdpGroupKeepUserName, sizeof(c.RdpGroupKeepUserName), MsGetUserNameExW());
+
+		wchar_t *current_username = MsGetUserNameExW();
+		if (UniIsFilledStr(current_username))
+		{
+			UniStrCpy(c.LastUsername, sizeof(c.LastUsername), current_username);
+		}
+
 		DtcSetConfig(dg->Rpc, &c);
 	}
 
@@ -2842,6 +2897,12 @@ UINT DgMainDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *para
 			if (CALL(hWnd, DtcGetConfig(dg->Rpc, &t)))
 			{
 				t.Active = (wParam == B_ACCEPT);
+
+				wchar_t *current_username = MsGetUserNameExW();
+				if (UniIsFilledStr(current_username))
+				{
+					UniStrCpy(t.LastUsername, sizeof(t.LastUsername), current_username);
+				}
 
 				if (CALL(hWnd, DtcSetConfig(dg->Rpc, &t)))
 				{

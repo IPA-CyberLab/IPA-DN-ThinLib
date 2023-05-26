@@ -142,6 +142,7 @@ struct RPC_DS_CONFIG
 	bool SaveEventLog;
 	bool DisableShare;
 	wchar_t AdminUsername[MAX_PATH];
+	wchar_t LastUsername[MAX_PATH];
 	bool EnableOtp;
 	char OtpEmail[MAX_PATH];
 	char EmergencyOtp[128];

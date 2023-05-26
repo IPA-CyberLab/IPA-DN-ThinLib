@@ -5228,6 +5228,12 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
+			if (st.ReportAppendUserName)
+			{
+				Format(tmp, sizeof(tmp), "Windows user name: %S\n", svc->Username);
+				WriteBuf(current_mail_body, tmp, StrLen(tmp));
+			}
+
 			Format(tmp, sizeof(tmp), "IP address: %r\n", &my_ip);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
@@ -5260,6 +5266,8 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					L"$hostname", computer_name_short, false);
 				UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 					L"$macaddress", mac_str_w, false);
+				UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+					L"$username", svc->Username, false);
 				UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 					L"$mailid", mail_id_w, false);
 
@@ -5297,6 +5305,13 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				}
 
 				UniStrCatA(prefix_tmp, sizeof(prefix_tmp), range);
+
+				if (st.ReportAppendUserName)
+				{
+					wchar_t tmp3[128] = CLEAN;
+					UniFormat(tmp3, sizeof(tmp3), L" (User: %s)", svc->Username);
+					UniStrCat(prefix_tmp, sizeof(prefix_tmp), tmp3);
+				}
 
 				TOKEN_LIST *to_list = ParseToken(st.ReportMailTo, "/, \t");
 					
@@ -5634,6 +5649,11 @@ void TfReportThreadProc(THREAD *thread, void *param)
 						L"$hostname", computer_name, false);
 					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 						L"$macaddress", mac_str_w, false);
+					wchar_t username_tmp[MAX_PATH] = CLEAN;
+					UniStrCpy(username_tmp, sizeof(username_tmp), svc->Username);
+					UniReplaceStrEx(username_tmp, sizeof(username_tmp), username_tmp, L" ", L"_", true);
+					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
+						L"$username", username_tmp, false);
 					UniReplaceStrEx(prefix_tmp, sizeof(prefix_tmp), prefix_tmp,
 						L"$eventid", event_id_w, false);
 
@@ -6557,6 +6577,7 @@ void TfMain(TF_SERVICE *svc)
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
 					rep.ReportAppendUniqueId = IniBoolValue(ini, "ReportAppendUniqueId");
 					rep.ReportAppendTimeZone = IniBoolValue(ini, "ReportAppendTimeZone");
+					rep.ReportAppendUserName = IniBoolValue(ini, "ReportAppendUserName");
 
 					rep.EnableConfigAutoUpdate = IniBoolValue(ini, "EnableConfigAutoUpdate");
 					rep.ConfigAutoUpdateIntervalMsec = IniIntValue(ini, "ConfigAutoUpdateIntervalMsec");
@@ -7481,6 +7502,8 @@ TF_SERVICE *TfStartService(TF_STARTUP_SETTINGS *settings)
 	}
 
 	TF_SERVICE *svc = ZeroMalloc(sizeof(TF_SERVICE));
+
+	UniStrCpy(svc->Username, sizeof(svc->Username), MsGetUserNameExW());
 
 	Copy(&svc->StartupSettings, settings, sizeof(TF_STARTUP_SETTINGS));
 

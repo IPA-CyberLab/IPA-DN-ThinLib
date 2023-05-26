@@ -231,6 +231,7 @@ struct DS
 	UINT NumConfigures;					// 設定接続回数
 	bool EnableOtp;						// OTP 有効
 	char OtpEmail[MAX_PATH];			// OTP 送付先メールアドレス
+	wchar_t LastUsername[MAX_PATH];
 	char EmergencyOtp[128];
 
 	char OtpTicket[MAX_PATH];			// OTP チケット。2 回目以降の認証時に利用可能

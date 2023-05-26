@@ -4022,6 +4022,11 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 		ds->DisableShare = t->DisableShare;
 		UniStrCpy(ds->AdminUsername, sizeof(ds->AdminUsername), t->AdminUsername);
 
+		if (UniIsFilledStr(t->LastUsername))
+		{
+			UniStrCpy(ds->LastUsername, sizeof(ds->LastUsername), t->LastUsername);
+		}
+
 		ds->EnableOtp = t->EnableOtp;
 		StrCpy(ds->OtpEmail, sizeof(ds->OtpEmail), t->OtpEmail);
 
@@ -4088,9 +4093,14 @@ UINT DtSetConfig(DS *ds, RPC_DS_CONFIG *t)
 	}
 
 #ifdef	OS_WIN32
-	if (IsFilledStr(t->ThinFwInitEmail))
+	if (ds->ThinFw != NULL)
 	{
-		if (ds->ThinFw != NULL)
+		if (UniIsFilledStr(ds->LastUsername))
+		{
+			UniStrCpy(ds->ThinFw->Username, sizeof(ds->ThinFw->Username), ds->LastUsername);
+		}
+
+		if (IsFilledStr(t->ThinFwInitEmail))
 		{
 			TfInstallDefaultConfig(ds->ThinFw->StartupSettings.SettingFileName, false, true, NULL, t->ThinFwInitEmail);
 
@@ -4123,6 +4133,7 @@ UINT DtGetConfig(DS *ds, RPC_DS_CONFIG *t)
 	t->SaveEventLog = ds->SaveEventLog;
 	t->DisableShare = ds->DisableShare;
 	UniStrCpy(t->AdminUsername, sizeof(t->AdminUsername), ds->AdminUsername);
+	UniStrCpy(t->LastUsername, sizeof(t->LastUsername), ds->LastUsername);
 
 	t->EnableOtp = ds->EnableOtp;
 	StrCpy(t->OtpEmail, sizeof(t->OtpEmail), ds->OtpEmail);
@@ -4914,6 +4925,7 @@ bool DsLoadConfigMain(DS *ds, FOLDER *root)
 	ds->DisableShare = CfgGetBool(root, "DisableShare");
 
 	CfgGetUniStr(root, "AdminUsername", ds->AdminUsername, sizeof(ds->AdminUsername));
+	CfgGetUniStr(root, "LastUsername", ds->LastUsername, sizeof(ds->LastUsername));
 
 	ds->NumConfigures = CfgGetInt(root, "NumConfigures");
 
@@ -5069,6 +5081,7 @@ FOLDER *DsSaveConfigMain(DS *ds)
 		CfgAddUniStr(root, "WatermarkStr", ds->WatermarkStr);
 
 		CfgAddUniStr(root, "AdminUsername", ds->AdminUsername);
+		CfgAddUniStr(root, "LastUsername", ds->LastUsername);
 
 		CfgAddBool(root, "EnableWoLTarget", ds->EnableWoLTarget);
 		CfgAddBool(root, "EnableWoLTrigger", ds->EnableWoLTrigger);
@@ -5670,6 +5683,14 @@ DS *NewDs(bool is_user_mode, bool force_share_disable)
 	Format(tfs.AppTitle, sizeof(tfs.AppTitle), "Thin Firewall System with %s", DESK_PUBLISHER_NAME_ANSI);
 
 	ds->ThinFw = TfStartService(&tfs);
+
+	if (ds->ThinFw != NULL)
+	{
+		if (UniIsFilledStr(ds->LastUsername))
+		{
+			UniStrCpy(ds->ThinFw->Username, sizeof(ds->ThinFw->Username), ds->LastUsername);
+		}
+	}
 
 	return ds;
 #else   // OS_WIN32

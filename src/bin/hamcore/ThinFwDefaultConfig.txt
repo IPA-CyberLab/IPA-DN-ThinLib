@@ -573,10 +573,11 @@ ReportSyslogOnlyWhenLocked      false
 ## syslog 送付時のフォーマット (行の先頭部分の文字列)
 ## 変数 $hostname の部分はコンピュータ名に置換される。
 ## 変数 $macaddress と書くと、その部分は MAC アドレスに置換される。
+## 変数 $username と書くと、その部分はユーザー名に置換される。
 ## 変数 $eventid と書くと、その部分はイベント ID (連番) に置換される。
 ## 【解説】※ 通常は、デフォルト値のままで問題ありません。
 
-ReportSyslogPrefix              $hostname:$macaddress ThinFirewall: Event #$eventid:
+ReportSyslogPrefix              $hostname:$macaddress:$username ThinFirewall: Event #$eventid:
 
 
 #### 3.3 - ローカル HDD へのログ保存機能
@@ -597,6 +598,13 @@ ReportSaveToDir                 true
 ## 【解説】★ お好みに応じて設定を変更してください。
 
 ReportAppendTimeZone            false
+
+
+## ログ情報にユーザー名を含めるか否かのフラグ
+## (true: 有効、false: 無効)
+## 【解説】★ お好みに応じて設定を変更してください。
+
+ReportAppendUserName            true
 
 
 ## ユニーク ID の付与機能 (true: 有効、false: 無効)
