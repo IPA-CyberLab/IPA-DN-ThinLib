@@ -5438,31 +5438,38 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 					if (current_buf == NULL || CmpBuf(current_buf, downloaded_buf) != 0)
 					{
-						UINT64 free_size = 0;
-						if (Win32GetDiskFreeW(real_filename, &free_size, NULL, NULL))
-						{
-							if (free_size < 100000000)
-							{
-								TfLog(svc, "ConfigAutoUpdate: Update failed. The free disk space (%I64u bytes) is less than 100MB.", free_size);
-							}
-							else
-							{
-								//UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
+						LIST *current_ini = ReadIni(current_buf);
 
-								if (DumpBufSafeW(downloaded_buf, real_filename) == false)
+						if (current_buf == NULL || IniBoolValue(current_ini, "EnableConfigAutoUpdate"))
+						{
+							UINT64 free_size = 0;
+							if (Win32GetDiskFreeW(real_filename, &free_size, NULL, NULL))
+							{
+								if (free_size < 100000000)
 								{
-									TfLog(svc, "ConfigAutoUpdate: Update filed. Cannot write to localdisk file '%s'.", real_filename);
+									TfLog(svc, "ConfigAutoUpdate: Update failed. The free disk space (%I64u bytes) is less than 100MB.", free_size);
 								}
 								else
 								{
-									TfLog(svc, "ConfigAutoUpdate: The localdisk file '%s' is updated from the URL '%S'. Old size = %u bytes, New size = %u bytes.", real_filename, url,
-										current_buf->Size, downloaded_buf->Size);
+									//UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
 
-									svc->ConfigUpdatedReloadFlag = true;
-									Set(svc->HaltEvent);
+									if (DumpBufSafeW(downloaded_buf, real_filename) == false)
+									{
+										TfLog(svc, "ConfigAutoUpdate: Update filed. Cannot write to localdisk file '%s'.", real_filename);
+									}
+									else
+									{
+										TfLog(svc, "ConfigAutoUpdate: The localdisk file '%s' is updated from the URL '%S'. Old size = %u bytes, New size = %u bytes.", real_filename, url,
+											current_buf->Size, downloaded_buf->Size);
+
+										svc->ConfigUpdatedReloadFlag = true;
+										Set(svc->HaltEvent);
+									}
 								}
 							}
 						}
+
+						FreeIni(current_ini);
 					}
 
 					FreeBuf(current_buf);
@@ -6899,14 +6906,31 @@ L_BOOT_ERROR:
 								if (e->Param == MS_THINFW_ENTRY_TYPE_BLOCK &&
 									e->DataSize == sizeof(MS_THINFW_ENTRY_BLOCK))
 								{
-									DIFF_ENTRY *e2 = CloneDiffEntry(e);
+									bool ok = true;
 
-									//MS_THINFW_ENTRY_BLOCK *b1 = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
-									//MS_THINFW_ENTRY_BLOCK *b2 = (MS_THINFW_ENTRY_BLOCK *)&e2->Data;
+									MS_THINFW_ENTRY_BLOCK *b = (MS_THINFW_ENTRY_BLOCK *)e->Data;
 
-									e2->IsAdded = e2->IsRemoved = false;
+									if (cfg_IgnoreDNSoverTCPSession &&
+										b->Protocol == IP_PROTO_TCP &&
+										b->IsReceive == false &&
+										b->RemotePort == NAT_DNS_PROXY_PORT &&
+										MsIsIpInDnsServerList(current_dns_servers_list, &b->RemoteIP))
+									{
+										// DNS over TCP: Do not report
+										ok = false;
+									}
 
-									Add(wfp_log_list, e2);
+									if (ok)
+									{
+										DIFF_ENTRY *e2 = CloneDiffEntry(e);
+
+										//MS_THINFW_ENTRY_BLOCK *b1 = (MS_THINFW_ENTRY_BLOCK *)&e->Data;
+										//MS_THINFW_ENTRY_BLOCK *b2 = (MS_THINFW_ENTRY_BLOCK *)&e2->Data;
+
+										e2->IsAdded = e2->IsRemoved = false;
+
+										Add(wfp_log_list, e2);
+									}
 								}
 							}
 						}
