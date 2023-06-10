@@ -5447,7 +5447,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 							}
 							else
 							{
-								UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
+								//UniStrCat(real_filename, sizeof(real_filename), L".test.txt");
 
 								if (DumpBufSafeW(downloaded_buf, real_filename) == false)
 								{
