@@ -1654,6 +1654,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 				if (t->ProcessId != 0)
 				{
+					data.ProcessId = t->ProcessId;
+
 					MS_PROCESS *proc = MsSearchProcessById(process_list, t->ProcessId);
 
 					if (proc != NULL)

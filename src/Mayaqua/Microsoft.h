@@ -944,6 +944,7 @@ typedef struct MS_THINFW_ENTRY_PROCESS
 typedef struct MS_THINFW_ENTRY_TCP
 {
 	TCPTABLE Tcp;
+	UINT ProcessId;
 	bool HasProcessInfo;
 	MS_THINFW_ENTRY_PROCESS Process;
 	char Type[32];

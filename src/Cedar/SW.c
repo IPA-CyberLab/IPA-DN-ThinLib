@@ -789,7 +789,7 @@ bool SwSfxExtractProcess(HWND hWnd, bool* hide_error_msg)
 			// Copy ThinFirewall_Config.ini physical file if exists
 			wchar_t thinfw_config[MAX_PATH] = CLEAN;
 			CombinePathW(thinfw_config, sizeof(thinfw_config), MsGetMyTempDirW(), L"ThinFirewall_Config.ini");
-			FileCopyW(L"@ThinFirewall_Config.ini", entry_point);
+			FileCopyW(L"@ThinFirewall_Config.ini", thinfw_config);
 
 			// Add a path of this own
 			UniFormat(tmp, sizeof(tmp), L" /CALLERSFXPATH:\"%s\"", copy_of_me);

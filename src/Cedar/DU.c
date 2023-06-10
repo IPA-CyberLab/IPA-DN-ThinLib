@@ -6179,6 +6179,11 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 		{
 			MS_THINFW_ENTRY_PROCESS *proc = &tcp->Process;
 
+			if (UniIsFilledStr(proc->CommandLineW))
+			{
+				UniFormat(tmpw, sizeof(tmpw), L", FullCommandLine: %s", proc->CommandLineW);
+			}
+
 			if (UniIsFilledStr(proc->Rdp.WinStationName))
 			{
 				char rdp_client_info[MAX_PATH] = CLEAN;
@@ -6206,14 +6211,26 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			}
 
 			UniFormat(proc_info, sizeof(proc_info),
-				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u)%s",
+				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s",
 				tcp->Process.ProcessId,
 				tcp->Process.Is64BitProcess ? 64 : 32,
 				tcp->Process.ExeFilenameW,
 				tcp->Process.Domain,
 				tcp->Process.Username,
 				tcp->Process.SessionId,
+				tmpw,
 				rdp_session_info);
+		}
+		else
+		{
+			if (tcp->ProcessId != 0)
+			{
+				UniFormat(proc_info, sizeof(proc_info), L" ProcessInfo=(PID: %u, Unknown)", tcp->ProcessId);
+			}
+			else
+			{
+				UniFormat(proc_info, sizeof(proc_info), L" ProcessInfo=(Unknown)");
+			}
 		}
 
 		StrCpy(category, category_size, tcp->Type);
