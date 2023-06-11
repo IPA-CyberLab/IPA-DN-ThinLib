@@ -1292,17 +1292,18 @@ void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *dat
 
 	UniStrCpy(data->ExeFilenameW, sizeof(data->ExeFilenameW), proc->ExeFilenameW);
 
-	bool is_svc = false;
+	bool is_windows_exe = false;
 
-	if (UniEndWith(data->ExeFilenameW, L"\\svchost.exe"))
+	wchar_t windir_tmp[MAX_PATH] = CLEAN;
+	UniStrCpy(windir_tmp, sizeof(windir_tmp), MsGetWindowDirW());
+	UniStrCat(windir_tmp, sizeof(windir_tmp), L"\\");
+
+	if (UniStartWith(data->ExeFilenameW, windir_tmp))
 	{
-		if (UniStartWith(data->ExeFilenameW, MsGetWindowDirW()))
-		{
-			is_svc = true;
-		}
+		is_windows_exe = true;
 	}
 
-	if (no_args == false || is_svc)
+	if (no_args == false || is_windows_exe)
 	{
 		UniStrCpy(data->CommandLineW, sizeof(data->CommandLineW), proc->CommandLineW);
 	}
