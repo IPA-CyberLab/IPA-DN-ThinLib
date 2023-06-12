@@ -6099,8 +6099,8 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		if (UniIsFilledStr(proc->Svc.ServiceName))
 		{
-			UniFormat(svc_info, sizeof(svc_info), L" ServiceInfo=(ServiceName: %s, DisplayName: %s)",
-				proc->Svc.ServiceName, proc->Svc.ServiceTitle);
+			UniFormat(svc_info, sizeof(svc_info), L" ServiceInfo=(ServiceName: %s, DisplayName: %s, ServiceType: %S, ServicePath: %s)",
+				proc->Svc.ServiceName, proc->Svc.ServiceTitle, proc->Svc.ServiceType, proc->Svc.ExeFilenameW);
 		}
 
 		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s%s",
@@ -6391,6 +6391,7 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchDns = false;
 	bool cfg_EnableWatchWindowsEventLog = false;
 	bool cfg_EnableWatchProcess = false;
+	bool cfg_EnableWatchService = false;
 	bool cfg_EnableWatchTcp = false;
 	bool cfg_EnableWatchFwBlock = false;
 	bool cfg_WatchOnlyWhenLocked = false;
@@ -6557,6 +6558,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_EnableWatchRdp = IniBoolValue(ini, "EnableWatchRdp");
 					cfg_EnableWatchDns = IniBoolValue(ini, "EnableWatchDns");
 					cfg_EnableWatchProcess = IniBoolValue(ini, "EnableWatchProcess");
+					cfg_EnableWatchService = IniBoolValue(ini, "EnableWatchService");
 					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
 					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
@@ -6695,6 +6697,7 @@ L_BOOT_ERROR:
 				cfg_EnableWatchRdp = false;
 				cfg_EnableWatchDns = false;
 				cfg_EnableWatchProcess = false;
+				cfg_EnableWatchService = false;
 				cfg_EnableWatchTcp = false;
 				cfg_EnableWatchFwBlock = false;
 				cfg_WatchOnlyWhenLocked = false;
@@ -6999,6 +7002,11 @@ L_BOOT_ERROR:
 					if (cfg_EnableWatchProcess == false)
 					{
 						flags |= MS_GET_THINFW_LIST_FLAGS_NO_PROCESS;
+					}
+
+					if (cfg_EnableWatchService == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_SERVICE;
 					}
 
 					flags |= MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP;
