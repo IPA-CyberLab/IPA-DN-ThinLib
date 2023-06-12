@@ -1080,6 +1080,36 @@ MS_DNS_CACHE_ENTRY_CNAME *MsSearchDnsCacheList_CNAME(LIST *o, char *realname)
 	return Search(o, &t);
 }
 
+int MsCmpService(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 == NULL)
+	{
+		return 0;
+	}
+	if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+
+	MS_THINFW_ENTRY_SERVICE *e1 = *((MS_THINFW_ENTRY_SERVICE **)p1);
+	MS_THINFW_ENTRY_SERVICE *e2 = *((MS_THINFW_ENTRY_SERVICE **)p2);
+
+	if (e1->ProcessId > e2->ProcessId)
+	{
+		return 1;
+	}
+	else if (e1->ProcessId < e2->ProcessId)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
 int MsCmpDnsCache_A(void *p1, void *p2)
 {
 	if (p1 == NULL && p2 == NULL)
@@ -1333,9 +1363,9 @@ char *MsGetWtsSessionStateStr(UINT state)
 	}
 }
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free)
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache)
 {
-	if (sid_cache == NULL)
+	if (sid_cache == NULL || svc_data_cache == NULL)
 	{
 		return NULL;
 	}
@@ -1356,9 +1386,198 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 	LIST *a_list = NewListFast(MsCmpDnsCache_A);
 
+	LIST *svc_list_by_id = NewListFast(MsCmpService);
+
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_PROCESS) == 0)
 	{
 		process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE | MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS);
+	}
+
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_SERVICE) == 0)
+	{
+		SC_HANDLE sc = OpenSCManager(NULL, NULL, SC_MANAGER_ENUMERATE_SERVICE);
+		if (sc != NULL)
+		{
+			UINT buf_size = 60000;
+			UCHAR *buf = Malloc(buf_size);
+
+			UINT svc_config_buf_size = 7992;
+			UCHAR *svc_config_buf = Malloc(svc_config_buf_size);
+
+			UINT type = 0;
+
+			for (type = 0;type < 2;type++)
+			{
+				UINT num_continue = 0;
+				UINT resume_handle = 0;
+
+			L_SVC_GET_NEXT:
+				{
+					UINT num_returned = 0;
+					UINT needed = buf_size;
+					Zero(buf, buf_size);
+					bool api_ret = EnumServicesStatusExW(sc, SC_ENUM_PROCESS_INFO,
+						type == 0 ? SERVICE_WIN32 : SERVICE_DRIVER,
+						SERVICE_STATE_ALL,
+						buf, buf_size,
+						&needed,
+						&num_returned,
+						&resume_handle,
+						NULL);
+
+					bool has_more_data = false;
+
+					if (api_ret == false && GetLastError() == ERROR_MORE_DATA && resume_handle != 0)
+					{
+						has_more_data = true;
+					}
+
+					if (api_ret || has_more_data)
+					{
+						if (num_returned)
+						{
+							UINT i;
+							ENUM_SERVICE_STATUS_PROCESSW *stat_array = (ENUM_SERVICE_STATUS_PROCESSW *)buf;
+							for (i = 0;i < num_returned;i++)
+							{
+								ENUM_SERVICE_STATUS_PROCESSW *stat = &stat_array[i];
+
+								wchar_t svc_exepath[MAX_PATH] = CLEAN;
+
+								MS_KV_SVC_DATA *svc_data = SearchKvListDataW(svc_data_cache, stat->lpServiceName, 0);
+								if (svc_data == NULL)
+								{
+									svc_data = ZeroMalloc(sizeof(MS_KV_SVC_DATA));
+									SC_HANDLE svc_handle = OpenServiceW(sc, stat->lpServiceName, SERVICE_QUERY_CONFIG);
+									if (svc_handle != NULL)
+									{
+										UINT buf_needed = 0;
+
+										Zero(svc_config_buf, svc_config_buf_size);
+										if (QueryServiceConfigW(svc_handle, (void *)svc_config_buf,
+											svc_config_buf_size, &buf_needed))
+										{
+											QUERY_SERVICE_CONFIGW *cfg = (QUERY_SERVICE_CONFIGW *)svc_config_buf;
+
+											UniStrCpy(svc_data->ExeFilenameW, sizeof(svc_data->ExeFilenameW),
+												cfg->lpBinaryPathName);
+
+											UniTrimDoubleQuotation(svc_data->ExeFilenameW);
+										}
+
+										CloseServiceHandle(svc_handle);
+									}
+
+									UniStrCpy(svc_exepath, sizeof(svc_exepath), svc_data->ExeFilenameW);
+
+									AddKvListW(svc_data_cache, stat->lpServiceName,
+										svc_data, sizeof(MS_KV_SVC_DATA), 0, 0, true);
+									Free(svc_data);
+								}
+								else
+								{
+									UniStrCpy(svc_exepath, sizeof(svc_exepath), svc_data->ExeFilenameW);
+								}
+
+								MS_THINFW_ENTRY_SERVICE svc = CLEAN;
+								UniStrCpy(svc.ExeFilenameW, sizeof(svc.ExeFilenameW), svc_exepath);
+								UniStrCpy(svc.ServiceName, sizeof(svc.ServiceName), stat->lpServiceName);
+								UniStrCpy(svc.ServiceTitle, sizeof(svc.ServiceTitle), stat->lpDisplayName);
+
+								SERVICE_STATUS_PROCESS *info = &stat->ServiceStatusProcess;
+								if (info->dwServiceType & SERVICE_FILE_SYSTEM_DRIVER)
+								{
+									svc.IsShared = true;
+									svc.IsKernel = true;
+									StrCpy(svc.ServiceType, sizeof(svc.ServiceType), "KernelFileSystemDriver");
+								}
+								else if (info->dwServiceType & SERVICE_KERNEL_DRIVER)
+								{
+									svc.IsShared = true;
+									svc.IsKernel = true;
+									StrCpy(svc.ServiceType, sizeof(svc.ServiceType), "KernelDriver");
+								}
+								else if (info->dwServiceType & SERVICE_WIN32_OWN_PROCESS)
+								{
+									StrCpy(svc.ServiceType, sizeof(svc.ServiceType), "Win32Service");
+								}
+								else if (info->dwServiceType & SERVICE_WIN32_SHARE_PROCESS)
+								{
+									svc.IsShared = true;
+									StrCpy(svc.ServiceType, sizeof(svc.ServiceType), "Win32SharedService");
+								}
+
+								svc.ProcessId = info->dwProcessId;
+
+								char *stat_str = "Unknown";
+								switch (info->dwCurrentState)
+								{
+								case SERVICE_STOPPED:
+									stat_str = "Stopped";
+									break;
+								case SERVICE_STOP_PENDING:
+									stat_str = "StopPending";
+									break;
+								case SERVICE_START_PENDING:
+									stat_str = "StartPending";
+									break;
+								case SERVICE_RUNNING:
+									stat_str = "Running";
+									break;
+								case SERVICE_PAUSED:
+									stat_str = "Paused";
+									break;
+								case SERVICE_PAUSE_PENDING:
+									stat_str = "PausePending";
+									break;
+								case SERVICE_CONTINUE_PENDING:
+									stat_str = "ContinuePending";
+									break;
+								}
+
+								StrCpy(svc.ServiceState, sizeof(svc.ServiceState), stat_str);
+
+								UniFormat(key, sizeof(key), L"SVC:%s:%s:%S:%S:%u", svc.ServiceName, svc.ServiceTitle, svc.ServiceType, svc.ServiceState, svc.ProcessId);
+
+								//if (UniInStr(data.ExeFilenameW, L"vpnclient_x64.exe"))
+								//{
+								//	Print("(A) %u %S %u %S  %S\n", data.ProcessId, data.ExeFilenameW,
+								//		data.Rdp.SessionId, data.Rdp.WinStationName, key);
+								//}
+
+								Add(ret, NewDiffEntry(key, &svc, sizeof(svc), MS_THINFW_ENTRY_TYPE_SERVICE, tick));
+
+								if (svc.ProcessId != 0 && svc.IsShared == false && svc.IsKernel == false)
+								{
+									Add(svc_list_by_id, Clone(&svc, sizeof(svc)));
+								}
+							}
+						}
+					}
+
+					if (has_more_data)
+					{
+						if (num_returned == 0)
+						{
+							num_continue++;
+						}
+						else
+						{
+							num_continue = 0;
+						}
+
+						if (num_continue <= 16)
+						{
+							goto L_SVC_GET_NEXT;
+						}
+					}
+				}
+			}
+
+			Free(buf);
+			Free(svc_config_buf);
+			CloseServiceHandle(sc);
+		}
 	}
 
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == 0)
@@ -1622,6 +1841,16 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 				//}
 			}
 
+			MS_THINFW_ENTRY_SERVICE t = CLEAN;
+			t.ProcessId = proc->ProcessId;
+
+			MS_THINFW_ENTRY_SERVICE *svc = Search(svc_list_by_id, &t);
+
+			if (svc != NULL)
+			{
+				Copy(&data.Svc, svc, sizeof(MS_THINFW_ENTRY_SERVICE));
+			}
+
 			UniFormat(key, sizeof(key), L"PROC:%u:%s", data.ProcessId, data.ExeFilenameW);
 
 			//if (UniInStr(data.ExeFilenameW, L"vpnclient_x64.exe"))
@@ -1673,6 +1902,16 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 						if (rdp != NULL)
 						{
 							Copy(&data.Process.Rdp, rdp, sizeof(MS_THINFW_ENTRY_RDP));
+						}
+
+						MS_THINFW_ENTRY_SERVICE t = CLEAN;
+						t.ProcessId = proc->ProcessId;
+
+						MS_THINFW_ENTRY_SERVICE *svc = Search(svc_list_by_id, &t);
+
+						if (svc != NULL)
+						{
+							Copy(&data.Process.Svc, svc, sizeof(MS_THINFW_ENTRY_SERVICE));
 						}
 					}
 				}
@@ -1767,6 +2006,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 	MsFreeDnsCacheList(dns_cache);
 
 	FreeSingleMemoryList(a_list);
+
+	FreeSingleMemoryList(svc_list_by_id);
 
 	FreeKvList(rdp_session_kv_list);
 

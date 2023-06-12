@@ -905,6 +905,8 @@ typedef struct MS_SID_INFO
 #define	MS_THINFW_ENTRY_TYPE_DNS			4
 #define MS_THINFW_ENTRY_TYPE_BLOCK			5
 #define MS_THINFW_ENTRY_TYPE_WINEVENT		6
+#define MS_THINFW_ENTRY_TYPE_SERVICE		7
+
 
 
 #define	MS_THINFW_ENTRY_FLAG_NONE			0
@@ -929,6 +931,18 @@ typedef struct MS_THINFW_ENTRY_RDP
 	char ClientHostname_Resolved[256];
 } MS_THINFW_ENTRY_RDP;
 
+typedef struct MS_THINFW_ENTRY_SERVICE
+{
+	wchar_t ServiceName[MAX_PATH];
+	wchar_t ServiceTitle[MAX_PATH];
+	char ServiceType[64];
+	char ServiceState[64];
+	UINT ProcessId;
+	wchar_t ExeFilenameW[MAX_PATH];
+	bool IsShared;
+	bool IsKernel;
+} MS_THINFW_ENTRY_SERVICE;
+
 typedef struct MS_THINFW_ENTRY_PROCESS
 {
 	wchar_t ExeFilenameW[MAX_PATH];	// EXE file name (Unicode)
@@ -939,7 +953,13 @@ typedef struct MS_THINFW_ENTRY_PROCESS
 	wchar_t Username[MAX_PATH];
 	wchar_t Domain[MAX_PATH];
 	MS_THINFW_ENTRY_RDP Rdp;
+	MS_THINFW_ENTRY_SERVICE Svc;
 } MS_THINFW_ENTRY_PROCESS;
+
+typedef struct MS_KV_SVC_DATA
+{
+	wchar_t ExeFilenameW[MAX_PATH];
+} MS_KV_SVC_DATA;
 
 typedef struct MS_THINFW_ENTRY_TCP
 {
@@ -1639,9 +1659,11 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 #define	MS_GET_THINFW_LIST_FLAGS_NO_DNS_CACHE		8
 #define	MS_GET_THINFW_LIST_FLAGS_NO_RDP				16
 #define	MS_GET_THINFW_LIST_FLAGS_NO_PROCESS			32
+#define MS_GET_THINFW_LIST_FLAGS_NO_SERVICE			64
 
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free);
+
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();

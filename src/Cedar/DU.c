@@ -6095,7 +6095,15 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		Format(category, category_size, "PROCESS_%s", e->IsAdded ? "START" : "STOP");
 
-		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s",
+		wchar_t svc_info[1024] = CLEAN;
+
+		if (UniIsFilledStr(proc->Svc.ServiceName))
+		{
+			UniFormat(svc_info, sizeof(svc_info), L" ServiceInfo=(ServiceName: %s, DisplayName: %s)",
+				proc->Svc.ServiceName, proc->Svc.ServiceTitle);
+		}
+
+		UniFormat(dst, dst_size, L"(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s%s",
 			proc->ProcessId,
 			proc->Is64BitProcess ? 64 : 32,
 			proc->ExeFilenameW,
@@ -6103,7 +6111,20 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 			proc->Username,
 			proc->SessionId,
 			tmpw,
+			svc_info,
 			rdp_session_info);
+
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_SERVICE:
+		DoNothing();
+		MS_THINFW_ENTRY_SERVICE *svc = (MS_THINFW_ENTRY_SERVICE *)&e->Data;
+
+		Format(category, category_size, "SERVICE_%s", svc->ServiceState);
+		StrUpper(category);
+
+		UniFormat(dst, dst_size, L"(ServiceName: %s, DisplayName: %s, ServiceType: %S, ServicePath: %s, ProcessId: %u, State: %S)",
+			svc->ServiceName, svc->ServiceTitle, svc->ServiceType, svc->ExeFilenameW, svc->ProcessId, svc->ServiceState);
 
 		break;
 
@@ -6210,8 +6231,16 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 			}
 
+			wchar_t svc_info[1024] = CLEAN;
+
+			if (UniIsFilledStr(proc->Svc.ServiceName))
+			{
+				UniFormat(svc_info, sizeof(svc_info), L" ServiceInfo=(ServiceName: %s, DisplayName: %s)",
+					proc->Svc.ServiceName, proc->Svc.ServiceTitle);
+			}
+
 			UniFormat(proc_info, sizeof(proc_info),
-				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s",
+				L" ProcessInfo=(PID: %u, %ubit, AppPath: %s, User: %s\\%s, SessionId: %u%s)%s%s",
 				tcp->Process.ProcessId,
 				tcp->Process.Is64BitProcess ? 64 : 32,
 				tcp->Process.ExeFilenameW,
@@ -6219,11 +6248,16 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 				tcp->Process.Username,
 				tcp->Process.SessionId,
 				tmpw,
+				svc_info,
 				rdp_session_info);
 		}
 		else
 		{
-			if (tcp->ProcessId != 0)
+			if (tcp->ProcessId != 4)
+			{
+				UniFormat(proc_info, sizeof(proc_info), L" ProcessInfo=(PID: %u, AppPath: System)", tcp->ProcessId);
+			}
+			else if (tcp->ProcessId != 0)
 			{
 				UniFormat(proc_info, sizeof(proc_info), L" ProcessInfo=(PID: %u, Unknown)", tcp->ProcessId);
 			}
@@ -6340,6 +6374,8 @@ void TfMain(TF_SERVICE *svc)
 	BUF *cfg_file_content = NewBuf();
 
 	LIST *sid_cache = MsNewSidToUsernameCache();
+
+	LIST *svc_data_cache_kv = NewKvListW();
 
 	LIST *ini = ReadIni(cfg_file_content);
 
@@ -6954,7 +6990,7 @@ L_BOOT_ERROR:
 						UnlockList(wfp_log->CurrentEntryList);
 					}
 
-					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list);
+					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv);
 
 					if (current_list == NULL)
 					{
@@ -6996,6 +7032,13 @@ L_BOOT_ERROR:
 									//}
 
 									if (proc->ProcessId != current_process_id)
+									{
+										ok = true;
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_SERVICE:
+									if (e->IsAdded) // Service: only new entries shall be reported
 									{
 										ok = true;
 									}
@@ -7248,6 +7291,8 @@ L_BOOT_ERROR:
 	{
 		TfLog(svc, "-------------------- Stop %S --------------------", svc->StartupSettings.AppTitle);
 	}
+
+	FreeKvListW(svc_data_cache_kv);
 }
 
 void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
