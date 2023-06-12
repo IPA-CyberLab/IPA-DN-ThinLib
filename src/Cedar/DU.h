@@ -117,7 +117,10 @@ struct TF_REPORT_SETTINGS
 	UINT ReportSyslogPort;
 	char ReportSyslogPrefix[MAX_PATH];
 
+	bool ReportSyslogNoFileShareAccessLog;
+
 	bool ReportSaveToDir;
+	bool ReportSaveToDirNoFileShareAccessLog;
 	bool ReportAppendUniqueId;
 	bool ReportAppendTimeZone;
 	bool ReportAppendUserName;

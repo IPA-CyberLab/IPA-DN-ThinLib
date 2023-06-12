@@ -5562,10 +5562,20 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				MS_THINFW_ENTRY_FILESHARE_SESSION *sess = (MS_THINFW_ENTRY_FILESHARE_SESSION *)&e->Data;
 				if (IsEmptyStr(sess->ClientHostname_Resolved))
 				{
+					char ipstr[128] = CLEAN;
 					if (UniStartWith(sess->ClientComputerName, L"\\\\"))
 					{
-						char ipstr[128] = CLEAN;
 						UniToStr(ipstr, sizeof(ipstr), sess->ClientComputerName + 2);
+					}
+					else
+					{
+						UniToStr(ipstr, sizeof(ipstr), sess->ClientComputerName);
+					}
+
+					Trim(ipstr);
+
+					if (StrLen(ipstr) >= 1)
+					{
 						IP ip = CLEAN;
 						if (StrToIP(&ip, ipstr))
 						{
@@ -5665,12 +5675,29 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 			if (st.ReportSaveToDir)
 			{
-				TfLogEx(svc, category, "(%S %S%S) %s", date_str, time_str, timezone_str, tmp);
+				bool ok = true;
+
+				if (e->Param == MS_THINFW_ENTRY_TYPE_FILESHARE_FILE && st.ReportSaveToDirNoFileShareAccessLog)
+				{
+					ok = false;
+				}
+
+				if (ok)
+				{
+					TfLogEx(svc, category, "(%S %S%S) %s", date_str, time_str, timezone_str, tmp);
+				}
 			}
 
 			if (st.ReportSyslogOnlyWhenLocked == false || (e->Flags & MS_THINFW_ENTRY_FLAG_LOCKED))
 			{
-				if (IsFilledStr(st.ReportSyslogHost) && st.ReportSyslogPort != 0)
+				bool ok = true;
+
+				if (e->Param == MS_THINFW_ENTRY_TYPE_FILESHARE_FILE && st.ReportSyslogNoFileShareAccessLog)
+				{
+					ok = false;
+				}
+
+				if (ok && IsFilledStr(st.ReportSyslogHost) && st.ReportSyslogPort != 0)
 				{
 					if (syslog == NULL)
 					{
@@ -6698,12 +6725,14 @@ void TfMain(TF_SERVICE *svc)
 					Trim(rep.ReportMailSubjectPrefix);
 
 					rep.ReportSyslogOnlyWhenLocked = IniBoolValue(ini, "ReportSyslogOnlyWhenLocked");
+					rep.ReportSyslogNoFileShareAccessLog = IniBoolValue(ini, "ReportSyslogNoFileShareAccessLog");
 					StrCpy(rep.ReportSyslogHost, sizeof(rep.ReportSyslogHost), IniStrValue(ini, "ReportSyslogHost"));
 					rep.ReportSyslogPort = IniIntValue(ini, "ReportSyslogPort");
 					StrCpy(rep.ReportSyslogPrefix, sizeof(rep.ReportSyslogPrefix), IniStrValue(ini, "ReportSyslogPrefix"));
 					Trim(rep.ReportSyslogPrefix);
 
 					rep.ReportSaveToDir = IniBoolValue(ini, "ReportSaveToDir");
+					rep.ReportSaveToDirNoFileShareAccessLog = IniBoolValue(ini, "ReportSaveToDirNoFileShareAccessLog");
 					rep.ReportAppendUniqueId = IniBoolValue(ini, "ReportAppendUniqueId");
 					rep.ReportAppendTimeZone = IniBoolValue(ini, "ReportAppendTimeZone");
 					rep.ReportAppendUserName = IniBoolValue(ini, "ReportAppendUserName");
