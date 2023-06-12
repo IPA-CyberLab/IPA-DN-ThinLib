@@ -906,6 +906,10 @@ typedef struct MS_SID_INFO
 #define MS_THINFW_ENTRY_TYPE_BLOCK			5
 #define MS_THINFW_ENTRY_TYPE_WINEVENT		6
 #define MS_THINFW_ENTRY_TYPE_SERVICE		7
+#define MS_THINFW_ENTRY_TYPE_FILESHARE_SESSION	8
+#define MS_THINFW_ENTRY_TYPE_FILESHARE_FILE	9
+
+
 
 
 
@@ -977,6 +981,21 @@ typedef struct MS_THINFW_ENTRY_DNS
 	char Name[256];
 	char Data[256];
 } MS_THINFW_ENTRY_DNS;
+
+typedef struct MS_THINFW_ENTRY_FILESHARE_SESSION
+{
+	wchar_t ClientComputerName[MAX_PATH];
+	wchar_t ClientUserName[MAX_PATH];
+	char ClientHostname_Resolved[256];
+} MS_THINFW_ENTRY_FILESHARE_SESSION;
+
+typedef struct MS_THINFW_ENTRY_FILESHARE_FILE
+{
+	UINT Id;
+	wchar_t FileName[MAX_PATH];
+	wchar_t UserName[MAX_PATH];
+	char Mode[16];
+} MS_THINFW_ENTRY_FILESHARE_FILE;
 
 typedef struct MS_THINFW_ENTRY_BLOCK
 {
@@ -1670,6 +1689,8 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 #define	MS_GET_THINFW_LIST_FLAGS_NO_RDP				16
 #define	MS_GET_THINFW_LIST_FLAGS_NO_PROCESS			32
 #define MS_GET_THINFW_LIST_FLAGS_NO_SERVICE			64
+#define MS_GET_THINFW_LIST_FLAGS_NO_FILESHARE		128
+
 
 
 

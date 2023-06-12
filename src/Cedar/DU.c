@@ -5215,6 +5215,11 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				BinToStr(mac_str, sizeof(mac_str), svc->MacAddress, 6);
 			}
 
+			UCHAR unique_id[16];
+			Rand(unique_id, sizeof(unique_id));
+			char unique_id_str[40] = CLEAN;
+			BinToStr(unique_id_str, sizeof(unique_id_str), unique_id, sizeof(unique_id));
+
 			UINT64 time = LocalTime64();
 			GetDateStr64(date_str, sizeof(date_str), time);
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
@@ -5223,6 +5228,9 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
 
 			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s%s\n", svc->StartupSettings.AppTitle, date_str, time_str, timezone_str);
+			WriteBuf(current_mail_body, tmp, StrLen(tmp));
+
+			Format(tmp, sizeof(tmp), "Message Unique ID: %S\n", unique_id_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
@@ -5546,6 +5554,26 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					if (IsZeroIP(&block->RemoteIP) == false && IsLocalHostIP(&block->RemoteIP) == false)
 					{
 						GetHostNameEx(block->RemoteIPHostname_Resolved, sizeof(block->RemoteIPHostname_Resolved), &block->RemoteIP, st.HostnameLookupTimeoutMsec, gethostname_flag);
+					}
+				}
+			}
+			else if (e->Param == MS_THINFW_ENTRY_TYPE_FILESHARE_SESSION)
+			{
+				MS_THINFW_ENTRY_FILESHARE_SESSION *sess = (MS_THINFW_ENTRY_FILESHARE_SESSION *)&e->Data;
+				if (IsEmptyStr(sess->ClientHostname_Resolved))
+				{
+					if (UniStartWith(sess->ClientComputerName, L"\\\\"))
+					{
+						char ipstr[128] = CLEAN;
+						UniToStr(ipstr, sizeof(ipstr), sess->ClientComputerName + 2);
+						IP ip = CLEAN;
+						if (StrToIP(&ip, ipstr))
+						{
+							if (IsZeroIP(&ip) == false && IsLocalHostIP(&ip) == false)
+							{
+								GetHostNameEx(sess->ClientHostname_Resolved, sizeof(sess->ClientHostname_Resolved), &ip, st.HostnameLookupTimeoutMsec, gethostname_flag);
+							}
+						}
 					}
 				}
 			}
@@ -6128,6 +6156,28 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 
 		break;
 
+	case MS_THINFW_ENTRY_TYPE_FILESHARE_SESSION:
+		StrCpy(category, category_size, e->IsAdded ? "FILESHARE_CONNECTED" : "FILESHARE_DISCONNECTED");
+		MS_THINFW_ENTRY_FILESHARE_SESSION *sess = (MS_THINFW_ENTRY_FILESHARE_SESSION *)&e->Data;
+
+		if (IsFilledStr(sess->ClientHostname_Resolved))
+		{
+			Format(ep_hostname, sizeof(ep_hostname), "ClientHostname: %s, ",
+				sess->ClientHostname_Resolved);
+		}
+
+		UniFormat(dst, dst_size, L"(%SClientComputer: %s, ClientUserName: %s)",
+			ep_hostname, sess->ClientComputerName, sess->ClientUserName);
+		break;
+
+	case MS_THINFW_ENTRY_TYPE_FILESHARE_FILE:
+		StrCpy(category, category_size, "FILESHARE_ACCESS");
+		MS_THINFW_ENTRY_FILESHARE_FILE *access = (MS_THINFW_ENTRY_FILESHARE_FILE *)&e->Data;
+
+		UniFormat(dst, dst_size, L"(AccessId: %u, AccessUserName: %s, AccessFileName: %s, AccessMode: %S)",
+			access->Id, access->UserName, access->FileName, access->Mode);
+		break;
+
 	case MS_THINFW_ENTRY_TYPE_RDP:
 		StrCpy(category, category_size,  e->IsAdded ? "RDP_START" : "RDP_STOP");
 		MS_THINFW_ENTRY_RDP *rdp = (MS_THINFW_ENTRY_RDP *)&e->Data;
@@ -6392,6 +6442,7 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchWindowsEventLog = false;
 	bool cfg_EnableWatchProcess = false;
 	bool cfg_EnableWatchService = false;
+	bool cfg_EnableWatchFileShare = false;
 	bool cfg_EnableWatchTcp = false;
 	bool cfg_EnableWatchFwBlock = false;
 	bool cfg_WatchOnlyWhenLocked = false;
@@ -6577,6 +6628,8 @@ void TfMain(TF_SERVICE *svc)
 						cfg_ReportMaxQueueLength = 1024;
 					}
 
+					cfg_EnableWatchFileShare = IniBoolValue(ini, "EnableWatchFileShare");
+
 					cfg_AlwaysWatchDnsCache = IniBoolValue(ini, "AlwaysWatchDnsCache");
 
 					cfg_WatchDnsCacheIntervalMsec = IniIntValue(ini, "WatchDnsCacheIntervalMsec");
@@ -6711,6 +6764,7 @@ L_BOOT_ERROR:
 				cfg_EnableDailyAliveMessage = false;
 				cfg_SendDailyAliveNoticeHhmmss = 0;
 				cfg_AlwaysWatchDnsCache = false;
+				cfg_EnableWatchFileShare = false;
 				cfg_WatchDnsCacheIntervalMsec = 15000;
 				ClearUniStr(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames));
 				lastState_locked = INFINITE;
@@ -6994,6 +7048,11 @@ L_BOOT_ERROR:
 						flags |= MS_GET_THINFW_LIST_FLAGS_NO_SERVICE;
 					}
 
+					if (cfg_EnableWatchFileShare == false)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_FILESHARE;
+					}
+
 					flags |= MS_GET_THINFW_LIST_FLAGS_NO_LOCALHOST_RDP;
 
 					LIST *wfp_log_list = NewDiffList();
@@ -7105,6 +7164,17 @@ L_BOOT_ERROR:
 
 								case MS_THINFW_ENTRY_TYPE_SERVICE:
 									if (e->IsAdded) // Service: only new entries shall be reported
+									{
+										ok = true;
+									}
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_FILESHARE_SESSION:
+									ok = true;
+									break;
+
+								case MS_THINFW_ENTRY_TYPE_FILESHARE_FILE:
+									if (e->IsAdded) // File share: only new entries shall be reported
 									{
 										ok = true;
 									}

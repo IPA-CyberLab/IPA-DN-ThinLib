@@ -1433,6 +1433,11 @@ void MsFreeDnsHash(HASH_LIST *h)
 
 void MsMainteDnsHash(HASH_LIST *h, MS_DNS_CACHE *dns_cache_src)
 {
+	if (h == NULL)
+	{
+		return;
+	}
+
 	MS_DNS_CACHE *dns_cache = dns_cache_src;
 
 	bool free_memory = false;
@@ -1537,6 +1542,73 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_PROCESS) == 0)
 	{
 		process_list = MsGetProcessList(MS_GET_PROCESS_LIST_FLAG_GET_SID | MS_GET_PROCESS_LIST_FLAG_GET_COMMAND_LINE | MS_GET_PROCESS_LIST_FLAG_GET_OTHER_USERS_PROCESS);
+	}
+
+	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_FILESHARE) == 0)
+	{
+		UCHAR *buf = NULL;
+		UINT read_count = 0;
+		UINT total_count = 0;
+		NET_API_STATUS api_ret = NetSessionEnum(NULL, NULL, NULL, 10, &buf, MAX_PREFERRED_LENGTH, &read_count, &total_count, NULL);
+		if (api_ret == NERR_Success)
+		{
+			SESSION_INFO_10 *ar = (SESSION_INFO_10 *)buf;
+			UINT i;
+			for (i = 0; i < read_count;i++)
+			{
+				SESSION_INFO_10 *e = &ar[i];
+
+				MS_THINFW_ENTRY_FILESHARE_SESSION data = CLEAN;
+				UniStrCpy(data.ClientComputerName, sizeof(data.ClientComputerName), e->sesi10_cname);
+				UniStrCpy(data.ClientUserName, sizeof(data.ClientUserName), e->sesi10_username);
+
+				UniFormat(key, sizeof(key), L"SHARE_SESS:%s:%s", data.ClientComputerName, data.ClientUserName);
+
+				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_FILESHARE_SESSION, tick));
+			}
+		}
+		if (buf != NULL)
+		{
+			NetApiBufferFree(buf);
+		}
+
+		buf = NULL;
+		read_count = 0;
+		total_count = 0;
+		api_ret = NetFileEnum(NULL, NULL, NULL, 3, &buf, MAX_PREFERRED_LENGTH, &read_count, &total_count, NULL);
+		if (api_ret == NERR_Success)
+		{
+			FILE_INFO_3 *ar = (FILE_INFO_3 *)buf;
+			UINT i;
+			for (i = 0; i < read_count;i++)
+			{
+				FILE_INFO_3 *e = &ar[i];
+
+				MS_THINFW_ENTRY_FILESHARE_FILE data = CLEAN;
+				data.Id = e->fi3_id;
+				UniStrCpy(data.FileName, sizeof(data.FileName), e->fi3_pathname);
+				UniStrCpy(data.UserName, sizeof(data.UserName), e->fi3_username);
+
+				if ((e->fi3_permissions & PERM_FILE_WRITE) || (e->fi3_permissions & PERM_FILE_CREATE))
+				{
+					StrCpy(data.Mode, sizeof(data.Mode), "Write");
+				}
+				else
+				{
+					StrCpy(data.Mode, sizeof(data.Mode), "Read");
+				}
+
+				UniFormat(key, sizeof(key), L"SHARE_FILE:%u:%s:%s:%S",
+					data.Id, data.FileName, data.UserName, data.Mode);
+
+				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_FILESHARE_FILE, tick));
+
+			}
+		}
+		if (buf != NULL)
+		{
+			NetApiBufferFree(buf);
+		}
 	}
 
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_SERVICE) == 0)
