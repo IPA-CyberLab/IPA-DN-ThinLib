@@ -6842,9 +6842,7 @@ L_BOOT_ERROR:
 					dns_hash = MsNewDnsHash();
 				}
 
-				Print("DNS_HASH: %u\n", dns_hash->NumItems);
-
-				MsMainteDnsHash(dns_hash);
+				MsMainteDnsHash(dns_hash, NULL);
 			}
 		}
 
@@ -6964,19 +6962,6 @@ L_BOOT_ERROR:
 
 				if (is_watch_active)
 				{
-					if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
-					{
-						MsFreeDnsHash(dns_hash);
-						dns_hash = NULL;
-					}
-
-					if (dns_hash == NULL)
-					{
-						dns_hash = MsNewDnsHash();
-					}
-
-					MsMainteDnsHash(dns_hash);
-
 					UINT flags = 0;
 
 					if (cfg_IncludeProcessCommandLine == false)
@@ -7058,6 +7043,17 @@ L_BOOT_ERROR:
 							}
 						}
 						UnlockList(wfp_log->CurrentEntryList);
+					}
+
+					if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
+					{
+						MsFreeDnsHash(dns_hash);
+						dns_hash = NULL;
+					}
+
+					if (dns_hash == NULL)
+					{
+						dns_hash = MsNewDnsHash();
 					}
 
 					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv, dns_hash);

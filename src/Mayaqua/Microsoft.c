@@ -1431,9 +1431,17 @@ void MsFreeDnsHash(HASH_LIST *h)
 	ReleaseHashList(h);
 }
 
-void MsMainteDnsHash(HASH_LIST *h)
+void MsMainteDnsHash(HASH_LIST *h, MS_DNS_CACHE *dns_cache_src)
 {
-	MS_DNS_CACHE *dns_cache = MsGetDnsCacheList();
+	MS_DNS_CACHE *dns_cache = dns_cache_src;
+
+	bool free_memory = false;
+	
+	if (dns_cache == NULL)
+	{
+		dns_cache = MsGetDnsCacheList();
+		free_memory = true;
+	}
 
 	// DNS cache list
 	if (dns_cache != NULL)
@@ -1497,7 +1505,10 @@ void MsMainteDnsHash(HASH_LIST *h)
 		}
 	}
 
-	MsFreeDnsCacheList(dns_cache);
+	if (free_memory)
+	{
+		MsFreeDnsCacheList(dns_cache);
+	}
 }
 
 LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash)
@@ -1725,6 +1736,9 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 	{
 		dns_cache = MsGetDnsCacheList();
 	}
+
+	// DNS hash maintenance
+	MsMainteDnsHash(dns_hash, dns_cache);
 
 	// DNS cache list
 	if (dns_cache != NULL)

@@ -1699,7 +1699,7 @@ void MsGetTimezoneSuffixStr(char *dst, UINT size);
 HASH_LIST *MsNewDnsHash();
 MS_DNS_HASH *MsSearchDnsHash(HASH_LIST *h, IP *ip);
 void MsFreeDnsHash(HASH_LIST *h);
-void MsMainteDnsHash(HASH_LIST *h);
+void MsMainteDnsHash(HASH_LIST *h, MS_DNS_CACHE *dns_cache_src);
 UINT MsGetDnsHash(void *p);
 int MsCompareDnsHash(void *p1, void *p2);
 
