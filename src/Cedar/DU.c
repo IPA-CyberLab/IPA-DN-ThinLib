@@ -7069,7 +7069,7 @@ L_BOOT_ERROR:
 						// Update watcher
 						LIST *diff = UpdateDiffList(current_list, now_list);
 
-						Print("DIFF: %u\n", LIST_NUM(diff));
+						//Print("DIFF: %u\n", LIST_NUM(diff));
 
 						// Classifying each of diff entries and insert them to the queue
 						LockQueue(svc->ReportQueue);
