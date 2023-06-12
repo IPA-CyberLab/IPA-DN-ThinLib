@@ -973,8 +973,9 @@ typedef struct MS_THINFW_ENTRY_TCP
 
 typedef struct MS_THINFW_ENTRY_DNS
 {
-	char Hostname[MAX_PATH];
-	IP Ip;
+	char Type[16];
+	char Name[256];
+	char Data[256];
 } MS_THINFW_ENTRY_DNS;
 
 typedef struct MS_THINFW_ENTRY_BLOCK
@@ -1638,9 +1639,6 @@ void MsTestFunc2();
 
 int MsCmpDnsCache_A(void *p1, void *p2);
 int MsCmpDnsCache_CNAME(void *p1, void *p2);
-
-int MsCmpDnsCache_A_Ex(void *p1, void *p2);
-int MsCmpDnsCache_CNAME_Ex(void *p1, void *p2);
 
 MS_DNS_CACHE *MsGetDnsCacheList();
 void MsFreeDnsCacheList(MS_DNS_CACHE *c);

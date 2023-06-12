@@ -5975,8 +5975,8 @@ void TfGetStr(char *category, UINT category_size, wchar_t *dst, UINT dst_size, D
 	case MS_THINFW_ENTRY_TYPE_DNS:
 		StrCpy(category, category_size, "DNS");
 		MS_THINFW_ENTRY_DNS *dns = (MS_THINFW_ENTRY_DNS *)&e->Data;
-		UniFormat(dst, dst_size, L"(Hostname: %S, IPv%u_Address: %r)",
-			dns->Hostname, IsIP6(&dns->Ip) ? 6 : 4 , &dns->Ip);
+		UniFormat(dst, dst_size, L"(Type: %S, Name: %S, Data: %S)",
+			dns->Type, dns->Name, dns->Data);
 		break;
 
 	case MS_THINFW_ENTRY_TYPE_WINEVENT:
@@ -6405,7 +6405,7 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableDailyAliveMessage = false;
 	UINT cfg_SendDailyAliveNoticeHhmmss = 0;
 	bool cfg_AlwaysWatchDnsCache = false;
-	UINT cfg_WatchDnsCacheIntervalMsec = 800;
+	UINT cfg_WatchDnsCacheIntervalMsec = 15000;
 
 	wchar_t cfg_WindowsEventLogNames[1024] = CLEAN;
 
@@ -6580,7 +6580,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_WatchDnsCacheIntervalMsec = IniIntValue(ini, "WatchDnsCacheIntervalMsec");
 					if (cfg_WatchDnsCacheIntervalMsec == 0)
 					{
-						cfg_WatchDnsCacheIntervalMsec = 800;
+						cfg_WatchDnsCacheIntervalMsec = 15000;
 					}
 					cfg_WatchDnsCacheIntervalMsec = MAX(cfg_WatchDnsCacheIntervalMsec, 100);
 
@@ -6708,7 +6708,7 @@ L_BOOT_ERROR:
 				cfg_EnableDailyAliveMessage = false;
 				cfg_SendDailyAliveNoticeHhmmss = 0;
 				cfg_AlwaysWatchDnsCache = false;
-				cfg_WatchDnsCacheIntervalMsec = 800;
+				cfg_WatchDnsCacheIntervalMsec = 15000;
 				ClearUniStr(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames));
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
@@ -6845,6 +6845,15 @@ L_BOOT_ERROR:
 			}
 		}
 
+		if (cfg_Enable == false)
+		{
+			if (dns_hash != NULL)
+			{
+				MsFreeDnsHash(dns_hash);
+				dns_hash = NULL;
+			}
+		}
+
 		if (ever_enabled && (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec)))
 		{
 			last_poll = now;
@@ -6952,21 +6961,18 @@ L_BOOT_ERROR:
 
 				if (is_watch_active)
 				{
-					if (cfg_AlwaysWatchDnsCache)
+					if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
 					{
-						if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
-						{
-							MsFreeDnsHash(dns_hash);
-							dns_hash = NULL;
-						}
-
-						if (dns_hash == NULL)
-						{
-							dns_hash = MsNewDnsHash();
-						}
-
-						MsMainteDnsHash(dns_hash);
+						MsFreeDnsHash(dns_hash);
+						dns_hash = NULL;
 					}
+
+					if (dns_hash == NULL)
+					{
+						dns_hash = MsNewDnsHash();
+					}
+
+					MsMainteDnsHash(dns_hash);
 
 					UINT flags = 0;
 
