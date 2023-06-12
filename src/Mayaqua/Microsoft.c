@@ -8197,8 +8197,17 @@ LIST *MsGetProcessListNt(UINT flags)
 	for (i = 0;i < num;i++)
 	{
 		UINT id = processes[i];
-		HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-			false, id);
+		HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, id);
+
+		if (h == NULL)
+		{
+			h = OpenProcess(PROCESS_QUERY_INFORMATION, false, id);
+		}
+
+		if (h == NULL)
+		{
+			h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, id);
+		}
 
 		if (h != NULL)
 		{
@@ -13201,9 +13210,6 @@ bool MsInstallVLanWithoutLock(char *tag_name, char *connection_tag_name, char *i
 // Test function
 void MsTest()
 {
-	HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION, false, 4);
-	Print("%u\n", (UINT)h);
-	CloseHandle(h);
 }
 
 // Install a virtual LAN card (by calling Win32 API)
