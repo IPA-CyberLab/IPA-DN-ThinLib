@@ -1531,8 +1531,6 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 						ms->nt->WTSFreeMemory(client_info);
 					}
 
-					ms->nt->WTSFreeMemory(ex);
-
 					if (IsZeroIP(&data.ClientIp) == false)
 					{
 						MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
@@ -1587,6 +1585,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 						Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
 					}
+
+					ms->nt->WTSFreeMemory(ex);
 				}
 			}
 
