@@ -185,6 +185,7 @@ typedef struct DU_WFP_LOG
 	UINT64 LastGcTick;
 } DU_WFP_LOG;
 
+#define DU_WATCH_DNS_CACHE_MAX_ENTRIES		100000
 
 
 

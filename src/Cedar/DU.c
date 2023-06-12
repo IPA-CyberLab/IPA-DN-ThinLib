@@ -6370,6 +6370,7 @@ void TfMain(TF_SERVICE *svc)
 	UINT64 last_poll = 0;
 	UINT64 last_netinfo = 0;
 	UINT64 last_eventlog_read = 0;
+	UINT64 last_watch_dns_cache = 0;
 
 	BUF *cfg_file_content = NewBuf();
 
@@ -6403,6 +6404,8 @@ void TfMain(TF_SERVICE *svc)
 	UINT cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
 	bool cfg_EnableDailyAliveMessage = false;
 	UINT cfg_SendDailyAliveNoticeHhmmss = 0;
+	bool cfg_AlwaysWatchDnsCache = false;
+	UINT cfg_WatchDnsCacheIntervalMsec = 800;
 
 	wchar_t cfg_WindowsEventLogNames[1024] = CLEAN;
 
@@ -6430,6 +6433,8 @@ void TfMain(TF_SERVICE *svc)
 	MS_EVENTREADER_SESSION *event_reader = MsNewEventReaderSession();
 
 	UINT64 last_regupdate = 0;
+
+	HASH_LIST *dns_hash = NULL;
 
 	wchar_t tmp[2048];
 
@@ -6570,6 +6575,15 @@ void TfMain(TF_SERVICE *svc)
 						cfg_ReportMaxQueueLength = 1024;
 					}
 
+					cfg_AlwaysWatchDnsCache = IniBoolValue(ini, "AlwaysWatchDnsCache");
+
+					cfg_WatchDnsCacheIntervalMsec = IniIntValue(ini, "WatchDnsCacheIntervalMsec");
+					if (cfg_WatchDnsCacheIntervalMsec == 0)
+					{
+						cfg_WatchDnsCacheIntervalMsec = 800;
+					}
+					cfg_WatchDnsCacheIntervalMsec = MAX(cfg_WatchDnsCacheIntervalMsec, 100);
+
 					cfg_InputIdleTimerMsec = IniIntValue(ini, "InputIdleTimerMsec");
 					if (cfg_InputIdleTimerMsec == 0)
 					{
@@ -6693,6 +6707,8 @@ L_BOOT_ERROR:
 				cfg_WindowsEventLogPollIntervalMsec = 10 * 1000;
 				cfg_EnableDailyAliveMessage = false;
 				cfg_SendDailyAliveNoticeHhmmss = 0;
+				cfg_AlwaysWatchDnsCache = false;
+				cfg_WatchDnsCacheIntervalMsec = 800;
 				ClearUniStr(cfg_WindowsEventLogNames, sizeof(cfg_WindowsEventLogNames));
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
@@ -6805,6 +6821,30 @@ L_BOOT_ERROR:
 			}
 		}
 
+		if (cfg_Enable && cfg_AlwaysWatchDnsCache)
+		{
+			if (last_watch_dns_cache == 0 || now >= (last_watch_dns_cache + (UINT64)cfg_WatchDnsCacheIntervalMsec))
+			{
+				last_watch_dns_cache = now;
+				AddInterrupt(im, now + (UINT64)cfg_WatchDnsCacheIntervalMsec);
+
+				if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
+				{
+					MsFreeDnsHash(dns_hash);
+					dns_hash = NULL;
+				}
+
+				if (dns_hash == NULL)
+				{
+					dns_hash = MsNewDnsHash();
+				}
+
+				Print("DNS_HASH: %u\n", dns_hash->NumItems);
+
+				MsMainteDnsHash(dns_hash);
+			}
+		}
+
 		if (ever_enabled && (last_poll == 0 || now >= (last_poll + (UINT64)cfg_WatchPollingIntervalMsec)))
 		{
 			last_poll = now;
@@ -6912,6 +6952,22 @@ L_BOOT_ERROR:
 
 				if (is_watch_active)
 				{
+					if (cfg_AlwaysWatchDnsCache)
+					{
+						if (dns_hash != NULL && dns_hash->NumItems > DU_WATCH_DNS_CACHE_MAX_ENTRIES)
+						{
+							MsFreeDnsHash(dns_hash);
+							dns_hash = NULL;
+						}
+
+						if (dns_hash == NULL)
+						{
+							dns_hash = MsNewDnsHash();
+						}
+
+						MsMainteDnsHash(dns_hash);
+					}
+
 					UINT flags = 0;
 
 					if (cfg_IncludeProcessCommandLine == false)
@@ -6990,7 +7046,7 @@ L_BOOT_ERROR:
 						UnlockList(wfp_log->CurrentEntryList);
 					}
 
-					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv);
+					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv, dns_hash);
 
 					if (current_list == NULL)
 					{
@@ -7007,7 +7063,7 @@ L_BOOT_ERROR:
 						// Update watcher
 						LIST *diff = UpdateDiffList(current_list, now_list);
 
-						//Print("%u\n", LIST_NUM(diff));
+						Print("DIFF: %u\n", LIST_NUM(diff));
 
 						// Classifying each of diff entries and insert them to the queue
 						LockQueue(svc->ReportQueue);
@@ -7293,6 +7349,8 @@ L_BOOT_ERROR:
 	}
 
 	FreeKvListW(svc_data_cache_kv);
+
+	MsFreeDnsHash(dns_hash);
 }
 
 void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)

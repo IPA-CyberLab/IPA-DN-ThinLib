@@ -80,7 +80,7 @@
 #define	TF_SVC_MODE_SYSTEMMODE		0
 #define	TF_SVC_MODE_USERNAME		1
 
-#define	TF_LOG_DIR_NAME				"@ThinFirewall_log"
+#define	TF_LOG_DIR_NAME				"@ThinFirewall_Log"
 
 #define TF_DEFAULT_CONFIG_NAME		"@ThinFirewall_Config\\ThinFirewall_Config.ini"
 

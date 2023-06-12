@@ -103,7 +103,7 @@ static char *delete_targets[] =
 	"packet_log_archive",
 	"azure_log",
 	"tunnel_log",
-	"ThinFirewall_log",
+	"ThinFirewall_Log",
 };
 
 static UINT eraser_check_interval = DISK_FREE_CHECK_INTERVAL_DEFAULT;

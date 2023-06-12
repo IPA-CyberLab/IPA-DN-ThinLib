@@ -992,6 +992,13 @@ typedef struct MS_THINFW_ENTRY_BLOCK
 	wchar_t DomainName[MAX_SIZE];
 } MS_THINFW_ENTRY_BLOCK;
 
+typedef struct MS_DNS_HASH
+{
+	IP IpAddress;
+	char Hostname[256];
+	UINT CurrentDepth;
+} MS_DNS_HASH;
+
 typedef struct MS_WTS_LOCK_STATE_RET_EX
 {
 	UINT Reversed;
@@ -1630,6 +1637,11 @@ void MsTestFunc1(HWND hWnd);
 void MsTestFunc2();
 
 int MsCmpDnsCache_A(void *p1, void *p2);
+int MsCmpDnsCache_CNAME(void *p1, void *p2);
+
+int MsCmpDnsCache_A_Ex(void *p1, void *p2);
+int MsCmpDnsCache_CNAME_Ex(void *p1, void *p2);
+
 MS_DNS_CACHE *MsGetDnsCacheList();
 void MsFreeDnsCacheList(MS_DNS_CACHE *c);
 MS_DNS_CACHE_ENTRY_A *MsSearchDnsCacheList_A(LIST *o, IP *ip);
@@ -1663,7 +1675,7 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 
 
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache);
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();
@@ -1685,6 +1697,14 @@ LIST *MsWatchEvents(MS_EVENTREADER_SESSION *s, wchar_t *event_log_names, UINT ma
 UINT64 MsGetWindowsBootSystemTimeInternal();
 UINT64 MsGetWindowsBootSystemTime();
 void MsGetTimezoneSuffixStr(char *dst, UINT size);
+
+HASH_LIST *MsNewDnsHash();
+MS_DNS_HASH *MsSearchDnsHash(HASH_LIST *h, IP *ip);
+void MsFreeDnsHash(HASH_LIST *h);
+void MsMainteDnsHash(HASH_LIST *h);
+UINT MsGetDnsHash(void *p);
+int MsCompareDnsHash(void *p1, void *p2);
+
 
 // Inner functions
 #ifdef	MICROSOFT_C

@@ -1131,6 +1131,33 @@ int MsCmpDnsCache_A(void *p1, void *p2)
 	return CmpIpAddr(&e1->Ip, &e2->Ip);
 }
 
+int MsCmpDnsCache_A_Ex(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 == NULL)
+	{
+		return 0;
+	}
+	if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+
+	MS_DNS_CACHE_ENTRY_A *e1 = *((MS_DNS_CACHE_ENTRY_A **)p1);
+	MS_DNS_CACHE_ENTRY_A *e2 = *((MS_DNS_CACHE_ENTRY_A **)p2);
+
+	int r = CmpIpAddr(&e1->Ip, &e2->Ip);
+	if (r != 0)
+	{
+		return r;
+	}
+
+	return StrCmpi(e1->Hostname, e2->Hostname);
+}
+
 int MsCmpDnsCache_CNAME(void *p1, void *p2)
 {
 	if (p1 == NULL && p2 == NULL)
@@ -1150,6 +1177,33 @@ int MsCmpDnsCache_CNAME(void *p1, void *p2)
 	MS_DNS_CACHE_ENTRY_CNAME *e2 = *((MS_DNS_CACHE_ENTRY_CNAME **)p2);
 
 	return StrCmpi(e1->Realname, e2->Realname);
+}
+
+int MsCmpDnsCache_CNAME_Ex(void *p1, void *p2)
+{
+	if (p1 == NULL && p2 == NULL)
+	{
+		return 0;
+	}
+	if (p1 != NULL && p2 == NULL)
+	{
+		return 1;
+	}
+	if (p1 == NULL && p2 != NULL)
+	{
+		return -1;
+	}
+
+	MS_DNS_CACHE_ENTRY_CNAME *e1 = *((MS_DNS_CACHE_ENTRY_CNAME **)p1);
+	MS_DNS_CACHE_ENTRY_CNAME *e2 = *((MS_DNS_CACHE_ENTRY_CNAME **)p2);
+
+	int r = StrCmpi(e1->Realname, e2->Realname);
+	if (r != 0)
+	{
+		return r;
+	}
+
+	return StrCmpi(e1->Alias, e2->Alias);
 }
 
 MS_DNS_CACHE *MsGetDnsCacheList()
@@ -1268,6 +1322,13 @@ MS_DNS_CACHE *MsGetDnsCacheList()
 	ret->AList = a_list;
 	ret->CNameList = cname_list;
 
+	// Perform stable sort
+	SortEx(ret->AList, MsCmpDnsCache_A_Ex);
+	ret->AList->sorted = true;
+
+	SortEx(ret->CNameList, MsCmpDnsCache_CNAME_Ex);
+	ret->CNameList->sorted = true;
+
 	return ret;
 }
 
@@ -1363,7 +1424,142 @@ char *MsGetWtsSessionStateStr(UINT state)
 	}
 }
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache)
+UINT MsGetDnsHash(void *p)
+{
+	MS_DNS_HASH *d = (MS_DNS_HASH *)p;
+
+	return Crc32(&d->IpAddress, 0, sizeof(IP));
+}
+
+// Comparison function of IP table entries
+int MsCompareDnsHash(void *p1, void *p2)
+{
+	MS_DNS_HASH *e1, *e2;
+	if (p1 == NULL || p2 == NULL)
+	{
+		return 0;
+	}
+	e1 = *(MS_DNS_HASH **)p1;
+	e2 = *(MS_DNS_HASH **)p2;
+	if (e1 == NULL || e2 == NULL)
+	{
+		return 0;
+	}
+	return CmpIpAddr(&e1->IpAddress, &e2->IpAddress);
+}
+
+HASH_LIST *MsNewDnsHash()
+{
+	return NewHashList(MsGetDnsHash, MsCompareDnsHash, 12, false);
+}
+
+MS_DNS_HASH *MsSearchDnsHash(HASH_LIST *h, IP *ip)
+{
+	if (h == NULL)
+	{
+		return NULL;
+	}
+
+	MS_DNS_HASH t = CLEAN;
+	CopyIP(&t.IpAddress, ip);
+
+	MS_DNS_HASH *e = SearchHash(h, &t);
+
+	return e;
+}
+
+void MsFreeDnsHash(HASH_LIST *h)
+{
+	if (h == NULL)
+	{
+		return;
+	}
+
+	UINT num = 0;
+	MS_DNS_HASH **a = (MS_DNS_HASH **)HashListToArray(h, &num);
+	if (a != NULL)
+	{
+		UINT i;
+		for (i = 0;i < num;i++)
+		{
+			MS_DNS_HASH *e = a[i];
+
+			Free(e);
+		}
+		Free(a);
+	}
+
+	ReleaseHashList(h);
+}
+
+void MsMainteDnsHash(HASH_LIST *h)
+{
+	MS_DNS_CACHE *dns_cache = MsGetDnsCacheList();
+
+	// DNS cache list
+	if (dns_cache != NULL)
+	{
+		UINT i;
+		for (i = 0;i < LIST_NUM(dns_cache->AList);i++)
+		{
+			MS_DNS_CACHE_ENTRY_A *e = LIST_DATA(dns_cache->AList, i);
+			MS_THINFW_ENTRY_DNS data = CLEAN;
+
+			if (IsLocalHostIP(&e->Ip) == false)
+			{
+				// Try CNAME reverse search
+				MS_DNS_CACHE_ENTRY_CNAME *origin_cname = NULL;
+				UINT j;
+				char cname_search_target_realname[MAX_PATH] = CLEAN;
+
+				StrCpy(cname_search_target_realname, sizeof(cname_search_target_realname), e->Hostname);
+
+				UINT depth = 1;
+
+				for (j = 0;j < 4;j++)
+				{
+					MS_DNS_CACHE_ENTRY_CNAME *cname = MsSearchDnsCacheList_CNAME(dns_cache->CNameList, cname_search_target_realname);
+
+					if (cname == NULL)
+					{
+						break;
+					}
+
+					depth++;
+
+					origin_cname = cname;
+					StrCpy(cname_search_target_realname, sizeof(cname_search_target_realname),
+						cname->Alias);
+				}
+
+				StrCpy(data.Hostname, sizeof(data.Hostname), origin_cname == NULL ? e->Hostname : origin_cname->Alias);
+				CopyIP(&data.Ip, &e->Ip);
+
+				MS_DNS_HASH t = CLEAN;
+				CopyIP(&t.IpAddress, &data.Ip);
+
+				MS_DNS_HASH *e = SearchHash(h, &t);
+
+				if (e == NULL)
+				{
+					e = ZeroMalloc(sizeof(MS_DNS_HASH));
+					CopyIP(&e->IpAddress, &data.Ip);
+
+					AddHash(h, e);
+				}
+
+				if (e->CurrentDepth <= depth)
+				{
+					StrCpy(e->Hostname, sizeof(e->Hostname), data.Hostname);
+				}
+			}
+		}
+	}
+
+	MsFreeDnsCacheList(dns_cache);
+}
+
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash)
 {
 	if (sid_cache == NULL || svc_data_cache == NULL)
 	{
@@ -1594,6 +1790,7 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 	// DNS cache list
 	if (dns_cache != NULL)
 	{
+		//Debug("DNS_CACHE: %u %u\n", dns_cache->AList->num_item, dns_cache->CNameList->num_item);
 		UINT i;
 		for (i = 0;i < LIST_NUM(dns_cache->AList);i++)
 		{
@@ -1752,12 +1949,21 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 					if (IsZeroIP(&data.ClientIp) == false)
 					{
-						MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
-
-						if (found_a != NULL)
+						MS_DNS_HASH *found_hash = MsSearchDnsHash(dns_hash, &data.ClientIp);
+						if (found_hash != NULL)
 						{
 							StrCpy(data.ClientHostname_Resolved, sizeof(data.ClientHostname_Resolved),
-								found_a->Hostname);
+								found_hash->Hostname);
+						}
+						else
+						{
+							MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.ClientIp);
+
+							if (found_a != NULL)
+							{
+								StrCpy(data.ClientHostname_Resolved, sizeof(data.ClientHostname_Resolved),
+									found_a->Hostname);
+							}
 						}
 					}
 
@@ -1958,12 +2164,21 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 				if (IsZeroIP(&data.Tcp.RemoteIP) == false)
 				{
-					MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.Tcp.RemoteIP);
-
-					if (found_a != NULL)
+					MS_DNS_HASH *found_hash = MsSearchDnsHash(dns_hash, &data.Tcp.RemoteIP);
+					if (found_hash != NULL)
 					{
 						StrCpy(data.RemoteIPHostname_Resolved, sizeof(data.RemoteIPHostname_Resolved),
-							found_a->Hostname);
+							found_hash->Hostname);
+					}
+					else
+					{
+						MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &data.Tcp.RemoteIP);
+
+						if (found_a != NULL)
+						{
+							StrCpy(data.RemoteIPHostname_Resolved, sizeof(data.RemoteIPHostname_Resolved),
+								found_a->Hostname);
+						}
 					}
 				}
 
@@ -1986,12 +2201,21 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 			if (IsZeroIP(&block->RemoteIP) == false)
 			{
-				MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &block->RemoteIP);
-
-				if (found_a != NULL)
+				MS_DNS_HASH *found_hash = MsSearchDnsHash(dns_hash, &block->RemoteIP);
+				if (found_hash != NULL)
 				{
 					StrCpy(block->RemoteIPHostname_Resolved, sizeof(block->RemoteIPHostname_Resolved),
-						found_a->Hostname);
+						found_hash->Hostname);
+				}
+				else
+				{
+					MS_DNS_CACHE_ENTRY_A *found_a = MsSearchDnsCacheList_A(a_list, &block->RemoteIP);
+
+					if (found_a != NULL)
+					{
+						StrCpy(block->RemoteIPHostname_Resolved, sizeof(block->RemoteIPHostname_Resolved),
+							found_a->Hostname);
+					}
 				}
 			}
 
