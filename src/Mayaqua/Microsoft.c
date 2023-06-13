@@ -1601,7 +1601,16 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 				UniFormat(key, sizeof(key), L"SHARE_FILE:%u:%s:%s:%S",
 					data.Id, data.FileName, data.UserName, data.Mode);
 
-				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_FILESHARE_FILE, tick));
+				bool ok = true;
+				if (UniStrCmpi(data.FileName, L"\\spoolss") == 0)
+				{
+					ok = false;
+				}
+
+				if (ok)
+				{
+					Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_FILESHARE_FILE, tick));
+				}
 
 			}
 		}
