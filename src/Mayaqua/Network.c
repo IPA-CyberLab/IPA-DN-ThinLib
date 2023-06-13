@@ -613,6 +613,7 @@ char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 ti
 
 	char *template = "MIME-Version: 1.0\n"
 		"Date: __TIMESTAMP__\n"
+		"Message-ID: <__RAND__@__MACHINE_NAME__>\n"
 		"Subject: =?UTF-8?B?_SUBJECT_?=\n"
 		"From: _FROM_ <_FROM_>\n"
 		"To: _TO_\n"
@@ -627,6 +628,7 @@ char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 ti
 
 	char date_str[64] = CLEAN;
 	GetHttpDateStr(date_str, sizeof(date_str), time);
+	ReplaceStrEx(date_str, sizeof(date_str), date_str, "GMT", "+0000", false);
 
 	UCHAR rand[16] = CLEAN;
 	Rand(rand, sizeof(rand));
@@ -634,9 +636,17 @@ char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 ti
 	BinToStr(rand_str, sizeof(rand_str), rand, sizeof(rand));
 	StrLower(rand_str);
 
+	wchar_t computer_name[MAX_PATH] = CLEAN;
+	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
+	UniStrLower(computer_name);
+	
+	char computer_name_a[MAX_PATH];
+	UniToStr(computer_name_a, sizeof(computer_name_a), computer_name);
+	EnPrintableAsciiStr(computer_name_a, '_');
+
 	ReplaceStrEx(ret, ret_size, ret, "__TIMESTAMP__", date_str, false);
-	ReplaceStrEx(ret, ret_size, ret, "_RAND_", rand_str, false);
-	ReplaceStrEx(ret, ret_size, ret, "_MACHINE_NAME_", rand_str, false);
+	ReplaceStrEx(ret, ret_size, ret, "__RAND__", rand_str, false);
+	ReplaceStrEx(ret, ret_size, ret, "__MACHINE_NAME__", computer_name_a, false);
 	ReplaceStrEx(ret, ret_size, ret, "_FROM_", from, false);
 	ReplaceStrEx(ret, ret_size, ret, "_TO_", to, false);
 

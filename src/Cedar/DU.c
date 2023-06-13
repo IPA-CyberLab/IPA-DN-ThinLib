@@ -5232,7 +5232,9 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s%s\n", svc->StartupSettings.AppTitle, date_str, time_str, timezone_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-			Format(tmp, sizeof(tmp), "Message Unique ID: %s\n", unique_id_str);
+			Format(tmp, sizeof(tmp), "Computer MAC address: %s\n", mac_str);
+			WriteBuf(current_mail_body, tmp, StrLen(tmp));
+			Format(tmp, sizeof(tmp), "Computer IP address: %r\n", &my_ip);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
@@ -5244,11 +5246,81 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				WriteBuf(current_mail_body, tmp, StrLen(tmp));
 			}
 
-			Format(tmp, sizeof(tmp), "IP address: %r\n", &my_ip);
+			Format(tmp, sizeof(tmp), "Message Unique ID: %s\n", unique_id_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-			Format(tmp, sizeof(tmp), "MAC address: %s\n\n", mac_str);
-			WriteBuf(current_mail_body, tmp, StrLen(tmp));
+			{
+				// Get current MAC address
+				UINT64 disk_free = 0;
+				UINT64 disk_used = 0;
+				UINT64 disk_total = 0;
+				char disk_free_str[64] = CLEAN;
+				char disk_used_str[64] = CLEAN;
+				char disk_total_str[64] = CLEAN;
+
+				Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);
+				ToStr3(disk_free_str, sizeof(disk_free_str), disk_free);
+				ToStr3(disk_used_str, sizeof(disk_used_str), disk_used);
+				ToStr3(disk_total_str, sizeof(disk_total_str), disk_total);
+
+				char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+				char timezone_str[16] = CLEAN;
+				MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
+
+				char system_boot_datetime[128] = CLEAN;
+				GetDateTimeStr64(system_boot_datetime, sizeof(system_boot_datetime), SystemToLocal64(MsGetWindowsBootSystemTime()));
+
+				char system_boot_span[128] = CLEAN;
+				GetSpanStrMilli(system_boot_span, sizeof(system_boot_span), MsGetTickCount64());
+
+				char svc_boot_datetime[128] = CLEAN;
+				GetDateTimeStr64(svc_boot_datetime, sizeof(svc_boot_datetime), svc->BootLocalTime);
+
+				char svc_boot_span[128] = CLEAN;
+				GetSpanStrMilli(svc_boot_span, sizeof(svc_boot_span), Tick64() - svc->BootTick);
+
+				GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+				OS_INFO *os = GetOsInfo();
+				MEMINFO mem = CLEAN;
+				GetMemInfo(&mem);
+				wchar_t computer_name[128] = CLEAN;
+				MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
+
+				wchar_t tmp2[2048];
+				UniFormat(tmp2, sizeof(tmp2),
+					L"THINFW_BOOT_DATETIME: %S%S, THINFW_BOOT_UPTIME: %S,\n"
+					L"OsSystemName: %S, OsProductName: %S,\nOsVendorName: %S, "
+					L"OsVersion: %S,\n"
+					L"ProcessUserName: %s,\n"
+					L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes,\n"
+					L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, \nTotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, \nProcessAppPath: %s,\n"
+					L"OsBootDateTime: %S%S, OsUptime: %S,\n"
+					L"CEDAR_VER: %u, "
+					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u,\n"
+					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S\n\n"
+					,
+					svc_boot_datetime, timezone_str, svc_boot_span,
+					os->OsSystemName, os->OsProductName, os->OsVendorName,
+					os->OsVersion,
+					MsGetUserNameExW(),
+					disk_free_str, disk_used_str, disk_total_str,
+					mem.TotalMemory_Str, mem.UsedMemory_Str, mem.FreeMemory_Str,
+					mem.TotalPhys_Str, mem.UsedPhys_Str, mem.FreePhys_Str,
+					MsGetExeFileNameW(),
+					system_boot_datetime, timezone_str, system_boot_span,
+					CEDAR_VER,
+					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+					BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE,
+					THINLIB_COMMIT_ID, THINLIB_VER_LABEL
+				);
+
+				char *utf = CopyUniToUtf(tmp2);
+
+				WriteBuf(current_mail_body, utf, StrLen(utf));
+
+				Free(utf);
+			}
 
 			WriteBufChar(current_mail_body, 0);
 
@@ -7636,7 +7708,7 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 		os->OsVersion,
 		computer_name,
 		mac_str,
-		MsGetUserNameExW(),
+		svc->Username,
 		disk_free_str, disk_used_str, disk_total_str,
 		total_send_packets_str, total_send_bytes_str, total_recv_packets_str, total_recv_bytes_str,
 		mem.TotalMemory_Str, mem.UsedMemory_Str, mem.FreeMemory_Str,
