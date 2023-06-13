@@ -5224,13 +5224,15 @@ void TfReportThreadProc(THREAD *thread, void *param)
 			GetDateStr64(date_str, sizeof(date_str), time);
 			GetTimeStrMilli64(time_str, sizeof(time_str), time);
 
+			UINT64 system_time = LocalToSystem64(time);
+
 			char timezone_str[16] = CLEAN;
 			MsGetTimezoneSuffixStr(timezone_str, sizeof(timezone_str));
 
 			Format(tmp, sizeof(tmp), "\n---\nReported by %s\nMail timestamp: %s %s%s\n", svc->StartupSettings.AppTitle, date_str, time_str, timezone_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
-			Format(tmp, sizeof(tmp), "Message Unique ID: %S\n", unique_id_str);
+			Format(tmp, sizeof(tmp), "Message Unique ID: %s\n", unique_id_str);
 			WriteBuf(current_mail_body, tmp, StrLen(tmp));
 
 			Format(tmp, sizeof(tmp), "Windows computer name: %S\n", computer_name);
@@ -5328,7 +5330,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					char *to_address = to_list->Token[i];
 
 					char *mail_body = SmtpGenerateUtf8MailBody(prefix_tmp, st.ReportMailFrom, to_address,
-						time, current_mail_body->Buf);
+						system_time, current_mail_body->Buf);
 
 					BUF *mail_error = NewBuf();
 
