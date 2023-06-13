@@ -195,14 +195,7 @@ void InitCanaryRand()
 	free(p2);
 
 	canary_memtag_magic1 = *((UINT64 *)(GetCanaryRand(CANARY_RAND_ID_MEMTAG_MAGIC) + 0));
-	((UCHAR *)&canary_memtag_magic1)[0] = '{';
-	((UCHAR *)&canary_memtag_magic1)[7] = '}';
-
 	canary_memtag_magic2 = *((UINT64 *)(GetCanaryRand(CANARY_RAND_ID_MEMTAG_MAGIC) + 8));
-	((UCHAR *)&canary_memtag_magic2)[0] = '<';
-	((UCHAR *)&canary_memtag_magic2)[7] = '>';
-
-	printf("canary_memtag_magic = %lld %lld\n", canary_memtag_magic1, canary_memtag_magic2);
 
 	canary_inited = true;
 }
@@ -5637,7 +5630,7 @@ void *MallocEx(UINT size, bool zero_clear_when_free)
 	tag = InternalMalloc(real_size);
 
 	Zero(tag, sizeof(MEMTAG1));
-	tag->Magic = canary_memtag_magic1;
+	tag->Magic = canary_memtag_magic1 ^ (UINT64)tag;
 	tag->Size = size;
 	tag->ZeroFree = zero_clear_when_free;
 
@@ -5722,7 +5715,7 @@ void *ReAlloc(void *addr, UINT size)
 			MEMTAG1 *tag2 = InternalReAlloc(tag, CALC_MALLOCSIZE(size));
 
 			Zero(tag2, sizeof(MEMTAG1));
-			tag2->Magic = canary_memtag_magic1;
+			tag2->Magic = canary_memtag_magic1 ^ (UINT64)tag2;
 			tag2->Size = size;
 
 			return MEMTAG1_TO_POINTER(tag2);
@@ -5757,7 +5750,6 @@ void Free(void *addr)
 	// Memory release
 	tag->Magic = 0;
 	InternalFree(tag);
-	canary_memtag_magic1++;
 }
 
 // Check the memtag
@@ -5770,7 +5762,7 @@ void CheckMemTag1(MEMTAG1 *tag)
 		return;
 	}
 
-	if (tag->Magic != canary_memtag_magic1)
+	if (tag->Magic != (canary_memtag_magic1 ^ (UINT64)tag))
 	{
 		AbortExitEx("CheckMemTag1: tag->Magic != canary_memtag_magic1");
 		return;
