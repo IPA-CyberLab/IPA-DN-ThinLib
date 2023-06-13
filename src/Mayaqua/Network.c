@@ -644,7 +644,8 @@ char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 ti
 	UniStrLower(computer_name);
 	UniToStr(computer_name_a, sizeof(computer_name_a), computer_name);
 #else	// OS_WIN32
-	GetMachineNameEx(computer_name, sizeof(computer_name), false);
+	GetMachineNameEx(computer_name_a, sizeof(computer_name_a), false);
+	StrLower(computer_name_a);
 #endif // OS_WIN32
 	
 	EnPrintableAsciiStr(computer_name_a, '_');
