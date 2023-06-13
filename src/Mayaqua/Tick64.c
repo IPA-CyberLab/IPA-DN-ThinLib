@@ -104,7 +104,24 @@ UINT64 TickHighres64()
 
 #else	// OS_WIN32
 
-	return Tick64();
+	ret = Tick64();
+
+#endif	// OS_WIN32
+
+	return ret;
+}
+
+UINT64 TickHighresNano64(bool raw)
+{
+	UINT64 ret = 0;
+
+#ifdef	OS_WIN32
+
+	ret = (UINT64)(MsGetHiResTimeSpan(MsGetHiResCounter()) * 1000000000.0f);
+
+#else	// OS_WIN32
+
+	ret = UnixGetHighresTickNano64(raw);
 
 #endif	// OS_WIN32
 
