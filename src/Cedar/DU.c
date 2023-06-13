@@ -5522,7 +5522,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					{
 						LIST *current_ini = ReadIni(current_buf);
 
-						if (current_buf == NULL || IniBoolValue(current_ini, "EnableConfigAutoUpdate"))
+						if (current_buf == NULL || (IniBoolValue(current_ini, "EnableConfigAutoUpdate") && StrCmp(IniStrValue(current_ini, "ConfigAutoUpdateUrl"), st.ConfigAutoUpdateUrl) == 0))
 						{
 							UINT64 free_size = 0;
 							if (Win32GetDiskFreeW(real_filename, &free_size, NULL, NULL))
