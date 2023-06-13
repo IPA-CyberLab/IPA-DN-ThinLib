@@ -5289,15 +5289,15 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 				wchar_t tmp2[2048];
 				UniFormat(tmp2, sizeof(tmp2),
-					L"THINFW_BOOT_DATETIME: %S%S, THINFW_BOOT_UPTIME: %S,\n"
-					L"OsSystemName: %S, OsProductName: %S,\nOsVendorName: %S, "
-					L"OsVersion: %S,\n"
-					L"ProcessUserName: %s,\n"
-					L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes,\n"
-					L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, \nTotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, \nProcessAppPath: %s,\n"
-					L"OsBootDateTime: %S%S, OsUptime: %S,\n"
+					L"THINFW_BOOT_DATETIME: %S%S, THINFW_BOOT_UPTIME: %S\n"
+					L"OsSystemName: %S, OsProductName: %S\nOsVendorName: %S, "
+					L"OsVersion: %S\n"
+					L"ProcessUserName: %s\n"
+					L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes\n"
+					L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, \nTotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, \nProcessAppPath: %s\n"
+					L"OsBootDateTime: %S%S, OsUptime: %S\n"
 					L"CEDAR_VER: %u, "
-					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u,\n"
+					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u\n"
 					L"THINLIB_COMMIT_ID: %S, THINLIB_VER_LABEL: %S\n\n"
 					,
 					svc_boot_datetime, timezone_str, svc_boot_span,

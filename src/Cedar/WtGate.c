@@ -1316,7 +1316,6 @@ bool WtgWebSocketAccept(WT* wt, SOCK* s, char* url_target, TSESSION* session, TU
 		return false;
 	}
 
-	WHERE;
 	WS* w = NewWs(s);
 	if (w != NULL)
 	{
@@ -2571,8 +2570,10 @@ void WtgSessionMain(TSESSION *s)
 		return;
 	}
 
+	WT *wt = s->wt;
+
 #ifdef	OS_WIN32
-	if ((s->wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
+	if ((wt->Flags & WIDE_FLAG_NO_SET_PROCESS_PRIORITY) == 0)
 	{
 		MsSetThreadPriorityRealtime();
 	}
@@ -2593,6 +2594,8 @@ void WtgSessionMain(TSESSION *s)
 
 	while (true)
 	{
+		bool measure_delay = false;
+
 		loop1++;
 		bool disconnected = false;
 
@@ -2602,17 +2605,27 @@ void WtgSessionMain(TSESSION *s)
 		{
 			last_traffic_stat = now;
 
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
-			StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
+			StatManReportInt64(wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
+			StatManReportInt64(wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
 
 			s->Stat_ClientToServerTraffic = 0;
 			s->Stat_ServerToClientTraffic = 0;
 
-			WideGateCheckNextRebootTime64(s->wt->Wide);
+			WideGateCheckNextRebootTime64(wt->Wide);
+
+			measure_delay = true;
 		}
 
 		// ソケットイベントを待機
 		WtgWaitForSock(s);
+
+		UINT64 measude_delay_start = 0;
+
+		// 内部遅延を計測
+		if (measure_delay)
+		{
+			measude_delay_start = TickHighresNano64(true);
+		}
 
 		Lock(s->Lock);
 		{
@@ -2656,14 +2669,59 @@ void WtgSessionMain(TSESSION *s)
 			// サーバーとの接続が切断されたのでセッションを終了する
 			break;
 		}
+
+		// 内部遅延を計測
+		if (measure_delay)
+		{
+			UINT64 delay_value = 0;
+			UINT64 measude_delay_end = TickHighresNano64(true);
+			if (measude_delay_end >= measude_delay_start)
+			{
+				delay_value = measude_delay_end - measude_delay_start;
+			}
+
+			UINT64 now = Tick64();
+
+			// 遅延統計を更新
+			Lock(wt->InternalDelayMeasureLock);
+			{
+				wt->InternalDelayMeasure_Current_Total += delay_value;
+				wt->InternalDelayMeasure_Current_Count++;
+
+				if (wt->InternalDelayMeasure_Current_StartTick == 0 ||
+					(now >= (wt->InternalDelayMeasure_Current_StartTick + WT_INTERNAL_DELAY_MEASURE_INTERVAL)))
+				{
+					wt->InternalDelayMeasure_Current_StartTick = now;
+
+					if (wt->InternalDelayMeasure_Current_Count >= 1)
+					{
+						wt->InternalDelayMeasure_Last_Value = (double)wt->InternalDelayMeasure_Current_Total / (double)wt->InternalDelayMeasure_Current_Count / 1000000.0;
+						if (wt->InternalDelayMeasure_Last_Value == 0.0)
+						{
+							wt->InternalDelayMeasure_Last_Value = 0.0001;
+						}
+					}
+					else
+					{
+						wt->InternalDelayMeasure_Last_Value = 0.0;
+					}
+
+					wt->InternalDelayMeasure_Last_Value_Expires = now + (WT_INTERNAL_DELAY_MEASURE_INTERVAL * 2);
+
+					wt->InternalDelayMeasure_Current_Total = 0;
+					wt->InternalDelayMeasure_Current_Count = 0;
+				}
+			}
+			Unlock(wt->InternalDelayMeasureLock);
+		}
 	}
 
 	//printf("%p: loop 1 = %u, loop 2 = %u\n", s, loop1, loop2);
 
 	Debug("WtgSessionMain Cleanup...\n");
 
-	StatManReportInt64(s->wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
-	StatManReportInt64(s->wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
+	StatManReportInt64(wt->StatMan, "WtgTrafficClientToServer_Total", s->Stat_ClientToServerTraffic);
+	StatManReportInt64(wt->StatMan, "WtgTrafficServerToClient_Total", s->Stat_ServerToClientTraffic);
 
 	WideGateReportSessionDel(s->wt->Wide, s->SessionId);
 

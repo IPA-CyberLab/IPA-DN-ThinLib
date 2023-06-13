@@ -1447,6 +1447,8 @@ WT *NewWt(X *master_cert, UINT wide_flags)
 
 	wt = ZeroMalloc(sizeof(WT));
 
+	wt->InternalDelayMeasureLock = NewLock();
+
 	wt->Flags = wide_flags;
 
 	wt->ErrorControllersList = NewStrList();
@@ -1507,6 +1509,8 @@ void CleanupWt(WT *wt)
 
 	FreeStrList(wt->ErrorControllersList);
 	DeleteLock(wt->ErrorControllersListLock);
+
+	DeleteLock(wt->InternalDelayMeasureLock);
 
 	Free(wt);
 }

@@ -297,6 +297,13 @@ struct WT
 	LOCK* ErrorControllersListLock;
 	char WebAppProxyBaseUrl[MAX_PATH];
 
+	LOCK *InternalDelayMeasureLock;
+	UINT64 InternalDelayMeasure_Current_StartTick;
+	UINT64 InternalDelayMeasure_Current_Total;
+	UINT64 InternalDelayMeasure_Current_Count;
+	double InternalDelayMeasure_Last_Value;
+	UINT64 InternalDelayMeasure_Last_Value_Expires;
+
 	ZTTP_GW *ZttpGw;					// ZTTP 中継ゲートウェイ機能
 
 	// Client / Server / Gate 共通
@@ -311,6 +318,8 @@ struct WT
 
 	bool Server_IsInWtsSessionMainLoop;			// Server がセッションのメインループを回っているか
 };
+
+#define WT_INTERNAL_DELAY_MEASURE_INTERVAL	(10ULL * 1000ULL)
 
 // スレッドとセッションの組み合わせ
 struct SOCKTHREAD

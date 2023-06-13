@@ -3142,6 +3142,32 @@ void WideGatePackGateInfo(PACK *p, WT *wt)
 
 	PackAddStr(p, "UltraCommitId", THINLIB_COMMIT_ID);
 
+	double delay = 0.0;
+
+	UINT64 now = Tick64();
+
+	Lock(wt->InternalDelayMeasureLock);
+	{
+		if (now <= wt->InternalDelayMeasure_Last_Value_Expires)
+		{
+			delay = wt->InternalDelayMeasure_Last_Value;
+		}
+	}
+	Unlock(wt->InternalDelayMeasureLock);
+
+	// 状態メッセージ
+	char stat_msg[1024] = CLEAN;
+	char delay_str[32] = CLEAN;
+	StrCpy(delay_str, sizeof(delay_str), "N/A");
+	if (delay != 0.0)
+	{
+		Format(delay_str, sizeof(delay_str), "%0.3f ms", delay);
+	}
+
+	Format(stat_msg, sizeof(stat_msg), "CpuLatency: %s", delay_str);
+
+	PackAddStr(p, "StatMsg", stat_msg);
+
 	// MAC アドレス
 	if (IsEmptyStr(wt->WanMacAddress))
 	{
