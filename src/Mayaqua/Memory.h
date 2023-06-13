@@ -105,12 +105,18 @@
 #pragma pack(push, 1)
 #endif	// OS_WIN32
 
-// Memory tag
+// Memory tag 1
 struct MEMTAG1
 {
 	UINT64 Magic;
 	UINT Size;
 	bool ZeroFree;
+} GCC_PACKED;
+
+// Memory tag 2
+struct MEMTAG2
+{
+	UINT64 Magic;
 } GCC_PACKED;
 
 #ifdef	OS_WIN32

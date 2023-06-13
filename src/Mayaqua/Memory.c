@@ -5712,7 +5712,11 @@ void *ReAlloc(void *addr, UINT size)
 		else
 		{
 			// Size changed
-			MEMTAG1 *tag2 = InternalReAlloc(tag, CALC_MALLOCSIZE(size));
+			MEMTAG1 *tag2;
+
+			tag->Magic = 0;
+			
+			tag2 = InternalReAlloc(tag, CALC_MALLOCSIZE(size));
 
 			Zero(tag2, sizeof(MEMTAG1));
 			tag2->Magic = canary_memtag_magic1 ^ ((UINT64)tag2 * GOLDEN_RATION_PRIME_U64);
