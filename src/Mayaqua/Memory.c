@@ -99,6 +99,114 @@ static UINT fifo_current_realloc_mem_size = FIFO_REALLOC_MEM_SIZE;
 
 static ACTIVE_PATCH_ENTRY ActivePatchList[MAX_ACTIVE_PATCH] = CLEAN;
 
+static bool canary_inited = false;
+typedef struct CANARY_RAND_DATA
+{
+	UCHAR Data[CANARY_RAND_SIZE + 4];
+} CANARY_RAND_DATA;
+
+static CANARY_RAND_DATA canary_rand_data[NUM_CANARY_RAND] = CLEAN;
+
+static UINT64 canary_memtag_magic1 = 0;
+static UINT64 canary_memtag_magic2 = 0;
+
+UCHAR *GetCanaryRand(UINT id)
+{
+	if (id >= NUM_CANARY_RAND)
+	{
+		id = NUM_CANARY_RAND - 1;
+	}
+
+	return &((canary_rand_data[id].Data)[0]);
+}
+
+void InitCanaryRand()
+{
+	if (canary_inited)
+	{
+		return;
+	}
+
+	char random_seed[1024] = CLEAN;
+
+	void *p1 = malloc(1);
+	void *p2 = malloc(1);
+
+	UINT64 t1 = 0, t2 = 0;
+
+#ifdef OS_WIN32
+	SYSTEMTIME st = CLEAN;
+	Win32GetSystemTime(&st);
+	memcpy(&t1, ((UCHAR *)&st) + 0, 8);
+	memcpy(&t2, ((UCHAR *)&st) + 8, 8);
+#else	// OS_WIN32
+	struct timeval tv = CLEAN;
+	struct timezone tz = CLEAN;
+	gettimeofday(&tv, &tz);
+	t1 = (UINT64)tv.tv_sec;
+	t2 = (UINT64)tv.tv_usec;
+#endif // OS_WIN32
+
+	UINT64 dos_rand = (UINT64)rand();
+	UINT64 tick1 = TickHighresNano64(true);
+	UINT64 tick2 = TickHighresNano64(true);
+
+	UINT i;
+	for (i = 0;i < NUM_CANARY_RAND;i++)
+	{
+		// using sprintf() here is safe.
+		sprintf(random_seed,
+			"%u "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%llu "
+			"%u %u %s %s %u %u %u %u %u %u %s %s "
+			"%u "
+			,
+			i,
+			(UINT64)InitCanaryRand,
+			(UINT64)&canary_inited,
+			(UINT64)&((canary_rand_data[0].Data)[0]),
+			(UINT64)&random_seed[0],
+			tick1,
+			tick2,
+			dos_rand,
+			(UINT64)p1,
+			(UINT64)p2,
+			t1,
+			t2,
+			CEDAR_VER, CEDAR_BUILD, BUILDER_NAME, BUILD_PLACE, BUILD_DATE_Y, BUILD_DATE_M,
+			BUILD_DATE_D, BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE, THINLIB_COMMIT_ID, THINLIB_VER_LABEL,
+			~i
+		);
+
+		Hash(canary_rand_data[i].Data, random_seed, (UINT)strlen(random_seed), true);
+	}
+
+	free(p1);
+	free(p2);
+
+	canary_memtag_magic1 = *((UINT64 *)(GetCanaryRand(CANARY_RAND_ID_MEMTAG_MAGIC) + 0));
+	((UCHAR *)&canary_memtag_magic1)[0] = '{';
+	((UCHAR *)&canary_memtag_magic1)[7] = '}';
+
+	canary_memtag_magic2 = *((UINT64 *)(GetCanaryRand(CANARY_RAND_ID_MEMTAG_MAGIC) + 8));
+	((UCHAR *)&canary_memtag_magic2)[0] = '<';
+	((UCHAR *)&canary_memtag_magic2)[7] = '>';
+
+	printf("canary_memtag_magic = %lld %lld\n", canary_memtag_magic1, canary_memtag_magic2);
+
+	canary_inited = true;
+}
+
 // Add active patch
 bool Vars_ActivePatch_AddStr(char* name, char* str_value)
 {
@@ -5516,33 +5624,44 @@ void *Malloc(UINT size)
 }
 void *MallocEx(UINT size, bool zero_clear_when_free)
 {
-	MEMTAG *tag;
+	MEMTAG1 *tag;
 	UINT real_size;
+
+	if (canary_inited == false)
+	{
+		InitCanaryRand();
+	}
 
 	real_size = CALC_MALLOCSIZE(size);
 
 	tag = InternalMalloc(real_size);
 
-	Zero(tag, sizeof(MEMTAG));
-	tag->Magic = MEMTAG_MAGIC;
+	Zero(tag, sizeof(MEMTAG1));
+	tag->Magic = canary_memtag_magic1;
 	tag->Size = size;
 	tag->ZeroFree = zero_clear_when_free;
 
-	return MEMTAG_TO_POINTER(tag);
+	return MEMTAG1_TO_POINTER(tag);
 }
 
 // Get memory size
 UINT GetMemSize(void *addr)
 {
-	MEMTAG *tag;
+	MEMTAG1 *tag;
+
+	if (canary_inited == false)
+	{
+		InitCanaryRand();
+	}
+
 	// Validate arguments
 	if (IS_NULL_POINTER(addr))
 	{
 		return 0;
 	}
 
-	tag = POINTER_TO_MEMTAG(addr);
-	CheckMemTag(tag);
+	tag = POINTER_TO_MEMTAG1(addr);
+	CheckMemTag1(tag);
 
 	return tag->Size;
 }
@@ -5550,16 +5669,22 @@ UINT GetMemSize(void *addr)
 // ReAlloc
 void *ReAlloc(void *addr, UINT size)
 {
-	MEMTAG *tag;
+	MEMTAG1 *tag;
 	bool zerofree;
+
+	if (canary_inited == false)
+	{
+		InitCanaryRand();
+	}
+
 	// Validate arguments
 	if (IS_NULL_POINTER(addr))
 	{
 		return NULL;
 	}
 
-	tag = POINTER_TO_MEMTAG(addr);
-	CheckMemTag(tag);
+	tag = POINTER_TO_MEMTAG1(addr);
+	CheckMemTag1(tag);
 
 	zerofree = tag->ZeroFree;
 
@@ -5594,13 +5719,13 @@ void *ReAlloc(void *addr, UINT size)
 		else
 		{
 			// Size changed
-			MEMTAG *tag2 = InternalReAlloc(tag, CALC_MALLOCSIZE(size));
+			MEMTAG1 *tag2 = InternalReAlloc(tag, CALC_MALLOCSIZE(size));
 
-			Zero(tag2, sizeof(MEMTAG));
-			tag2->Magic = MEMTAG_MAGIC;
+			Zero(tag2, sizeof(MEMTAG1));
+			tag2->Magic = canary_memtag_magic1;
 			tag2->Size = size;
 
-			return MEMTAG_TO_POINTER(tag2);
+			return MEMTAG1_TO_POINTER(tag2);
 		}
 	}
 }
@@ -5608,15 +5733,20 @@ void *ReAlloc(void *addr, UINT size)
 // Free
 void Free(void *addr)
 {
-	MEMTAG *tag;
+	MEMTAG1 *tag;
 	// Validate arguments
 	if (IS_NULL_POINTER(addr))
 	{
 		return;
 	}
 
-	tag = POINTER_TO_MEMTAG(addr);
-	CheckMemTag(tag);
+	if (canary_inited == false)
+	{
+		InitCanaryRand();
+	}
+
+	tag = POINTER_TO_MEMTAG1(addr);
+	CheckMemTag1(tag);
 
 	if (tag->ZeroFree)
 	{
@@ -5627,25 +5757,24 @@ void Free(void *addr)
 	// Memory release
 	tag->Magic = 0;
 	InternalFree(tag);
+	canary_memtag_magic1++;
 }
 
 // Check the memtag
-void CheckMemTag(MEMTAG *tag)
+void CheckMemTag1(MEMTAG1 *tag)
 {
-#ifndef	DONT_CHECK_HEAP
 	// Validate arguments
 	if (tag == NULL)
 	{
-		AbortExitEx("CheckMemTag: tag == NULL");
+		AbortExitEx("CheckMemTag1: tag == NULL");
 		return;
 	}
 
-	if (tag->Magic != MEMTAG_MAGIC)
+	if (tag->Magic != canary_memtag_magic1)
 	{
-		AbortExitEx("CheckMemTag: tag->Magic != MEMTAG_MAGIC");
+		AbortExitEx("CheckMemTag1: tag->Magic != canary_memtag_magic1");
 		return;
 	}
-#endif	// DONT_CHECK_HEAP
 }
 
 // ZeroMalloc

@@ -2423,7 +2423,9 @@ void AbortExitEx(char *msg)
 
 		LocalTime(&time);
 
-		SystemToStr(time_str, sizeof(time_str), &time);
+		sprintf(time_str, "%04u-%02u-%02u %02u:%02u:%02u",
+			time.wYear, time.wMonth, time.wDay,
+			time.wHour, time.wMinute, time.wSecond);
 
 		fwrite(tag, 1, strlen(tag), f);
 
