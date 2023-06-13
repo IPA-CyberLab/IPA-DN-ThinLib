@@ -7218,6 +7218,8 @@ L_BOOT_ERROR:
 						dns_hash = MsNewDnsHash();
 					}
 
+					UINT64 tick = Tick64();
+
 					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv, dns_hash);
 
 					if (current_list == NULL)
@@ -7225,7 +7227,7 @@ L_BOOT_ERROR:
 						// Initialize watcher
 						current_list = NewDiffList();
 
-						LIST *diff = UpdateDiffList(current_list, now_list);
+						LIST *diff = UpdateDiffList(current_list, now_list, tick);
 
 						// Do not use the result of diff
 						FreeDiffList(diff);
@@ -7233,7 +7235,7 @@ L_BOOT_ERROR:
 					else
 					{
 						// Update watcher
-						LIST *diff = UpdateDiffList(current_list, now_list);
+						LIST *diff = UpdateDiffList(current_list, now_list, tick);
 
 						//Print("DIFF: %u\n", LIST_NUM(diff));
 

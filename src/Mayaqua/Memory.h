@@ -624,7 +624,7 @@ void ShuffleWithSeed(UINT* array, UINT size, void* seed, UINT seed_size);
 int CompareDiffList(void *p1, void *p2);
 LIST *NewDiffList();
 void FreeDiffList(LIST *list);
-LIST *UpdateDiffList(LIST *base_list, LIST *new_items);
+LIST *UpdateDiffList(LIST *base_list, LIST *new_items, UINT64 tick);
 DIFF_ENTRY *NewDiffEntry(wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);
 DIFF_ENTRY *CloneDiffEntry(DIFF_ENTRY *e);
 bool AddOrRenewDiffEntry(LIST *list, wchar_t *key, void *data, UINT data_size, UINT64 param, UINT64 tick);

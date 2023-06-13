@@ -6168,11 +6168,16 @@ bool AddOrRenewDiffEntry(LIST *list, wchar_t *key, void *data, UINT data_size, U
 	return ret;
 }
 
-LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
+LIST *UpdateDiffList(LIST *base_list, LIST *new_items, UINT64 tick)
 {
 	if (base_list == NULL || new_items == NULL)
 	{
 		return NewDiffList();
+	}
+
+	if (tick == 0)
+	{
+		tick = Tick64();
 	}
 
 	LIST *ret = NewDiffList();
@@ -6213,6 +6218,7 @@ LIST *UpdateDiffList(LIST *base_list, LIST *new_items)
 			DIFF_ENTRY *e_clone2 = CloneDiffEntry(e);
 			e_clone2->IsAdded = false;
 			e_clone2->IsRemoved = true;
+			e_clone2->Tick = tick;
 
 			Insert(ret, e_clone2);
 		}
