@@ -89,6 +89,11 @@
 #define	POINTER_TO_MEMTAG1(p)				((MEMTAG1 *)(((UCHAR *)(p)) - sizeof(MEMTAG1)))
 #define	IS_NULL_POINTER(p)					(((p) == NULL) || ((POINTER_TO_UINT64(p) == (UINT64)sizeof(MEMTAG1))))
 
+// Golden Ratio Prime
+// From https://github.com/torvalds/linux/blob/88c5083442454e5e8a505b11fa16f32d2879651e/include/linux/hash.h
+#define GOLDEN_RATION_PRIME_U32				((UINT32)0x61C88647)
+#define GOLDEN_RATION_PRIME_U64				((UINT64)7046029254386353131) // 0x61C8864680B583EB
+
 // Fixed size of a block of memory pool
 #define	MEMPOOL_MAX_SIZE					3000
 
