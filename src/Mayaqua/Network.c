@@ -636,12 +636,17 @@ char *SmtpGenerateUtf8MailBody(wchar_t *subject, char *from, char *to, UINT64 ti
 	BinToStr(rand_str, sizeof(rand_str), rand, sizeof(rand));
 	StrLower(rand_str);
 
+	char computer_name_a[MAX_PATH];
+
+#ifdef OS_WIN32
 	wchar_t computer_name[MAX_PATH] = CLEAN;
 	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
 	UniStrLower(computer_name);
-	
-	char computer_name_a[MAX_PATH];
 	UniToStr(computer_name_a, sizeof(computer_name_a), computer_name);
+#else	// OS_WIN32
+	GetMachineNameEx(computer_name, sizeof(computer_name), false);
+#endif // OS_WIN32
+	
 	EnPrintableAsciiStr(computer_name_a, '_');
 
 	ReplaceStrEx(ret, ret_size, ret, "__TIMESTAMP__", date_str, false);
