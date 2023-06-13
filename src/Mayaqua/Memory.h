@@ -81,10 +81,12 @@
 #define	MallocFast		Malloc
 #define	ZeroMallocFast	ZeroMalloc
 
+#define MAX_MALLOC_MEM_SIZE					(0xffffffff - 64)
+
 // Memory size that can be passed to the kernel at a time
 #define	MAX_SEND_BUF_MEM_SIZE				(10 * 1024 * 1024)
 
-#define	CALC_MALLOCSIZE(size)				((MAX(size, 1)) + sizeof(MEMTAG1))
+#define	CALC_MALLOCSIZE(size)				(((MAX(size, 1) + 7) / 8) * 8 + sizeof(MEMTAG1) + sizeof(MEMTAG2))
 #define	MEMTAG1_TO_POINTER(p)				((void *)(((UCHAR *)(p)) + sizeof(MEMTAG1)))
 #define	POINTER_TO_MEMTAG1(p)				((MEMTAG1 *)(((UCHAR *)(p)) - sizeof(MEMTAG1)))
 #define	IS_NULL_POINTER(p)					(((p) == NULL) || ((POINTER_TO_UINT64(p) == (UINT64)sizeof(MEMTAG1))))
@@ -101,27 +103,20 @@
 #define MAX_ACTIVE_PATCH					1024
 
 
-#ifdef	OS_WIN32
-#pragma pack(push, 1)
-#endif	// OS_WIN32
-
 // Memory tag 1
 struct MEMTAG1
 {
 	UINT64 Magic;
 	UINT Size;
 	bool ZeroFree;
-} GCC_PACKED;
+};
 
 // Memory tag 2
 struct MEMTAG2
 {
 	UINT64 Magic;
-} GCC_PACKED;
+};
 
-#ifdef	OS_WIN32
-#pragma pack(pop)
-#endif	// OS_WIN32
 
 // Buffer
 struct BUF
@@ -372,6 +367,7 @@ void *ZeroMallocEx(UINT size, bool zero_clear_when_free);
 void *ReAlloc(void *addr, UINT size);
 void Free(void *addr);
 void CheckMemTag1(MEMTAG1 *tag);
+void CheckMemTag2(MEMTAG2 *tag);
 UINT GetMemSize(void *addr);
 
 void *InternalMalloc(UINT size);
