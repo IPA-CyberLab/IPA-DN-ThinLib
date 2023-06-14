@@ -5640,12 +5640,12 @@ void *MallocEx(UINT size, bool zero_clear_when_free)
 
 	tag1 = InternalMalloc(real_size);
 
-	tag1->Magic = canary_memtag_magic1 ^ ((UINT64)tag1 * GOLDEN_RATION_PRIME_U64);
+	tag1->Magic = canary_memtag_magic1 ^ ((UINT64)tag1 * GOLDEN_RATIO_PRIME_U64);
 	tag1->Size = size;
 	tag1->ZeroFree = zero_clear_when_free;
 
 	tag2 = (MEMTAG2 *)(((UCHAR *)tag1) + CALC_MALLOCSIZE(tag1->Size) - sizeof(MEMTAG2));
-	tag2->Magic = canary_memtag_magic2 ^ ((UINT64)tag2 * GOLDEN_RATION_PRIME_U64);
+	tag2->Magic = canary_memtag_magic2 ^ ((UINT64)tag2 * GOLDEN_RATIO_PRIME_U64);
 
 	return MEMTAG1_TO_POINTER(tag1);
 }
@@ -5742,12 +5742,12 @@ void *ReAlloc(void *addr, UINT size)
 			
 			tag1_new = InternalReAlloc(tag1, CALC_MALLOCSIZE(size));
 
-			tag1_new->Magic = canary_memtag_magic1 ^ ((UINT64)tag1_new * GOLDEN_RATION_PRIME_U64);
+			tag1_new->Magic = canary_memtag_magic1 ^ ((UINT64)tag1_new * GOLDEN_RATIO_PRIME_U64);
 			tag1_new->Size = size;
 			tag1_new->ZeroFree = 0;
 
 			tag2_new = (MEMTAG2 *)(((UCHAR *)tag1_new) + CALC_MALLOCSIZE(size) - sizeof(MEMTAG2));
-			tag2_new->Magic = canary_memtag_magic2 ^ ((UINT64)tag2_new * GOLDEN_RATION_PRIME_U64);
+			tag2_new->Magic = canary_memtag_magic2 ^ ((UINT64)tag2_new * GOLDEN_RATIO_PRIME_U64);
 
 			return MEMTAG1_TO_POINTER(tag1_new);
 		}
@@ -5798,7 +5798,7 @@ void CheckMemTag1(MEMTAG1 *tag)
 		return;
 	}
 
-	if (tag->Magic != (canary_memtag_magic1 ^ ((UINT64)tag * GOLDEN_RATION_PRIME_U64)))
+	if (tag->Magic != (canary_memtag_magic1 ^ ((UINT64)tag * GOLDEN_RATIO_PRIME_U64)))
 	{
 		AbortExitEx("CheckMemTag1: tag1->Magic != canary_memtag_magic1");
 		return;
@@ -5815,7 +5815,7 @@ void CheckMemTag2(MEMTAG2 *tag)
 		return;
 	}
 
-	if (tag->Magic != (canary_memtag_magic2 ^ ((UINT64)tag * GOLDEN_RATION_PRIME_U64)))
+	if (tag->Magic != (canary_memtag_magic2 ^ ((UINT64)tag * GOLDEN_RATIO_PRIME_U64)))
 	{
 		AbortExitEx("CheckMemTag2: tag2->Magic != canary_memtag_magic2");
 		return;

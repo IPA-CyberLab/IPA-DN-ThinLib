@@ -1602,7 +1602,8 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 					data.Id, data.FileName, data.UserName, data.Mode);
 
 				bool ok = true;
-				if (UniStrCmpi(data.FileName, L"\\spoolss") == 0)
+				if (UniStrCmpi(data.FileName, L"\\spoolss") == 0 ||
+					UniStrCmpi(data.FileName, L"\\lsarpc") == 0)
 				{
 					ok = false;
 				}
