@@ -6568,6 +6568,7 @@ void TfMain(TF_SERVICE *svc)
 	UINT cfg_SendDailyAliveNoticeHhmmss = 0;
 	bool cfg_AlwaysWatchDnsCache = false;
 	UINT cfg_WatchDnsCacheIntervalMsec = 15000;
+	bool cfg_SetThinFirewallConfigAclSecure = false;
 
 	wchar_t cfg_WindowsEventLogNames[1024] = CLEAN;
 
@@ -6697,6 +6698,8 @@ void TfMain(TF_SERVICE *svc)
 
 					// Interpret ini
 					cfg_Enable = IniBoolValue(ini, "Enable");
+
+					cfg_SetThinFirewallConfigAclSecure = IniBoolValue(ini, "SetThinFirewallConfigAclSecure");
 
 					cfg_EnableDailyAliveMessage = IniBoolValue(ini, "EnableDailyAliveMessage");
 					cfg_SendDailyAliveNoticeHhmmss = IniIntValue(ini, "SendDailyAliveNoticeHhmmss");
@@ -6858,6 +6861,7 @@ void TfMain(TF_SERVICE *svc)
 				new_content = NULL;
 L_BOOT_ERROR:
 				cfg_Enable = false;
+				cfg_SetThinFirewallConfigAclSecure = false;
 				cfg_SettingReloadIntervalMsec = 15 * 1000;
 				cfg_WatchPollingIntervalMsec = 250;
 				cfg_EnableWatchRdp = false;
@@ -6884,6 +6888,14 @@ L_BOOT_ERROR:
 				lastState_locked = INFINITE;
 				lastState_watchActive = INFINITE;
 				lastState_firewall = INFINITE;
+			}
+
+			if (cfg_SetThinFirewallConfigAclSecure && svc->StartupSettings.Mode == TF_SVC_MODE_SYSTEMMODE)
+			{
+				// Set ACL
+				wchar_t fullpath[MAX_PATH] = CLEAN;
+				InnerFilePathW(fullpath, sizeof(fullpath), svc->StartupSettings.SettingFileName);
+				MsSetFileSecureAclAdminWriteEverynoeRead(fullpath);
 			}
 
 			last_cfg_read = now;
