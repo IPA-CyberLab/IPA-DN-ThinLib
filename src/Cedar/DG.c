@@ -213,6 +213,11 @@ UINT DgThinFwDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *pa
 		DlgFont(hWnd, S_31, 10, true);
 		DlgFont(hWnd, S_34, 10, true);
 		DlgFont(hWnd, IDOK, 9, true);
+
+		LANGLIST t = CLEAN;
+		GetCurrentLang(&t);
+
+		SetFont(hWnd, S_36, GetMeiryoFontEx2(10, true));
 		break;
 
 	case WM_COMMAND:
