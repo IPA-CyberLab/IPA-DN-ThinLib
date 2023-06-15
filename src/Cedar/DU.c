@@ -107,6 +107,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
+#include <Psapi.h>
 #include <Mayaqua/Mayaqua.h>
 #include <Cedar/Cedar.h>
 #include <Cedar/CMInner.h>
@@ -5257,6 +5258,12 @@ void TfReportThreadProc(THREAD *thread, void *param)
 				char disk_free_str[64] = CLEAN;
 				char disk_used_str[64] = CLEAN;
 				char disk_total_str[64] = CLEAN;
+				char process_mem_usage_str[64] = CLEAN;
+
+				PROCESS_MEMORY_COUNTERS meminfo = CLEAN;
+				meminfo.cb = sizeof(meminfo);
+				GetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
+				ToStr3(process_mem_usage_str, sizeof(process_mem_usage_str), meminfo.PagefileUsage);
 
 				Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);
 				ToStr3(disk_free_str, sizeof(disk_free_str), disk_free);
@@ -5294,7 +5301,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					L"OsVersion: %S\n"
 					L"ProcessUserName: %s\n"
 					L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes\n"
-					L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, \nTotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, \nProcessAppPath: %s\n"
+					L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, \nTotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, \nThinFwProcessAppPath: %s\nThinFwProcessMemoryUsage: %S bytes\n"
 					L"OsBootDateTime: %S%S, OsUptime: %S\n"
 					L"CEDAR_VER: %u, "
 					L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u\n"
@@ -5308,6 +5315,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 					mem.TotalMemory_Str, mem.UsedMemory_Str, mem.FreeMemory_Str,
 					mem.TotalPhys_Str, mem.UsedPhys_Str, mem.FreePhys_Str,
 					MsGetExeFileNameW(),
+					process_mem_usage_str,
 					system_boot_datetime, timezone_str, system_boot_span,
 					CEDAR_VER,
 					CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
@@ -7592,6 +7600,12 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 	char disk_free_str[64] = CLEAN;
 	char disk_used_str[64] = CLEAN;
 	char disk_total_str[64] = CLEAN;
+	char process_mem_usage_str[64] = CLEAN;
+
+	PROCESS_MEMORY_COUNTERS meminfo = CLEAN;
+	meminfo.cb = sizeof(meminfo);
+	GetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
+	ToStr3(process_mem_usage_str, sizeof(process_mem_usage_str), meminfo.PagefileUsage);
 
 	Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);
 	ToStr3(disk_free_str, sizeof(disk_free_str), disk_free);
@@ -7684,6 +7698,8 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 	TfLog(svc, "Operating System Boot DateTime: %S%S", system_boot_datetime, timezone_str);
 	TfLog(svc, "Operating System Uptime: %S", system_boot_span);
 
+	TfLog(svc, "Memory usage of this process: %S bytes", process_mem_usage_str);
+
 	wchar_t computer_name[128] = CLEAN;
 	MsGetComputerNameFullEx(computer_name, sizeof(computer_name), true);
 
@@ -7696,7 +7712,7 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 		L"UserName: %s, "
 		L"SystemDiskFree: %S bytes, SystemDiskUsed: %S bytes, SystemDiskTotal: %S bytes, "
 		L"NetworkTotalSentPackets: %S packets, NetworkTotalSentData: %S bytes, NetworkTotalReceivedPackets: %S packets, NetworkTotalReceivedData: %S bytes, "
-		L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, TotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, ProcessAppPath: %s, "
+		L"TotalVirtualMemory: %S bytes, UsedVirtualMemory: %S bytes, FreeVirtualMemory: %S bytes, TotalPhysMemory: %S bytes, UsedPhysMemory:%S bytes, FreePhysMemory:%S bytes, ThinFwProcessAppPath: %s, ThinFwProcessMemoryUsage: %S bytes, "
 		L"OsBootDateTime: %S%S, OsUptime: %S, "
 		L"CEDAR_VER: %u, "
 		L"CEDAR_BUILD: %u, BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u, "
@@ -7716,6 +7732,7 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 		mem.TotalMemory_Str, mem.UsedMemory_Str, mem.FreeMemory_Str,
 		mem.TotalPhys_Str, mem.UsedPhys_Str, mem.FreePhys_Str,
 		MsGetExeFileNameW(),
+		process_mem_usage_str,
 		system_boot_datetime, timezone_str, system_boot_span,
 		CEDAR_VER,
 		CEDAR_BUILD, BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,

@@ -6127,39 +6127,6 @@ void MsStopEasyNoSleep()
 
 void MsTest01()
 {
-	char *key = "Control Panel\\Desktop";
-	UINT64 last_set_flag = 0;
-	UINT last_c_x = INFINITE, last_c_y = INFINITE;
-	UINT64 last_mouse_move_time = 0;
-	EXECUTION_STATE(WINAPI * _SetThreadExecutionState)(EXECUTION_STATE);
-	HINSTANCE hKernel32;
-
-	hKernel32 = LoadLibrary("kernel32.dll");
-
-	_SetThreadExecutionState =
-		(EXECUTION_STATE(__stdcall *)(EXECUTION_STATE))
-		GetProcAddress(hKernel32, "SetThreadExecutionState");
-
-	while (true)
-	{
-		DWORD flag = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
-
-		if (MsIsWindows10())
-		{
-			flag |= ES_AWAYMODE_REQUIRED;
-		}
-		flag |= ES_DISPLAY_REQUIRED;
-
-		MsRegWriteStrW(REG_CURRENT_USER, key, "ScreenSaveActive", L"0");
-		MsRegDeleteValue(REG_CURRENT_USER, key, "SCRNSAVE.EXE");
-
-		if (_SetThreadExecutionState != NULL)
-		{
-			_SetThreadExecutionState(flag);
-		}
-
-		SleepThread(1234);
-	}
 }
 
 // Sleep prevention thread (for Windows Vista)
