@@ -16302,6 +16302,7 @@ bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_in
 
 							if (MsIsWindows8() == false)
 							{
+								// ここには到達しないはず...
 								is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
 							}
 
