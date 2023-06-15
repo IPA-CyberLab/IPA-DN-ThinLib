@@ -501,7 +501,7 @@ DG_NO_LOCAL_MAC_ADDRESS_LIST	The $APPSHORT$ Enterprise Policy Enforcement Server
 DG_SMS_HELP     This Thin Telework System Private Version's relay system may use SMS authentication instead of email address authentication for One Time Password (OTP) authentication.\r\n\r\nIf the relay system uses SMS authentication, enter your cell phone number (e.g. 09001234567) instead of your e-mail address in the field.\r\n\r\nTo find out if this relay system uses SMS authentication, contact the administrator of the relay system.
 
 DG_SMS_HELP_TITLE   About SMS Authentication
-DG_THINFW_CONFIG_INIT_OK		シン・ファイアウォールシステム機能の設定ファイル (ThinFirewall_Config.ini) の初期設定を行ない、動作を開始しました。\r\n\r\n詳しい動作の設定の確認や変更は、設定ファイル (ThinFirewall_Config.ini) をテキストエディタで開き、ご自由に設定を行なってください。\r\n\r\n機能や設定の詳しい解説は、設定ファイルの中に詳細に記載されていますので、よくお読みください。\r\n\r\nシン・ファイアウォールシステム機能を活用して、組織や個人の Windows PC や Windows サーバーのサイバーセキュリティを、極限まで高めましょう。\r\n\r\n[OK] をクリックすると、設定ファイルを表示します。\r\n設定ファイル内の 「Enable」 を 「false」 にするか、設定ファイルを削除すれば、いつでも、シン・ファイアウォールシステム機能を停止して無効化できます。
+DG_THINFW_CONFIG_INIT_OK		The initial configuration file (ThinFirewall_Config.ini) for Thin Firewall System function has been set up and operation has started.\r\n\r\nTo check or change the detailed operation settings, please open the configuration file (ThinFirewall_Config.ini) with a text editor and configure the settings as you wish.\r\n\r\nPlease read carefully the detailed description of the functions and settings as they are described in detail in the configuration file.\r\n\r\nTake advantage of Thin Firewall System functionality to increase the cyber security of your organization's and personal Windows PCs and Windows servers to the utmost limit.\r\n\r\nYou can deactivate and disable the Thin Firewall System feature at any time by setting "Enable" to "false" in the configuration file or by deleting the configuration file.
 
 
 
@@ -4616,6 +4616,8 @@ S_REG_1					You have to enter the Unlock Key before using this system. Click the
 B_REG					&Unlock Key
 B_WEBCLIENT				Open Web &Client
 S_WEBCLIENT				You can connect to this PC remotely from your Chromebook or Mac with Web Client.
+B_THINFW				Thin Firewall System
+S_THINFW				Detect and block suspecious activity.
 
 
 PREFIX					D_DG_PROXY
@@ -5094,6 +5096,42 @@ CAPTION					Detect Internet connectivity
 S_TITLE					Detecting whether this PC is connected to Internet. Please wait...
 S_BOLD					Checking the Internet connectivity...
 IDCANCEL				Select &manually
+
+
+PREFIX					D_DG_THINFW
+CAPTION					Thin Firewall System - Monitors Windows and Apps, Sends out Reports of Suspicious Behavior Attempts via Email and Syslog
+S_1						Thin Firewall System can be used to secure your Windows PCs and Windows servers. It records the behavior of Windows PCs running various programs, detects suspicious communications, and automatically reports them in real time via e-mail or syslog. Automatically block outgoing connections to the Internet when the PC is not in use, such as when the screen is locked.
+S_18					Anyone can deploy Thin Firewall System on their own PCs. System administrators can deploy to many employee PCs and critical servers. This is especially useful when Windows is used for long term operations on internal LANs or various control systems that handle sensitive information but also need Internet access, or when older versions of Windows that are no longer supported can continue to be used safely.
+S_26					The action of Thin Firewall System is configured in a single config text file (.ini). The configuration file can be automatically distributed from a distribution server and constantly updated. For more information, please refer to the extensive explanatory comments in the configuration file.
+S_27					Thin Firewall System is a bonus feature of $APPVERYSHORT$ and is available free of charge. However, its richness, stability, and flexibility are comparable to commercial endpoint security monitoring solutions. And it is so easy to use that a system administrator with a few months of rudimentary study of computer administration can almost certainly use it.
+S_28					(1) "Behavior Watch Function" - Detection of suspicious programs such as malware and suspicious communications
+S_29					It monitors the behavior of Windows itself and all programs running on it. This allows for early detection of spyware and other malware on the PC, as well as infection and intrusion attempts from other terminals on the LAN.\r\nWhen an event occurs, such as a process starting or stopping, a communication occurring (incoming or outgoing), a DNS query occurring, an incoming remote desktop call, or a Windows Event Log being recorded, it is logged and emailed to you in real time via email or syslog.
+S_30					Targeted malware, which is difficult to detect with anti-virus software, can be easily detected. You can send e-mails to your own e-mail address, or you can use a foreign cloud service provider such as Gmail, which provides a full-text searchable e-mail service that can store and search large volumes of e-mails almost free of charge. In other words, Gmail and other services can be used free of charge as log storage and search platforms that would normally cost a lot of money.
+S_31					(2) "Lockdown Firewall Function" (operates in system mode only) - intercepts and prevents suspicious communications
+S_32					On a Windows PC, a variety of applications are constantly running, forming an ecosystem, each freely communicating with hosts on the Internet. At the moment a user is using a PC, it is difficult to distinguish between necessary and unnecessary communication. When the user locks the screen, leaves the office, or goes to bed, there is no need for communication to take place, and any communication that takes place during these times is risky.
+S_33					This function automatically locks down all application communications while the Windows PC screen is locked (e.g., when away from the PC). When the screen is unlocked and the PC is put back into use, communication is allowed again. Exceptions can be flexibly configured.\r\nThis prevents malware from operating during the time the PC is locked and away from the computer, spreading infection or being remotely controlled. This allows you to stop malware from communicating with the outside world even if it is already running on your PC.
+S_34					How to start, stop, and configure the operation of Thin Firewall System
+S_35					The operation of the thin firewall system can be started, stopped, and its behavior changed at any time by editing a single configuration text file (.ini) in any text editor. Note that professional system administrators can easily realize automatic updates of the configuration file from a web server, allowing them to monitor hundreds of terminals easily. Please refer to the explanatory comments in the .ini file for more information.
+IDOK					How to start, stop, and configure the operation of Thin Firewall System
+B_LOG					View &log files
+IDCANCEL				&Close
+S_36					Thin Firewall System was developed in 2023 as a result of a system management need in the Cyber Technology Laboratory of the IPA Industrial Cyber Security Center.
+
+
+PREFIX					D_DG_THINFW_INIT
+CAPTION					Initial startup settings for the Thin Firewall System configuration file
+S_28					It appears to activate Thin Firewall System for the first time. Create a configuration file (.ini). By including an e-mail address in the configuration file, various events detected by the system's "Behavior Watch" function (process startups, shutdowns, communication occurrences (incoming and outgoing), DNS queries, incoming remote desktop calls, Windows event logging, etc.) can be sent to the specified e-mail address. The "Event Log" can be sent to a specified e-mail address.
+S_29					The destination e-mail address can be either the company's own e-mail address or a foreign cloud service provider such as Gmail, which provides full-text searchable e-mail services that can store and search large volumes of e-mail almost free of charge. In other words, Gmail and other services can be used free of charge as log storage and search infrastructure, which is inherently expensive.\r\nThen, if the mail system performs a white-list sorting process based on the body text, it can ignore behavior that is already known to be safe and recognize only abnormal behavior that it sees for the first time.
+S_30					Now you can set the initial email address of the recipient. The email address entered here will be written to the configuration file (.ini).\r\n\r\nYou can change the e-mailing or not and the settings at any time later. The SMTP server to be used and SMTP authentication information can also be set or changed from the configuration file.
+S_31					E-mail address to which detection events by the "Behavior Watch" function are automatically sent:
+S_32					(Optional: you can setup later)
+S_33					A large number of emails with behavior detection results may be sent one after another. It is recommended to create a new free email address, such as Gmail, and send the results to it instead of the business email address you normally use. It can be used as a substitute for expensive log storage and search engines. And if you have Gmail or similar apps installed on your smartphone, you can also receive notifications on your smartphone.
+IDOK					&OK
+IDCANCEL				Cancel
+S_34					Since the behavior and destination information does not contain any confidential information about the file itself or the contents of the communication, it is safe to the use of free Gmail and other services. Once it starts working, if mail is not being sent successfully, check the log file. The SMTP server in the initial state of the sample configuration file is expected to work in passing, but there is a risk that it will be marked as SPAM. We recommend that you set up your SMTP server to use your organization's SMTP server or a free SMTP server such as Gmail that you have created.
+S_35					Since a considerable number of detection e-mails may be sent mechanically, we recommend that you create a disposable e-mail address using Gmail or similar and receive logs with the disposable e-mail address to accumulate e-mails one after another on a semi-permanent basis. You can use full-text search and filters to check for suspicious events. It is also possible to send one email per event by configuration file.\r\n\r\nAlso, since these are mechanically generated e-mails, the From: e-mail address (configurable in the configuration file) should be registered in the white list to avoid SPAM misclassification.
+
+
 
 
 
