@@ -2394,6 +2394,13 @@ void DgMainDlgInit(HWND hWnd, DG *dg)
 		Hide(hWnd, B_WEBCLIENT);
 		Hide(hWnd, S_WEBCLIENT);
 	}
+
+	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem"))
+	{
+		Hide(hWnd, B_THINFW);
+		Hide(hWnd, S_THINFW);
+		Hide(hWnd, S_THINFW_ICON);
+	}
 }
 
 // コントロールの更新

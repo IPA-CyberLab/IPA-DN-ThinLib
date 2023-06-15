@@ -786,10 +786,13 @@ bool SwSfxExtractProcess(HWND hWnd, bool* hide_error_msg)
 				WideLoadEntryPoint(&cert, url, sizeof(url), NULL, mode, sizeof(mode), system, sizeof(system));
 			}
 
-			// Copy ThinFirewall_Config.ini physical file if exists
-			wchar_t thinfw_config[MAX_PATH] = CLEAN;
-			CombinePathW(thinfw_config, sizeof(thinfw_config), MsGetMyTempDirW(), L"ThinFirewall_Config.ini");
-			FileCopyW(L"@ThinFirewall_Config.ini", thinfw_config);
+			if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
+			{
+				// Copy ThinFirewall_Config.ini physical file if exists
+				wchar_t thinfw_config[MAX_PATH] = CLEAN;
+				CombinePathW(thinfw_config, sizeof(thinfw_config), MsGetMyTempDirW(), L"ThinFirewall_Config.ini");
+				FileCopyW(L"@ThinFirewall_Config.ini", thinfw_config);
+			}
 
 			// Add a path of this own
 			UniFormat(tmp, sizeof(tmp), L" /CALLERSFXPATH:\"%s\"", copy_of_me);
@@ -3874,20 +3877,23 @@ bool SwInstallMain(SW* sw, WIZARD_PAGE* wp, SW_COMPONENT* c)
 
 	if (c->Id == SW_CMP_THIN_SERVER || c->Id == SW_CMP_THIN_SERVER_NS)
 	{
-		BUF *local_thinconfig_buf = ReadDumpW(L"@ThinFirewall_Config.ini");
-		if (local_thinconfig_buf != NULL)
+		if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
 		{
-			char *eof_tag = "[END_OF_FILE]";
-
-			if (SearchBin(local_thinconfig_buf->Buf, 0, local_thinconfig_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+			BUF *local_thinconfig_buf = ReadDumpW(L"@ThinFirewall_Config.ini");
+			if (local_thinconfig_buf != NULL)
 			{
-				wchar_t real_filename[MAX_PATH] = CLEAN;
-				CombinePathW(real_filename, sizeof(real_filename), sw->InstallDir, L"ThinFirewall_Config\\ThinFirewall_Config.ini");
+				char *eof_tag = "[END_OF_FILE]";
 
-				TfInstallDefaultConfig(real_filename, false, true, local_thinconfig_buf, "");
+				if (SearchBin(local_thinconfig_buf->Buf, 0, local_thinconfig_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+				{
+					wchar_t real_filename[MAX_PATH] = CLEAN;
+					CombinePathW(real_filename, sizeof(real_filename), sw->InstallDir, L"ThinFirewall_Config\\ThinFirewall_Config.ini");
+
+					TfInstallDefaultConfig(real_filename, false, true, local_thinconfig_buf, "");
+				}
+
+				FreeBuf(local_thinconfig_buf);
 			}
-
-			FreeBuf(local_thinconfig_buf);
 		}
 	}
 

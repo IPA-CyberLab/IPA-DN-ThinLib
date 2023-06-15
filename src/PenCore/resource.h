@@ -1110,6 +1110,8 @@
 #define S_WEBCLIENT                     1547
 #define B_WEBCLIENT2                    1548
 #define B_THINFW                        1548
+#define S_THINFW                        1549
+#define S_THINFW_ICON                   1550
 #define B_ONLINE                        1655
 #define D_NM_CONNECT                    1998
 #define D_NM_MAIN                       1999
@@ -1494,7 +1496,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        255
 #define _APS_NEXT_COMMAND_VALUE         40111
-#define _APS_NEXT_CONTROL_VALUE         1548
+#define _APS_NEXT_CONTROL_VALUE         1551
 #define _APS_NEXT_SYMED_VALUE           102
 #endif
 #endif

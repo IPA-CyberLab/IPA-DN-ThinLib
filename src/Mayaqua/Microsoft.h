@@ -1587,6 +1587,7 @@ bool MsPerformMsChapV2AuthByLsa(char *username, UCHAR *challenge8, UCHAR *client
 
 void MsDisableWcmNetworkMinimize();
 bool MsSetFileSecureAcl(wchar_t *path);
+bool MsSetFileSecureAclAdminWriteEverynoeRead(wchar_t *path);
 bool MsSetFileSecureAclEverone(wchar_t *path);
 
 bool MsGetMsiInstalledDir(char *component_code, wchar_t *dir, UINT dir_size);
