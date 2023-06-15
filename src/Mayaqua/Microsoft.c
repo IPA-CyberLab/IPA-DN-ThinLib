@@ -2116,44 +2116,6 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 				Copy(&data.Tcp, t, sizeof(TCPTABLE));
 
-				if (t->ProcessId != 0)
-				{
-					data.ProcessId = t->ProcessId;
-
-					MS_PROCESS *proc = MsSearchProcessById(process_list, t->ProcessId);
-
-					if (proc != NULL)
-					{
-						MsProcessToThinFwEntryProcess(sid_cache, &data.Process, proc, (flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE));
-
-						data.HasProcessInfo = true;
-
-						char session_id_str[16] = CLEAN;
-						ToStr(session_id_str, proc->SessionId);
-
-						MS_THINFW_ENTRY_RDP *rdp = SearchKvListData(rdp_session_kv_list, session_id_str, 0);
-
-						if (rdp != NULL)
-						{
-							Copy(&data.Process.Rdp, rdp, sizeof(MS_THINFW_ENTRY_RDP));
-						}
-
-						MS_THINFW_ENTRY_SERVICE t = CLEAN;
-						t.ProcessId = proc->ProcessId;
-
-						MS_THINFW_ENTRY_SERVICE *svc = Search(svc_list_by_id, &t);
-
-						if (svc != NULL)
-						{
-							Copy(&data.Process.Svc, svc, sizeof(MS_THINFW_ENTRY_SERVICE));
-						}
-					}
-				}
-
-				UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u,%u",
-					&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort, t->Status == TCP_STATE_LISTEN);
-				//UniPrint(L"%s\n", key);
-
 				bool is_server_session = false;
 
 				if (t->Status != TCP_STATE_LISTEN && IsZeroIP(&t->RemoteIP) == false)
@@ -2190,17 +2152,64 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 					StrCpy(data.Type, sizeof(data.Type), "TCP_CLIENT");
 				}
 
-				if (IsZeroIP(&data.Tcp.RemoteIP) == false)
+				bool ok = true;
+
+				if (is_server_session && (flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP_SERVER))
 				{
-					MS_DNS_HASH *found_hash = MsSearchDnsHash(dns_hash, &data.Tcp.RemoteIP);
-					if (found_hash != NULL)
-					{
-						StrCpy(data.RemoteIPHostname_Resolved, sizeof(data.RemoteIPHostname_Resolved),
-							found_hash->Hostname);
-					}
+					ok = false;
 				}
 
-				Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
+				if (ok)
+				{
+					if (t->ProcessId != 0)
+					{
+						data.ProcessId = t->ProcessId;
+
+						MS_PROCESS *proc = MsSearchProcessById(process_list, t->ProcessId);
+
+						if (proc != NULL)
+						{
+							MsProcessToThinFwEntryProcess(sid_cache, &data.Process, proc, (flags & MS_GET_THINFW_LIST_FLAGS_PROC_NO_CMD_LINE));
+
+							data.HasProcessInfo = true;
+
+							char session_id_str[16] = CLEAN;
+							ToStr(session_id_str, proc->SessionId);
+
+							MS_THINFW_ENTRY_RDP *rdp = SearchKvListData(rdp_session_kv_list, session_id_str, 0);
+
+							if (rdp != NULL)
+							{
+								Copy(&data.Process.Rdp, rdp, sizeof(MS_THINFW_ENTRY_RDP));
+							}
+
+							MS_THINFW_ENTRY_SERVICE t = CLEAN;
+							t.ProcessId = proc->ProcessId;
+
+							MS_THINFW_ENTRY_SERVICE *svc = Search(svc_list_by_id, &t);
+
+							if (svc != NULL)
+							{
+								Copy(&data.Process.Svc, svc, sizeof(MS_THINFW_ENTRY_SERVICE));
+							}
+						}
+					}
+
+					UniFormat(key, sizeof(key), L"TCP:%r:%u:%r:%u,%u",
+						&t->LocalIP, t->LocalPort, &t->RemoteIP, t->RemotePort, t->Status == TCP_STATE_LISTEN);
+
+					if (IsZeroIP(&data.Tcp.RemoteIP) == false)
+					{
+						MS_DNS_HASH *found_hash = MsSearchDnsHash(dns_hash, &data.Tcp.RemoteIP);
+						if (found_hash != NULL)
+						{
+							StrCpy(data.RemoteIPHostname_Resolved, sizeof(data.RemoteIPHostname_Resolved),
+								found_hash->Hostname);
+						}
+					}
+
+					Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_TCP, tick));
+				}
 			}
 		}
 	}

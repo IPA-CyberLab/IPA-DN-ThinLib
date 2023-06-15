@@ -6553,6 +6553,7 @@ void TfMain(TF_SERVICE *svc)
 	bool cfg_EnableWatchService = false;
 	bool cfg_EnableWatchFileShare = false;
 	bool cfg_EnableWatchTcp = false;
+	bool cfg_WatchTcpIgnoreServerConnection = false;
 	bool cfg_EnableWatchFwBlock = false;
 	bool cfg_WatchOnlyWhenLocked = false;
 	bool cfg_IncludeProcessCommandLine = false;
@@ -6722,6 +6723,7 @@ void TfMain(TF_SERVICE *svc)
 					cfg_IncludeProcessCommandLine = IniBoolValue(ini, "IncludeProcessCommandLine");
 					cfg_WatchOnlyWhenLocked = IniBoolValue(ini, "WatchOnlyWhenLocked");
 					cfg_EnableWatchTcp = IniBoolValue(ini, "EnableWatchTcp");
+					cfg_WatchTcpIgnoreServerConnection = IniBoolValue(ini, "WatchTcpIgnoreServerConnection");
 					cfg_EnableWatchFwBlock = IniBoolValue(ini, "EnableWatchFwBlock");
 
 					cfg_GetNetworkInfoIntervalMsec = IniIntValue(ini, "GetNetworkInfoIntervalMsec");
@@ -6863,6 +6865,7 @@ L_BOOT_ERROR:
 				cfg_EnableWatchProcess = false;
 				cfg_EnableWatchService = false;
 				cfg_EnableWatchTcp = false;
+				cfg_WatchTcpIgnoreServerConnection = false;
 				cfg_EnableWatchFwBlock = false;
 				cfg_WatchOnlyWhenLocked = false;
 				cfg_IncludeProcessCommandLine = false;
@@ -7137,6 +7140,11 @@ L_BOOT_ERROR:
 					if (cfg_EnableWatchTcp == false)
 					{
 						flags |= MS_GET_THINFW_LIST_FLAGS_NO_TCP;
+					}
+
+					if (cfg_WatchTcpIgnoreServerConnection)
+					{
+						flags |= MS_GET_THINFW_LIST_FLAGS_NO_TCP_SERVER;
 					}
 
 					if (cfg_EnableWatchRdp == false)
