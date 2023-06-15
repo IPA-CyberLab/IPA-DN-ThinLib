@@ -1889,7 +1889,6 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 		if (MsIsNt() == false || ms->nt->WTSEnumerateSessionsA == NULL ||
 			ms->nt->WTSQuerySessionInformationW == NULL || ms->nt->WTSFreeMemory == NULL ||
-			MsIsWindows7() == false ||
 			ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
 		{
 		}
@@ -1900,14 +1899,14 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 			{
 				WTS_SESSION_INFOA *a = &info[i];
 
-				WTSINFOEXW_FIX1 *ex = CLEAN;
 				DWORD retsize = 0;
 
-				if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-					WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+				WTSINFOEX_LEVEL1_W_FIX1 ex1_data = CLEAN;
+
+				if (Ms_WTSQuerySessionInformationEx_SafeLeak(WTS_CURRENT_SERVER_HANDLE, a->SessionId, &ex1_data))
 				{
 					//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
-					WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+					WTSINFOEX_LEVEL1_W_FIX1 *ex1 = &ex1_data;
 
 					MS_THINFW_ENTRY_RDP data = CLEAN;
 
@@ -2041,8 +2040,6 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 						Add(ret, NewDiffEntry(key, &data, sizeof(data), MS_THINFW_ENTRY_TYPE_RDP, tick));
 					}
-
-					ms->nt->WTSFreeMemory(ex);
 				}
 			}
 
@@ -16270,11 +16267,6 @@ bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_in
 		return true;
 	}
 
-	if (MsIsWindows7() == false)
-	{
-		return true;
-	}
-
 	if (ms->nt->WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count) == false || info == NULL)
 	{
 		return true;
@@ -16293,49 +16285,63 @@ bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_in
 
 				if (a->State == WTSActive)
 				{
-					if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
-						WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+					if (MsIsWindows8())
 					{
-						//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
-						WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
-
-						bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
-
-						// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
-						// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
-
-						if (MsIsWindows8() == false)
+						// Windows 8 以降は、WTSQuerySessionInformationW(WTSSessionInfoEx) に
+						// メモリリークがないので、API を普通に使用する。
+						if (ms->nt->WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, a->SessionId,
+							WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
 						{
-							is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+							//Print("retsize = %u, sizeof = %u\n", retsize, sizeof(WTSINFOEXW_FIX1));
+							WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+
+							bool is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_LOCK);
+
+							// Windows 7, Server 2008 R2 では、バグにより、フラグが逆になっている。
+							// https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_a#wts_sessionstate_unlock-1-0x1
+
+							if (MsIsWindows8() == false)
+							{
+								is_locked = (ex1->SessionFlags == WTS_SESSIONSTATE_UNLOCK);
+							}
+
+							if (is_locked == false)
+							{
+								num_unlocked_sessions++;
+							}
+
+							//if (is_locked == false)
+							//{
+							//	// うまくいかない
+							//	FILETIME *last_input_time = (FILETIME *)&ex1->LastInputTime;
+
+							//	if (IsZero(last_input_time, sizeof(FILETIME)) == false)
+							//	{
+							//		SYSTEMTIME st = CLEAN;
+
+							//		if (FileTimeToSystemTime(last_input_time, &st))
+							//		{
+							//			UINT64 st64 = SystemToUINT64(&st);
+
+							//			if (st64 != 0)
+							//			{
+							//				max_last_input_time = MAX(max_last_input_time, st64);
+							//			}
+							//		}
+							//	}
+							//}
+
+							ms->nt->WTSFreeMemory(ex);
 						}
-
-						if (is_locked == false)
-						{
-							num_unlocked_sessions++;
-						}
-
-						//if (is_locked == false)
-						//{
-						//	// うまくいかない
-						//	FILETIME *last_input_time = (FILETIME *)&ex1->LastInputTime;
-
-						//	if (IsZero(last_input_time, sizeof(FILETIME)) == false)
-						//	{
-						//		SYSTEMTIME st = CLEAN;
-
-						//		if (FileTimeToSystemTime(last_input_time, &st))
-						//		{
-						//			UINT64 st64 = SystemToUINT64(&st);
-
-						//			if (st64 != 0)
-						//			{
-						//				max_last_input_time = MAX(max_last_input_time, st64);
-						//			}
-						//		}
-						//	}
-						//}
-
-						ms->nt->WTSFreeMemory(ex);
+					}
+					else
+					{
+						// Windows 7 では、WTSQuerySessionInformationW(WTSSessionInfoEx) に
+						// メモリリークがあるので、この API は使用しない。
+						// また、Windows Vista, XP では、そもそも WTSSessionInfoEx が利用できない。
+						// そこで、代わりに、WTSActive なセッションはすべてロックされてていない
+						// セッションであるとみなす。(制限事項である。)
+						num_unlocked_sessions++;
 					}
 				}
 			}
@@ -16346,6 +16352,98 @@ bool MsWtsOneOrMoreUnlockedSessionExists(MS_WTS_LOCK_STATE_RET_EX *additional_in
 
 	return (num_unlocked_sessions >= 1);
 }
+
+
+bool Ms_WTSQuerySessionInformationEx_SafeLeak(HANDLE wts_handle, DWORD session_id, struct _WTSINFOEX_LEVEL1_W_FIX1 *dst)
+{
+	Zero(dst, sizeof(WTSINFOEX_LEVEL1_W_FIX1));
+	bool ret = false;
+	DWORD retsize = 0;
+
+	if (MsIsWindows8())
+	{
+		// Windows 8 or greater uses WTSSessionInfoEx
+		WTSINFOEXW_FIX1 *ex = CLEAN;
+
+		retsize = 0;
+		if (ms->nt->WTSQuerySessionInformationW(wts_handle, session_id,
+			WTSSessionInfoEx, (void *)&ex, &retsize) && retsize >= sizeof(WTSINFOEXW_FIX1))
+		{
+			WTSINFOEX_LEVEL1_W_FIX1 *ex1 = (WTSINFOEX_LEVEL1_W_FIX1 *)&ex->Data;
+
+			Copy(dst, ex1, sizeof(WTSINFOEX_LEVEL1_W_FIX1));
+
+			ms->nt->WTSFreeMemory(ex);
+			ret = true;
+		}
+	}
+	else
+	{
+		// Windows 7 or older's WTSQuerySessionInformationW(WTSSessionInfoEx) has memory leak. Do not use WTSQuerySessionInformationW
+		wchar_t *tmpstr;
+		DWORD *tmpstate;
+
+		// WinStationName
+		tmpstr = NULL;
+		retsize = 0;
+		if (ms->nt->WTSQuerySessionInformationW(wts_handle, session_id,
+			WTSWinStationName,
+			(void *)&tmpstr,
+			&retsize) && tmpstr != NULL && retsize != 0)
+		{
+			UniStrCpy(dst->WinStationName, sizeof(dst->WinStationName), tmpstr);
+			ms->nt->WTSFreeMemory(tmpstr);
+			ret = true;
+		}
+
+		// UserName
+		tmpstr = NULL;
+		retsize = 0;
+		if (ms->nt->WTSQuerySessionInformationW(wts_handle, session_id,
+			WTSUserName,
+			(void *)&tmpstr,
+			&retsize) && tmpstr != NULL && retsize != 0)
+		{
+			UniStrCpy(dst->UserName, sizeof(dst->UserName), tmpstr);
+			ms->nt->WTSFreeMemory(tmpstr);
+			ret = true;
+		}
+
+		// DomainName
+		tmpstr = NULL;
+		retsize = 0;
+		if (ms->nt->WTSQuerySessionInformationW(wts_handle, session_id,
+			WTSDomainName,
+			(void *)&tmpstr,
+			&retsize) && tmpstr != NULL && retsize != 0)
+		{
+			UniStrCpy(dst->DomainName, sizeof(dst->DomainName), tmpstr);
+			ms->nt->WTSFreeMemory(tmpstr);
+			ret = true;
+		}
+
+		// SessionState
+		tmpstate = 0;
+		retsize = 0;
+		if (ms->nt->WTSQuerySessionInformationW(wts_handle, session_id,
+			WTSConnectState,
+			(void *)&tmpstate,
+			&retsize) && tmpstate != NULL && retsize != 0)
+		{
+			dst->SessionState = *tmpstate;
+			ms->nt->WTSFreeMemory(tmpstate);
+			ret = true;
+		}
+	}
+
+	if (ret)
+	{
+		dst->SessionId = session_id;
+	}
+
+	return ret;
+}
+
 
 void MsWtsTest1()
 {

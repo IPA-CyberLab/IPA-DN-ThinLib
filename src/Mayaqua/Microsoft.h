@@ -1762,6 +1762,7 @@ bool CALLBACK MsEnumResourcesInternalProc(HMODULE hModule, const char *type, cha
 void CALLBACK MsScmDispatcher(DWORD argc, LPTSTR *argv);
 LRESULT CALLBACK MsSuspendHandlerWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void MsSuspendHandlerThreadProc(THREAD *thread, void *param);
+bool Ms_WTSQuerySessionInformationEx_SafeLeak(HANDLE wts_handle, DWORD session_id, struct _WTSINFOEX_LEVEL1_W_FIX1 *dst);
 
 
 #endif	// MICROSOFT_C
