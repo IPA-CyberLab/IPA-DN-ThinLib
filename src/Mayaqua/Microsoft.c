@@ -17221,6 +17221,10 @@ NT_API *MsLoadNtApiFunctions()
 		nt->GetProcessImageFileNameW =
 			(DWORD(__stdcall *)(HANDLE, LPWSTR, DWORD))
 			GetProcAddress(nt->hPsApi, "GetProcessImageFileNameW");
+
+		nt->_GetProcessMemoryInfo =
+			(BOOL(__stdcall *)(HANDLE, void *, DWORD))
+			GetProcAddress(nt->hPsApi, "GetProcessMemoryInfo");
 	}
 
 	// Registry related API
@@ -17391,6 +17395,21 @@ NT_API *MsLoadNtApiFunctions()
 	}
 
 	return nt;
+}
+
+bool MsGetProcessMemoryInfo(void *process_handle, void *dst, DWORD dst_size)
+{
+	if (MsIsNt() == false)
+	{
+		return false;
+	}
+
+	if (ms->nt->_GetProcessMemoryInfo == NULL)
+	{
+		return false;
+	}
+
+	return ms->nt->_GetProcessMemoryInfo((HANDLE)process_handle, dst, dst_size);
 }
 
 // Release of NT system function

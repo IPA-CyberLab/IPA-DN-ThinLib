@@ -625,7 +625,6 @@ void MayaquaSetWin32ShowDiskSpaceWarningOnBoot(bool enabled);
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "dnsapi.lib")
-#pragma comment(lib, "Psapi.lib")
 #pragma warning( disable : 4099 )
 #endif	// OS_WIN32
 

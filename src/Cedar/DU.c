@@ -5262,7 +5262,7 @@ void TfReportThreadProc(THREAD *thread, void *param)
 
 				PROCESS_MEMORY_COUNTERS meminfo = CLEAN;
 				meminfo.cb = sizeof(meminfo);
-				GetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
+				MsGetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
 				ToStr3(process_mem_usage_str, sizeof(process_mem_usage_str), meminfo.PagefileUsage);
 
 				Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);
@@ -7604,7 +7604,7 @@ void TfRaiseAliveEvent(TF_SERVICE *svc, bool is_startup)
 
 	PROCESS_MEMORY_COUNTERS meminfo = CLEAN;
 	meminfo.cb = sizeof(meminfo);
-	GetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
+	MsGetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
 	ToStr3(process_mem_usage_str, sizeof(process_mem_usage_str), meminfo.PagefileUsage);
 
 	Win32GetDiskFree(MsGetWindowsDir(), &disk_free, &disk_used, &disk_total);

@@ -537,6 +537,7 @@ typedef struct NT_API
 	BOOL (WINAPI *EnumProcessModules)(HANDLE, HMODULE *, DWORD, DWORD *);
 	DWORD (WINAPI *GetModuleFileNameExA)(HANDLE, HMODULE, LPSTR, DWORD);
 	DWORD (WINAPI *GetModuleFileNameExW)(HANDLE, HMODULE, LPWSTR, DWORD);
+	BOOL (WINAPI *_GetProcessMemoryInfo)(HANDLE, void *, DWORD);
 	DWORD (WINAPI *GetProcessImageFileNameA)(HANDLE, LPSTR, DWORD);
 	DWORD (WINAPI *GetProcessImageFileNameW)(HANDLE, LPWSTR, DWORD);
 	BOOL (WINAPI *QueryFullProcessImageNameA)(HANDLE, DWORD, LPSTR, PDWORD);
@@ -1724,6 +1725,7 @@ void MsMainteDnsHash(HASH_LIST *h, MS_DNS_CACHE *dns_cache_src);
 UINT MsGetDnsHash(void *p);
 int MsCompareDnsHash(void *p1, void *p2);
 
+bool MsGetProcessMemoryInfo(void *process_handle, void *dst, DWORD dst_size);
 
 // Inner functions
 #ifdef	MICROSOFT_C
