@@ -7977,8 +7977,15 @@ bool TfInstallDefaultConfig(wchar_t *filename, bool overwrite, bool set_acl, BUF
 		char rdp_port_str[32] = CLEAN;
 		ToStr(rdp_port_str, rdp_port);
 
+		wchar_t app_title[MAX_PATH];
+		UniStrCpy(app_title, sizeof(app_title), _UU("DS_TITLE"));
+		char *app_title_utf = CopyUniToUtf(app_title);
+
 		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$RDP_PORT$", rdp_port_str, false);
 		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$MAIL_ADDR_LINE$", init_mail_line, false);
+		ReplaceStrEx(tmp_body, tmp_body_size, tmp_body, "$APP_NAME$", app_title_utf, false);
+
+		Free(app_title_utf);
 
 		UCHAR bom_data[] = { 0xef, 0xbb, 0xbf, };
 
