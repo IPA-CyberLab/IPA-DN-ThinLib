@@ -2052,7 +2052,10 @@ WIDE *WideServerStartEx2(char *svc_name, WT_ACCEPT_PROC *accept_proc, void *acce
 	WideLog(w, "SvcName: \"%s\"", w->SvcName);
 
 	// 接続を開始
-	WideServerReconnect(w);
+	if ((w->Flags & WIDE_FLAG_NO_INITIAL_CONNECT) == 0)
+	{
+		WideServerReconnect(w);
+	}
 
 	return w;
 }
