@@ -9055,6 +9055,7 @@ LIST *Win32GetTcpTableListByGetExtendedTcpTable()
 			Free(table);
 			if (ret != ERROR_INSUFFICIENT_BUFFER)
 			{
+				// Print("err= %u\n", ret);
 				return NULL;
 			}
 		}
@@ -9073,6 +9074,7 @@ LIST *Win32GetTcpTableListByGetExtendedTcpTable()
 
 			if (ret != ERROR_INSUFFICIENT_BUFFER)
 			{
+				// Print("err= %u\n", ret);
 				return NULL;
 			}
 		}
@@ -9080,6 +9082,7 @@ LIST *Win32GetTcpTableListByGetExtendedTcpTable()
 
 	if (ok == false)
 	{
+		// WHERE;
 		return NULL;
 	}
 

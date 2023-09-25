@@ -1516,7 +1516,7 @@ void MsMainteDnsHash(HASH_LIST *h, MS_DNS_CACHE *dns_cache_src)
 	}
 }
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash)
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash, LIST **tcp_table_holder)
 {
 	if (sid_cache == NULL || svc_data_cache == NULL)
 	{
@@ -1810,7 +1810,27 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_TCP) == 0)
 	{
-		tcp_list = Win32GetTcpTableList_v4v6();
+		LIST *tcp_list_new = Win32GetTcpTableList_v4v6();
+
+		if (tcp_list_new != NULL)
+		{
+			// 取得成功
+			if (*tcp_table_holder != NULL)
+			{
+				// 古いものを破棄
+				FreeTcpTableList(*tcp_table_holder);
+			}
+
+			*tcp_table_holder = tcp_list_new;
+
+			tcp_list = tcp_list_new;
+		}
+		else
+		{
+			// 取得失敗 古いものを再利用
+
+			tcp_list = *tcp_table_holder;
+		}
 	}
 
 	// DNS cache
@@ -2240,7 +2260,14 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 		}
 	}
 
-	FreeTcpTableList(tcp_list);
+	if (tcp_table_holder == NULL)
+	{
+		FreeTcpTableList(tcp_list);
+	}
+	else
+	{
+		// 破棄しない (tcp_table_holder で親が破棄する)
+	}
 
 	MsFreeProcessList(process_list);
 

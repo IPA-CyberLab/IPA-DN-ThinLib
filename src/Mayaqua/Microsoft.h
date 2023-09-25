@@ -1698,7 +1698,7 @@ bool MsIsIpInDnsServerList(LIST *o, IP *ip);
 
 
 
-LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash);
+LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_and_free, LIST *svc_data_cache, HASH_LIST *dns_hash, LIST **tcp_table_holder);
 void MsProcessToThinFwEntryProcess(LIST *sid_cache, MS_THINFW_ENTRY_PROCESS *data, MS_PROCESS *proc, bool no_args);
 
 UINT64 MsGetIdleTick();

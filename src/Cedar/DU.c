@@ -6531,6 +6531,8 @@ void TfMain(TF_SERVICE *svc)
 	UINT64 last_eventlog_read = 0;
 	UINT64 last_watch_dns_cache = 0;
 
+	LIST *tcp_table_holder = NULL;
+
 	BUF *cfg_file_content = NewBuf();
 
 	LIST *sid_cache = MsNewSidToUsernameCache();
@@ -7248,7 +7250,7 @@ L_BOOT_ERROR:
 
 					UINT64 tick = Tick64();
 
-					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv, dns_hash);
+					LIST *now_list = MsGetThinFwList(sid_cache, flags, wfp_log_list, svc_data_cache_kv, dns_hash, &tcp_table_holder);
 
 					if (current_list == NULL)
 					{
@@ -7549,6 +7551,8 @@ L_BOOT_ERROR:
 	DuWfpStopLog2(wfp_log);
 
 	MsFreeEventReaderSession(event_reader);
+
+	FreeTcpTableList(tcp_table_holder);
 
 	if (current_single_instance != NULL)
 	{
