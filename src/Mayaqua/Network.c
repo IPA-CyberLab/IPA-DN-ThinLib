@@ -8973,11 +8973,37 @@ bool TryListen4(UINT port)
 // Get the TCP table list (Win32)
 #ifdef	OS_WIN32
 
+static bool w32_tcp_v4_ok = false;
+static bool w32_tcp_v6_ok = false;
+
 LIST *Win32GetTcpTableList_v4v6()
 {
+	LIST *v4 = NULL;
+	LIST *v6 = NULL;
+
+	v4 = Win32GetTcpTableListByGetExtendedTcpTable();
+	v6 = Win32GetTcpTableListByGetExtendedTcpTable_IPv6();
+
+	if (v4 != NULL)
+	{
+		w32_tcp_v4_ok = true;
+	}
+
+	if (v6 != NULL)
+	{
+		w32_tcp_v6_ok = true;
+	}
+
+	if ((w32_tcp_v4_ok && v4 == NULL) ||
+		(w32_tcp_v6_ok && v6 == NULL))
+	{
+		FreeTcpTableList(v4);
+		FreeTcpTableList(v6);
+
+		return NULL;
+	}
+
 	LIST *ret = NewListFast(NULL);
-	LIST *v4 = Win32GetTcpTableListByGetExtendedTcpTable();
-	LIST *v6 = Win32GetTcpTableListByGetExtendedTcpTable_IPv6();
 
 	UINT i;
 

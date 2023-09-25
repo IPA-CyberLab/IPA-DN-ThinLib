@@ -1815,13 +1815,16 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 		if (tcp_list_new != NULL)
 		{
 			// 取得成功
-			if (*tcp_table_holder != NULL)
+			if (tcp_table_holder != NULL)
 			{
-				// 古いものを破棄
-				FreeTcpTableList(*tcp_table_holder);
-			}
+				if (*tcp_table_holder != NULL)
+				{
+					// 古いものを破棄
+					FreeTcpTableList(*tcp_table_holder);
+				}
 
-			*tcp_table_holder = tcp_list_new;
+				*tcp_table_holder = tcp_list_new;
+			}
 
 			tcp_list = tcp_list_new;
 		}
@@ -1829,9 +1832,14 @@ LIST *MsGetThinFwList(LIST *sid_cache, UINT flags, LIST *fw_block_list_to_merge_
 		{
 			// 取得失敗 古いものを再利用
 
-			tcp_list = *tcp_table_holder;
+			if (tcp_table_holder != NULL)
+			{
+				tcp_list = *tcp_table_holder;
+			}
 		}
 	}
+
+	Print("TCP LIST = %u\n", LIST_NUM(tcp_list));
 
 	// DNS cache
 	if ((flags & MS_GET_THINFW_LIST_FLAGS_NO_DNS_CACHE) == 0)
