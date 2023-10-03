@@ -979,6 +979,14 @@ tcp          out        all   permit  202.222.5.0/24   443         *
 tcp          out        all   permit  202.222.6.0/24   443         *
 tcp          out        all   permit  202.222.7.0/24   443         *
 tcp          out        all   permit  202.247.128.0/22 443         *
+tcp          out        all   permit  133.242.145.163  80          *
+tcp          out        all   permit  133.242.145.163  443         *
+tcp          out        all   permit  54.70.59.22      80          *
+tcp          out        all   permit  54.70.59.22      443         *
+tcp          out        all   permit  2401:2500:102:1205:133:242:145:163      80          *
+tcp          out        all   permit  2401:2500:102:1205:133:242:145:163      443         *
+tcp          out        all   permit  2600:1f13:475:4201:1f17:8114:d1c6:b0d8  80          *
+tcp          out        all   permit  2600:1f13:475:4201:1f17:8114:d1c6:b0d8  443         *
 # 自治体テレワークシステム for LGWAN の中継 GW となる可能性がある IP 帯
 tcp          out        all   permit  61.205.16.0/20   443         *
 tcp          out        all   permit  61.212.0.0/16    443         *
