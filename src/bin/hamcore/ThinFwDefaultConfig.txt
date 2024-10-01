@@ -1100,11 +1100,24 @@ tcp         out        all   permit  100.64.0.0/10   445          *
 
 
 # 例外 1.1 (4) - 発信方向の IPv4 TCP パケットに対する通信規制の例外の定義
+# IPv4 の MS-SQL クライアント (宛先: TCP ポート 1433)
+# Windows の MS-SQL クライアント機能を用いて LAN 内の
+# MS-SQL Server 等との通信を利用している場合、その通信を切断してしまわないよう
+# に例外許可ルールに追加する。プライベート IPv4 アドレス宛の通信のみ
+# 許可する。(通常、MS-SQL はプライベート IPv4 でのみ利用するため)
+
+# Protocol  Direction  Type  Action  RemoteIP        RemotePort   LocalPort
+tcp         out        new   deny    any4            1433         *
+tcp         out        all   permit  10.0.0.0/8      1433         *
+tcp         out        all   permit  172.16.0.0/12   1433         *
+tcp         out        all   permit  192.168.0.0/16  1433         *
+tcp         out        all   permit  100.64.0.0/10   1433         *
+
+
+# 例外 1.1 (5) - 発信方向の IPv4 TCP パケットに対する通信規制の例外の定義
 # IPv4 の iSCSI クライアント (宛先: TCP ポート 3260)
 # Windows の iSCSI クライアント (イニシエータ) 機能を用いて LAN 内の
-# NAS 等との通信を利用している場合、その通信を切断してしまわないよう
-# に例外許可ルールに追加する。プライベート IPv4 アドレス宛の通信のみ
-# 許可する。(通常、iSCSI はプライベート IPv4 でのみ利用するため)
+# NAS 等との通信を利用している場合、その通信は無条件で許可する。
 
 # Protocol  Direction  Type  Action  RemoteIP        RemotePort   LocalPort
 tcp         out        all   permit  10.0.0.0/8      3260         *
