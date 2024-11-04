@@ -4093,7 +4093,7 @@ bool NatTransactIcmp(VH *v, NAT_ENTRY *n)
 		else
 		{
 			// Analyze the arriving packet
-			ICMP_RESULT *ret = IcmpParseResult(&dest_ip, n->SrcPort, 0, buf, recv_size);
+			ICMP_RESULT *ret = IcmpParseResult(&dest_ip, n->SrcPort, 0, buf, recv_size, NULL);
 
 			if (ret != NULL)
 			{

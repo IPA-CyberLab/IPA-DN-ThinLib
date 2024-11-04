@@ -981,8 +981,9 @@ UCHAR GetNextByte(BUF *b);
 bool IsDhcpPacketForSpecificMac(UCHAR *data, UINT size, UCHAR *mac_address);
 
 ICMP_RESULT *IcmpEchoSendBySocket(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size, UINT timeout);
+ICMP_RESULT *IcmpEchoSendBySocket_v6Internal(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size, UINT timeout);
 ICMP_RESULT *IcmpEchoSend(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size, UINT timeout);
-ICMP_RESULT *IcmpParseResult(IP *dest_ip, USHORT src_id, USHORT src_seqno, UCHAR *recv_buffer, UINT recv_buffer_size);
+ICMP_RESULT *IcmpParseResult(IP *dest_ip, USHORT src_id, USHORT src_seqno, UCHAR *recv_buffer, UINT recv_buffer_size, IP *src_ip_v6);
 void IcmpFreeResult(ICMP_RESULT *r);
 
 USHORT IpChecksum(void *buf, UINT size);

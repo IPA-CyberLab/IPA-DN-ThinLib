@@ -122,20 +122,19 @@ void IcmpFreeResult(ICMP_RESULT *r)
 }
 
 // Parse the ICMP reply packet received from the socket
-ICMP_RESULT *IcmpParseResult(IP *dest_ip, USHORT src_id, USHORT src_seqno, UCHAR *recv_buffer, UINT recv_buffer_size)
+ICMP_RESULT *IcmpParseResult(IP *dest_ip, USHORT src_id, USHORT src_seqno, UCHAR *recv_buffer, UINT recv_buffer_size, IP *src_ip_v6)
 {
 	ICMP_RESULT *ret = NULL;
-	UINT i;
 	// Validate arguments
-	if (dest_ip == NULL || IsIP4(dest_ip) == false || recv_buffer == NULL || recv_buffer_size == 0)
+	if (dest_ip == NULL || recv_buffer == NULL || recv_buffer_size == 0)
 	{
 		return NULL;
 	}
 
-	i = recv_buffer_size;
-
-	if (true)
+	if (IsIP4(dest_ip))
 	{
+		UINT i = recv_buffer_size;
+
 		UINT ip_header_size = GetIpHeaderSize(recv_buffer, i);
 		if (ip_header_size >= sizeof(IPV4_HEADER) && (ip_header_size <= i))
 		{
@@ -230,6 +229,111 @@ ICMP_RESULT *IcmpParseResult(IP *dest_ip, USHORT src_id, USHORT src_seqno, UCHAR
 			}
 		}
 	}
+	else if (IsIP6(dest_ip))
+	{
+		//char tmp[MAX_SIZE];
+
+		//BinToStr(tmp, sizeof(tmp), recv_buffer, i);
+		//Print("%s\n", tmp);
+		UINT icmp_packet_size = recv_buffer_size;
+		ICMP_HEADER *icmp = (ICMP_HEADER *)(recv_buffer);
+
+		if (icmp_packet_size >= sizeof(ICMP_HEADER))
+		{
+			USHORT chksum = icmp->Checksum;
+			USHORT chksum2;
+			icmp->Checksum = 0;
+
+			chksum2 = IpChecksum(icmp, icmp_packet_size);
+
+			//if (chksum2 == chksum)
+			{
+				if (icmp->Type == ICMPV6_TYPE_ECHO_RESPONSE)
+				{
+					WHERE;
+					ICMP_ECHO *echo = (ICMP_ECHO *)(recv_buffer + sizeof(ICMP_HEADER));
+					if (icmp_packet_size >= (sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO)))
+					{
+						if (Endian16(echo->Identifier) == src_id && (src_seqno == 0 || Endian16(echo->SeqNo) == src_seqno))
+						{
+							IP ip;
+
+							CopyIP(&ip, src_ip_v6);
+
+							// Received the correct Echo response
+							ret = ZeroMalloc(sizeof(ICMP_RESULT));
+
+							ret->Ok = true;
+							ret->Ttl = 63;
+							ret->DataSize = icmp_packet_size - (sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO));
+							ret->Data = Clone(recv_buffer + sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO),
+								ret->DataSize);
+							Copy(&ret->IpAddress, &ip, sizeof(IP));
+						}
+					}
+				}
+				else if (icmp->Type == ICMPV6_TYPE_ECHO_REQUEST)
+				{
+					// Ignore because an Echo request should not arrive
+				}
+				else
+				{
+					// If an error is returned, compare to the copy of
+					// the ICMP packet last sent
+					if (recv_buffer_size >= (8 + sizeof(ICMP_HEADER) + sizeof(IPV6_HEADER)))
+					{
+						UCHAR *orig_ipv6 = recv_buffer + 8 + sizeof(ICMP_HEADER);
+						UINT orig_ipv6_size = recv_buffer_size - 8 - sizeof(ICMP_HEADER);
+
+						IPV6_HEADER_PACKET_INFO v6info = CLEAN;
+
+						if (ParsePacketIPv6Header(&v6info, orig_ipv6, orig_ipv6_size))
+						{
+							WHERE;
+						}
+					}
+					/*
+					if (icmp_packet_size >= (sizeof(ICMP_HEADER) + 8 + sizeof(IPV6_HEADER)))
+					{
+					}
+
+					IPV4_HEADER *orig_ipv4 = (IPV4_HEADER *)(recv_buffer + 8 + sizeof(ICMP_HEADER));
+					if (icmp_packet_size >= (sizeof(ICMP_HEADER) + 8 + sizeof(IPV6_HEADER)))
+					{
+						UINT orig_ipv4_header_size = GetIpHeaderSize((UCHAR *)orig_ipv4, icmp_packet_size - 4 - sizeof(ICMP_HEADER));
+						if (orig_ipv4_header_size >= sizeof(IPV4_HEADER))
+						{
+							if ((IPV4_GET_VERSION(orig_ipv4) == 4) && (orig_ipv4->Protocol == IP_PROTO_ICMPV4))
+							{
+								if (icmp_packet_size >= (sizeof(ICMP_HEADER) + 4 + orig_ipv4_header_size + sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO)))
+								{
+									ICMP_HEADER *orig_icmp = (ICMP_HEADER *)(recv_buffer + ip_header_size + sizeof(ICMP_HEADER) + 4 + orig_ipv4_header_size);
+									ICMP_ECHO *orig_echo = (ICMP_ECHO *)(recv_buffer + ip_header_size + sizeof(ICMP_HEADER) + 4 + orig_ipv4_header_size + sizeof(ICMP_HEADER));
+
+									if (orig_icmp->Type == ICMP_TYPE_ECHO_REQUEST && orig_echo->Identifier == Endian16(src_id) && (src_seqno == 0 || orig_echo->SeqNo == Endian16(src_seqno)))
+									{
+										IP ip;
+
+										UINTToIP(&ip, ipv4->SrcIP);
+
+										ret = ZeroMalloc(sizeof(ICMP_RESULT));
+
+										ret->Type = icmp->Type;
+										ret->Code = icmp->Code;
+										ret->Ttl = ipv4->TimeToLive;
+										ret->DataSize = icmp_packet_size - (sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO));
+										ret->Data = Clone(recv_buffer + ip_header_size + sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO),
+											ret->DataSize);
+										Copy(&ret->IpAddress, &ip, sizeof(IP));
+									}
+								}
+							}
+						}
+					}*/
+				}
+			}
+		}
+	}
 
 	return ret;
 }
@@ -244,6 +348,10 @@ ICMP_RESULT *IcmpEchoSendBySocket(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size
 	UINT64 sent_tick;
 	UINT64 recv_tick;
 	// Validate arguments
+	if (IsIP6(dest_ip))
+	{
+		return IcmpEchoSendBySocket_v6Internal(dest_ip, ttl, data, size, timeout);
+	}
 	if (dest_ip == NULL || IsIP4(dest_ip) == false || (size != 0 && data == NULL))
 	{
 		return NULL;
@@ -323,7 +431,139 @@ ICMP_RESULT *IcmpEchoSendBySocket(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size
 
 					if (i != 0 && i != SOCK_LATER)
 					{
-						ret = IcmpParseResult(dest_ip, id, seq, recv_buffer, i);
+						ret = IcmpParseResult(dest_ip, id, seq, recv_buffer, i, NULL);
+
+						if (ret != NULL)
+						{
+							break;
+						}
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				if (interval == 0)
+				{
+					break;
+				}
+
+				if (ret != NULL)
+				{
+					break;
+				}
+			}
+
+			FreeInterruptManager(interrupt);
+
+			Free(recv_buffer);
+
+			if (ret == NULL)
+			{
+				ret = ZeroMalloc(sizeof(ICMP_RESULT));
+
+				ret->Timeout = true;
+			}
+		}
+
+		Free(send_buffer);
+		ReleaseSock(s);
+	}
+
+	return ret;
+}
+
+// Send the ICMP Echo (by a socket) (IPv6 Internal)
+ICMP_RESULT *IcmpEchoSendBySocket_v6Internal(IP *dest_ip, UCHAR ttl, UCHAR *data, UINT size, UINT timeout)
+{
+	SOCK *s;
+	ICMP_RESULT *ret = NULL;
+	USHORT id;
+	USHORT seq;
+	UINT64 sent_tick;
+	UINT64 recv_tick;
+	// Validate arguments
+	if (dest_ip == NULL || IsIP6(dest_ip) == false || (size != 0 && data == NULL))
+	{
+		return NULL;
+	}
+	if (ttl == 0)
+	{
+		ttl = 127;
+	}
+
+	s = NewUDP6(MAKE_SPECIAL_PORT(IP_PROTO_ICMPV6), NULL);
+	if (s != NULL)
+	{
+		// Construction of the ICMP packet
+		UCHAR *send_buffer;
+		UINT send_buffer_size = sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO) + size;
+		ICMP_HEADER *send_icmp_header;
+		ICMP_ECHO *send_icmp_echo;
+		UINT i;
+
+		id = Rand16();
+		if (id == 0)
+		{
+			id = 1;
+		}
+
+		seq = Rand16();
+		if (seq == 0)
+		{
+			seq = 1;
+		}
+
+		send_buffer = ZeroMalloc(send_buffer_size);
+
+		send_icmp_header = (ICMP_HEADER *)send_buffer;
+		send_icmp_header->Type = ICMPV6_TYPE_ECHO_REQUEST;
+
+		send_icmp_echo = (ICMP_ECHO *)(send_buffer + sizeof(ICMP_HEADER));
+		send_icmp_echo->Identifier = Endian16(id);
+		send_icmp_echo->SeqNo = Endian16(seq);
+
+		Copy(send_buffer + sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO), data, size);
+
+		send_icmp_header->Checksum = 0;
+
+		// Send an ICMP
+		SetTtl(s, ttl);
+		sent_tick = TickHighres64();
+		i = SendTo(s, dest_ip, MAKE_SPECIAL_PORT(IP_PROTO_ICMPV6), send_buffer, send_buffer_size);
+
+		if (i != 0 && i != INFINITE)
+		{
+			// ICMP response received
+			INTERRUPT_MANAGER *interrupt = NewInterruptManager();
+			UINT64 giveup_time = Tick64() + (UINT64)timeout;
+			UINT recv_buffer_size = (sizeof(IPV4_HEADER) + sizeof(ICMP_HEADER) + sizeof(ICMP_ECHO) + size + 64) * 2;
+			UCHAR *recv_buffer = Malloc(recv_buffer_size);
+
+			AddInterrupt(interrupt, giveup_time);
+
+			while (true)
+			{
+				UINT interval = GetNextIntervalForInterrupt(interrupt);
+				IP src_ip;
+				UINT src_port;
+				SOCKSET set;
+
+				InitSockSet(&set);
+				AddSockSet(&set, s);
+
+				Select(&set, interval, NULL, NULL);
+
+				while (true)
+				{
+					Zero(recv_buffer, recv_buffer_size);
+					i = RecvFrom(s, &src_ip, &src_port, recv_buffer, recv_buffer_size);
+					recv_tick = TickHighres64();
+
+					if (i != 0 && i != SOCK_LATER)
+					{
+						ret = IcmpParseResult(dest_ip, id, seq, recv_buffer, i, &src_ip);
 
 						if (ret != NULL)
 						{
