@@ -112,7 +112,7 @@ void SetMaxUnestablishedConnections(UINT num)
 		num = DEFAULT_MAX_UNESTABLISHED_CONNECTIONS;
 	}
 
-	max_unestablished_connections = MAX(num, max_connections_per_ip);
+	max_unestablished_connections = num;
 }
 
 // Get the maximum number of connections per IP address
@@ -128,7 +128,7 @@ void SetMaxConnectionsPerIp(UINT num)
 	{
 		num = DEFAULT_MAX_CONNECTIONS_PER_IP;
 	}
-	max_connections_per_ip = MAX(num, MIN_MAX_CONNECTIONS_PER_IP);
+	max_connections_per_ip = num;
 }
 
 // Enable the DoS defense

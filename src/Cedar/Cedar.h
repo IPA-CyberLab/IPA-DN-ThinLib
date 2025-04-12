@@ -436,11 +436,9 @@
 
 // Number of standard connections per IP address
 #define DEFAULT_MAX_CONNECTIONS_PER_IP	256
-#define MIN_MAX_CONNECTIONS_PER_IP	10		// Minimum value
 
 // Allowed number of outstanding connections
 #define	DEFAULT_MAX_UNESTABLISHED_CONNECTIONS	1000
-#define	MIN_MAX_UNESTABLISHED_CONNECTIONS	30	// Minimum value
 
 
 //////////////////////////////////////////////////////////////////////

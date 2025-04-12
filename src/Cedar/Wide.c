@@ -2328,6 +2328,53 @@ void WideLogMain(WIDE* w, char *format, va_list args)
 		InsertUnicodeRecord(w->WideLog, buf);
 	}
 
+	if (w != NULL && w->WideSysLog != NULL)
+	{
+		UINT buf4_tmp_size = 4096 * sizeof(wchar_t);
+		wchar_t *buf4 = ZeroMalloc(buf4_tmp_size);
+		char machine_name[64] = CLEAN;
+		GetMachineName(machine_name, sizeof(machine_name));
+
+		if (IsFilledStr(w->WideSysLogPrefix))
+		{
+			UniStrCatA(buf4, buf4_tmp_size, w->WideSysLogPrefix);
+			UniStrCat(buf4, buf4_tmp_size, L" ");
+		}
+
+		if (w->WideSysLogAddHostname)
+		{
+			UniStrCat(buf4, buf4_tmp_size, L"(");
+			UniStrCatA(buf4, buf4_tmp_size, machine_name);
+			UniStrCat(buf4, buf4_tmp_size, L") ");
+		}
+
+		if (w->WideSysLogAddMacAddress && IsFilledStr(w->WideSysLogAddMacAddress_Str))
+		{
+			UniStrCat(buf4, buf4_tmp_size, L"[MacAddress: ");
+			UniStrCatA(buf4, buf4_tmp_size, w->WideSysLogAddMacAddress_Str);
+			UniStrCat(buf4, buf4_tmp_size, L"] ");
+		}
+
+		if (w->WideSysLogAddIpAddress)
+		{
+			IP ip = CLEAN;
+			if (GetLastLocalIpEx(&ip, false, false))
+			{
+				char ipstr[64] = CLEAN;
+				IPToStr(ipstr, sizeof(ipstr), &ip);
+				UniStrCat(buf4, buf4_tmp_size, L"[IPAddress: ");
+				UniStrCatA(buf4, buf4_tmp_size, ipstr);
+				UniStrCat(buf4, buf4_tmp_size, L"] ");
+			}
+		}
+
+		UniStrCat(buf4, buf4_tmp_size, buf);
+
+		SendSysLog(w->WideSysLog, buf4);
+
+		Free(buf4);
+	}
+
 	if (w == NULL || (w->Flags & WIDE_FLAG_NO_LOG) == 0)
 	{
 		Debug("WIDE_LOG: %S\n", buf);
@@ -2360,6 +2407,53 @@ void WideUnicodeLogEx(WIDE *w, char *prefix, wchar_t *str)
 	if (w != NULL && w->WideLog != NULL)
 	{
 		InsertUnicodeRecord(w->WideLog, buf);
+	}
+
+	if (w != NULL && w->WideSysLog != NULL)
+	{
+		UINT buf4_tmp_size = 4096 * sizeof(wchar_t);
+		wchar_t *buf4 = ZeroMalloc(buf4_tmp_size);
+		char machine_name[64] = CLEAN;
+		GetMachineName(machine_name, sizeof(machine_name));
+
+		if (IsFilledStr(w->WideSysLogPrefix))
+		{
+			UniStrCatA(buf4, buf4_tmp_size, w->WideSysLogPrefix);
+			UniStrCat(buf4, buf4_tmp_size, L" ");
+		}
+
+		if (w->WideSysLogAddHostname)
+		{
+			UniStrCat(buf4, buf4_tmp_size, L"(");
+			UniStrCatA(buf4, buf4_tmp_size, machine_name);
+			UniStrCat(buf4, buf4_tmp_size, L") ");
+		}
+
+		if (w->WideSysLogAddMacAddress && IsFilledStr(w->WideSysLogAddMacAddress_Str))
+		{
+			UniStrCat(buf4, buf4_tmp_size, L"[MacAddress: ");
+			UniStrCatA(buf4, buf4_tmp_size, w->WideSysLogAddMacAddress_Str);
+			UniStrCat(buf4, buf4_tmp_size, L"] ");
+		}
+
+		if (w->WideSysLogAddIpAddress)
+		{
+			IP ip = CLEAN;
+			if (GetLastLocalIpEx(&ip, false, false))
+			{
+				char ipstr[64] = CLEAN;
+				IPToStr(ipstr, sizeof(ipstr), &ip);
+				UniStrCat(buf4, buf4_tmp_size, L"[IPAddress: ");
+				UniStrCatA(buf4, buf4_tmp_size, ipstr);
+				UniStrCat(buf4, buf4_tmp_size, L"] ");
+			}
+		}
+
+		UniStrCat(buf4, buf4_tmp_size, buf);
+
+		SendSysLog(w->WideSysLog, buf4);
+
+		Free(buf4);
 	}
 
 	if (w == NULL || (w->Flags & WIDE_FLAG_NO_LOG) == 0)
@@ -3207,8 +3301,8 @@ void WideGatePackGateInfo(PACK *p, WT *wt)
 	// MAC アドレス
 	if (IsEmptyStr(wt->WanMacAddress))
 	{
-		UCHAR mac[6];
-		char tmp[64] = {0};
+		UCHAR mac[6] = CLEAN;
+		char tmp[64] = CLEAN;
 
 		if (LinuxGetWanMacAddress(mac))
 		{
@@ -4231,6 +4325,18 @@ WIDE *WideGateStart()
 		}
 
 		save_log = INT_TO_BOOL(IniIntValue(o, "SaveLog"));
+
+		UINT dos_max_unestablished_connections = IniIntValue(o, "DosProtection_MaxUnestablishedConnections");
+		if (dos_max_unestablished_connections != 0)
+		{
+			SetMaxUnestablishedConnections(dos_max_unestablished_connections);
+		}
+
+		UINT dos_max_connections_per_ip = IniIntValue(o, "DosProtection_MaxConnectionsPerIp");
+		if (dos_max_connections_per_ip != 0)
+		{
+			SetMaxConnectionsPerIp(dos_max_connections_per_ip);
+		}
 	}
 
 	if (port == 0)
@@ -4240,45 +4346,96 @@ WIDE *WideGateStart()
 
 	if (save_log)
 	{
+		// ディスクにログを保存
 		w->WideLog = NewLog(WIDE_GATE_LOG_DIRNAME, "gate", LOG_SWITCH_DAY);
 		w->WideLog->Flush = w->IsStandaloneMode;
-
-		char ssl_lib_ver[MAX_PATH] = CLEAN;
-
-		GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
-
-		WideLog(w, "-------------------- Start Thin Gate System --------------------");
-		WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
-		WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
-		WideLog(w, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
-			BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
-		WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
-		WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
-		WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
-
-		OS_INFO* os = GetOsInfo();
-		if (os != NULL)
-		{
-			WideLog(w, "OsType: %u", os->OsType);
-			WideLog(w, "OsServicePack: %u", os->OsServicePack);
-			WideLog(w, "OsSystemName: %s", os->OsSystemName);
-			WideLog(w, "OsProductName: %s", os->OsProductName);
-			WideLog(w, "OsVendorName: %s", os->OsVendorName);
-			WideLog(w, "OsVersion: %s", os->OsVersion);
-			WideLog(w, "KernelName: %s", os->KernelName);
-			WideLog(w, "KernelVersion: %s", os->KernelVersion);
-		}
-
-		MEMINFO mem = CLEAN;
-		GetMemInfo(&mem);
-
-		WideLog(w, "Memory - TotalMemory: %I64u", mem.TotalMemory);
-		WideLog(w, "Memory - UsedMemory: %I64u", mem.UsedMemory);
-		WideLog(w, "Memory - FreeMemory: %I64u", mem.FreeMemory);
-		WideLog(w, "Memory - TotalPhys: %I64u", mem.TotalPhys);
-		WideLog(w, "Memory - UsedPhys: %I64u", mem.UsedPhys);
-		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 	}
+
+	if (o != NULL)
+	{
+		char *syslog_host = IniStrValue(o, "SysLogHostname");
+		UINT syslog_port = IniIntValue(o, "SysLogPort");
+
+		if (IsFilledStr(syslog_host) && syslog_port != 0)
+		{
+			// Syslog にログを送付
+			w->WideSysLog = NewSysLog(syslog_host, syslog_port);
+
+			char *tmp1 = IniStrValue(o, "SysLogPrefix");
+			if (IsFilledStr(tmp1))
+			{
+				StrCpy(w->WideSysLogPrefix, sizeof(w->WideSysLogPrefix), tmp1);
+			}
+
+			w->WideSysLogAddHostname = IniBoolValue(o, "SysLogAddHostname");
+			w->WideSysLogAddMacAddress = IniBoolValue(o, "SysLogAddMacAddress");
+			w->WideSysLogAddIpAddress = IniBoolValue(o, "SysLogAddIpAddress");
+
+			if (w->WideSysLogAddIpAddress)
+			{
+				// IP アドレスの取得
+				IP ip_dummy = CLEAN;
+				GetMyPrivateIP(&ip_dummy, false);
+			}
+
+			// MAC アドレスの取得
+			if (w->WideSysLogAddMacAddress)
+			{
+				UCHAR mac[6] = CLEAN;
+				char tmp[64] = CLEAN;
+
+				if (LinuxGetWanMacAddress(mac))
+				{
+					MacToStr(tmp, sizeof(tmp), mac);
+					ReplaceStr(tmp, sizeof(tmp), tmp, "-", ":");
+				}
+
+				if (IsEmptyStr(tmp))
+				{
+					StrCpy(tmp, sizeof(tmp), "-");
+				}
+
+				StrCpy(w->WideSysLogAddMacAddress_Str, sizeof(w->WideSysLogAddMacAddress_Str), tmp);
+			}
+			StrCpy(w->WideSysLogAddMacAddress_Str, sizeof(w->WideSysLogAddMacAddress_Str), "00:aa:bb:cc:dd:ee");
+		}
+	}
+
+	char ssl_lib_ver[MAX_PATH] = CLEAN;
+
+	GetSslLibVersion(ssl_lib_ver, sizeof(ssl_lib_ver));
+
+	WideLog(w, "-------------------- Start Thin Gate System --------------------");
+	WideLog(w, "CEDAR_VER: %u", CEDAR_VER);
+	WideLog(w, "CEDAR_BUILD: %u", CEDAR_BUILD);
+	WideLog(w, "BUILD_DATE: %04u/%02u/%02u %02u:%02u:%02u", BUILD_DATE_Y, BUILD_DATE_M, BUILD_DATE_D,
+		BUILD_DATE_HO, BUILD_DATE_MI, BUILD_DATE_SE);
+	WideLog(w, "THINLIB_COMMIT_ID: %s", THINLIB_COMMIT_ID);
+	WideLog(w, "THINLIB_VER_LABEL: %s", THINLIB_VER_LABEL);
+	WideLog(w, "SSL_LIB_VER: %s", ssl_lib_ver);
+
+	OS_INFO* os = GetOsInfo();
+	if (os != NULL)
+	{
+		WideLog(w, "OsType: %u", os->OsType);
+		WideLog(w, "OsServicePack: %u", os->OsServicePack);
+		WideLog(w, "OsSystemName: %s", os->OsSystemName);
+		WideLog(w, "OsProductName: %s", os->OsProductName);
+		WideLog(w, "OsVendorName: %s", os->OsVendorName);
+		WideLog(w, "OsVersion: %s", os->OsVersion);
+		WideLog(w, "KernelName: %s", os->KernelName);
+		WideLog(w, "KernelVersion: %s", os->KernelVersion);
+	}
+
+	MEMINFO mem = CLEAN;
+	GetMemInfo(&mem);
+
+	WideLog(w, "Memory - TotalMemory: %I64u", mem.TotalMemory);
+	WideLog(w, "Memory - UsedMemory: %I64u", mem.UsedMemory);
+	WideLog(w, "Memory - FreeMemory: %I64u", mem.FreeMemory);
+	WideLog(w, "Memory - TotalPhys: %I64u", mem.TotalPhys);
+	WideLog(w, "Memory - UsedPhys: %I64u", mem.UsedPhys);
+	WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 
 	// Set WT for server logging functions
 	w->wt->Cedar->WtForServerLog = w->wt;
@@ -4509,6 +4666,8 @@ void WideGateStopEx(WIDE* wide, bool daemon_force_exit)
 	WideLog(wide, "-------------------- Stop Thin Gate System --------------------");
 
 	FreeLog(wide->WideLog);
+
+	FreeSysLog(wide->WideSysLog);
 
 	DeleteCounter(wide->SessionAddDelCriticalCounter);
 

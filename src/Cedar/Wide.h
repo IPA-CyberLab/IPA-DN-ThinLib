@@ -251,6 +251,12 @@ struct WIDE
 	UINT Flags;
 
 	LOG* WideLog;
+	SLOG *WideSysLog;
+	char WideSysLogPrefix[MAX_PATH];
+	bool WideSysLogAddHostname;
+	bool WideSysLogAddIpAddress;
+	bool WideSysLogAddMacAddress;
+	char WideSysLogAddMacAddress_Str[64];
 
 	// WideClient
 	char RecvUrl[MAX_PATH];

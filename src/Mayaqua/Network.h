@@ -1753,6 +1753,7 @@ bool IsIPAddressInSameLocalNetwork(IP *a);
 
 void SetLastLocalIp(IP *ip);
 bool GetLastLocalIp(IP *ip, bool ipv6);
+bool GetLastLocalIpEx(IP *ip, bool ipv6, bool guess_local_if_ip_by_api);
 
 bool IsIPPrivate(IP *ip);
 bool IsIPLocalOrPrivate(IP *ip);

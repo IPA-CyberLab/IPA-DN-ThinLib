@@ -17846,6 +17846,10 @@ void SetLastLocalIp(IP *ip)
 
 bool GetLastLocalIp(IP *ip, bool ipv6)
 {
+	return GetLastLocalIpEx(ip, ipv6, true);
+}
+bool GetLastLocalIpEx(IP *ip, bool ipv6, bool guess_local_if_ip_by_api) 
+{
 	if (ip == NULL)
 	{
 		return false;
@@ -17877,9 +17881,12 @@ bool GetLastLocalIp(IP *ip, bool ipv6)
 
 	if (ret == false)
 	{
-		GetCurrentGlobalIPGuess(ip, ipv6);
+		if (guess_local_if_ip_by_api)
+		{
+			GetCurrentGlobalIPGuess(ip, ipv6);
 
-		ret = !IsZeroIP(ip);
+			ret = !IsZeroIP(ip);
+		}
 	}
 
 	return ret;
