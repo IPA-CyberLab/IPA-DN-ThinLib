@@ -10,11 +10,17 @@
 ** BETA VERSION UNDER DEVELOPMENT, INCOMPLETE AND BUGGY. USE AT YOUR OWN RISK. Ver 1.0 is scheduled to be released during November 2021. We strongly recommend that you wait until Ver 1.0 is released. ** - This Git repository contains the source code and documentation for the open source version of the Thin Telework System which is under development. 2021-10-31 by Daiyuu Nobori.
 
 
-## [Current Version] rc2
+## [Current Version] rc2fix1
 
 ## rc3 の機能追加予定 (予告編)
 rc3 には、次の機能を追加予定です。これは、シン・テレワークシステムの一応の完成版のリリース前における、最後の重要な機能追加となる予定です。
 1. ZTTP (Zero Trust Tunneling Protocol) を実装する予定です。ZTTP は、最近のゼロトラスト製品として流行し始めている、クラウド型 HTTPS プロキシサーバー機能 (SSL 通信を中間者攻撃の手法を用いて復号化するもの) において、シン・テレワークシステムの通信が不正な通信であるとみなされて検出され、遮断されてしまうリスクを回避するために、通信内容を二重に SSL で暗号化することにより、外側の SSL が中間的に解読されても、内側の SSL の内容・属性が全く分からないようにするための機能です。これにより、一部の企業で利用されている HTTPS プロキシサーバーにおいて、シン・テレワークシステムの通信がうまく確立しない問題を解決することができます。ZTTP は、デフォルトで OFF になっていますが、ユーザーが選択的に ON にすることができます。
+
+## rc2fix1 (rc2 の不具合修正) - 2025/04/13
+1. 中継ゲートウェイの ThinGate.ini の設定で、SaveLog オプションを有効にしているにもかかわらず、TCP リスナー関係のログ (例: DoS 攻撃対策機能の動作状況のログ) がローカルの gate_log に記録されない問題を修正しました。
+2. ThinGate.ini ファイルにおいて、DoS 攻撃対策機能を有効にしている場合 (DisableDoSProtection が 1 に設定されている場合)、DoS 攻撃防止機能が有効な場合の詳細設定を可能にしました。DosProtection_MaxUnestablishedConnections (ゲートウェイ全体において許容される未確立の (すなわち、中途半端な) TCP コネクション数の最大数) および DosProtection_MaxConnectionsPerIp (単一の接続元 IP アドレスから同時に確立を許容する TCP コネクション数の最大数) の値を整数値で指定できるようになりました。
+3. デバッグログのリモート syslog サーバーへの転送機能を実装しました。ログをリモート syslog サーバーに転送する場合は SysLogHostname に転送先 syslog サーバーの IP アドレスを記載し、SysLogPort に転送先 syslog サーバーの UDP ポート番号を記載することができるようになりました。詳しくは ThinGate.ini 設定ファイルの SysLogHostname, SysLogPort, SysLogPrefix, SysLogAddHostname, SysLogAddMacAddress および SysLogAddIpAddress オプションをご参照ください。
+
 
 ## rc2 (Release Candidate 2: リリース直前の候補 2) - 2023/06/19
 1. シン・ファイアウォール機能を追加しました。シン・ファイアウォール機能は、シン・テレワークシステム サーバー機能に付属しています。シン・ファイアウォール機能に関する詳細は、シン・ファイアウォール機能の設定ファイル (サーバー設定ツールからボタンをクリックして簡単にアクセスできます。) をご参照ください。なお、シン・ファイアウォール機能は、標準状態で開始されておらず、ユーザーが明示的な操作を行い動作を開始するまでは動作しないようになっています。また、ソースコードの `src/Vars/VarsActivePatch.h` の `Vars_ActivePatch_AddBool("DisableThinFirewallSystem", false);` の設定値を `true` に変更することにより、シン・ファイアウォールシステム機能を完全に無効化することができます。
