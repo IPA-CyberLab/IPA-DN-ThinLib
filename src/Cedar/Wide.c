@@ -4397,7 +4397,6 @@ WIDE *WideGateStart()
 
 				StrCpy(w->WideSysLogAddMacAddress_Str, sizeof(w->WideSysLogAddMacAddress_Str), tmp);
 			}
-			StrCpy(w->WideSysLogAddMacAddress_Str, sizeof(w->WideSysLogAddMacAddress_Str), "00:aa:bb:cc:dd:ee");
 		}
 	}
 
