@@ -962,6 +962,10 @@ void WriteServerLog(CEDAR *c, wchar_t *str)
 	}
 
 #ifdef	CEDAR_DESKVPN
+	if (c->WtForServerLog != NULL)
+	{
+		WtUnicodeLogEx(c->WtForServerLog, "Engine", str);
+	}
 	return;
 #endif	// CEDAR_DESKVPN
 

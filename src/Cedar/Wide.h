@@ -461,6 +461,9 @@ void WideLogEx(WIDE* w, char* prefix, char* format, ...);
 void WtLog(WT* wt, char* format, ...);
 void WtLogEx(WT* wt, char* prefix, char* format, ...);
 
+void WtUnicodeLogEx(WT *wt, char *prefix, wchar_t *str);
+void WideUnicodeLogEx(WIDE *w, char *prefix, wchar_t *str);
+
 void WtSessionLog(TSESSION *s, char* format, ...);
 
 void WideLogMain(WIDE* w, char* format, va_list args);

@@ -1000,6 +1000,7 @@ typedef struct CEDAR
 	UINT FifoBudget;				// Fifo budget
 	SSL_ACCEPT_SETTINGS SslAcceptSettings;	// SSL Accept Settings
 	char OpenVPNDefaultClientOption[MAX_SIZE];	// OpenVPN Default Client Option String
+	struct WT *WtForServerLog;		// WT for server logging functions
 } CEDAR;
 
 // Type of CEDAR

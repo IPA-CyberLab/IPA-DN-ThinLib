@@ -2337,6 +2337,39 @@ void WideLogMain(WIDE* w, char *format, va_list args)
 	Free(buf);
 }
 
+void WtUnicodeLogEx(WT *wt, char *prefix, wchar_t *str)
+{
+	if (wt == NULL)
+	{
+		return;
+	}
+	WideUnicodeLogEx(wt->Wide, prefix, str);
+}
+void WideUnicodeLogEx(WIDE *w, char *prefix, wchar_t *str) 
+{
+	UINT buf_tmp_size = 4096 * sizeof(wchar_t);
+	if (w == NULL || prefix == NULL || str == NULL)
+	{
+		return;
+	}
+
+	wchar_t *buf = ZeroMalloc(buf_tmp_size);
+
+	UniFormat(buf, buf_tmp_size, L"[%S] %s", prefix, str);
+
+	if (w != NULL && w->WideLog != NULL)
+	{
+		InsertUnicodeRecord(w->WideLog, buf);
+	}
+
+	if (w == NULL || (w->Flags & WIDE_FLAG_NO_LOG) == 0)
+	{
+		UniDebug(L"WIDE_LOG: %s\n", buf);
+	}
+
+	Free(buf);
+}
+
 // Server の停止
 void WideServerStop(WIDE *w)
 {
@@ -4247,6 +4280,9 @@ WIDE *WideGateStart()
 		WideLog(w, "Memory - FreePhys: %I64u", mem.FreePhys);
 	}
 
+	// Set WT for server logging functions
+	w->wt->Cedar->WtForServerLog = w->wt;
+
 	if (false) // TODO  ZTTP_Test
 	{
 		// ZTTP 中継ゲートウェイ機能を開始
@@ -4453,6 +4489,9 @@ void WideGateStopEx(WIDE* wide, bool daemon_force_exit)
 
 	// ZTTP 中継ゲートウェイ機能を停止
 	FreeZttpGw(wide->wt->ZttpGw);
+
+	// Unset WT for server logging functions
+	wide->wt->Cedar->WtForServerLog = NULL;
 
 	ReleaseWt(wide->wt);
 
