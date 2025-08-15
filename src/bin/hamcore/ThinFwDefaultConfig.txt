@@ -917,6 +917,7 @@ trusted_client C:\windows\System32\smartscreen.exe
 trusted_client C:\Windows\System32\backgroundTaskHost.exe
 trusted_client C:\Windows\System32\pacjsworker.exe
 trusted_client C:\Windows\System32\dfsrs.exe
+trusted_client C:\Windows\System32\snmp.exe
 trusted_client C:\Program Files\Windows Defender\MpCmdRun.exe
 
 # Zscaler 社のゼロトラスト製品のトンネル通信サービス
