@@ -3875,24 +3875,27 @@ bool SwInstallMain(SW* sw, WIZARD_PAGE* wp, SW_COMPONENT* c)
 		goto LABEL_CLEANUP;
 	}
 
-	if (c->Id == SW_CMP_THIN_SERVER || c->Id == SW_CMP_THIN_SERVER_NS)
+	if (sw->IsSystemMode && MsIsNt())
 	{
-		if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
+		if (c->Id == SW_CMP_THIN_SERVER || c->Id == SW_CMP_THIN_SERVER_NS)
 		{
-			BUF *local_thinconfig_buf = ReadDumpW(L"@ThinFirewall_Config.ini");
-			if (local_thinconfig_buf != NULL)
+			if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
 			{
-				char *eof_tag = "[END_OF_FILE]";
-
-				if (SearchBin(local_thinconfig_buf->Buf, 0, local_thinconfig_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+				BUF *local_thinconfig_buf = ReadDumpW(L"@ThinFirewall_Config.ini");
+				if (local_thinconfig_buf != NULL)
 				{
-					wchar_t real_filename[MAX_PATH] = CLEAN;
-					CombinePathW(real_filename, sizeof(real_filename), sw->InstallDir, L"ThinFirewall_Config\\ThinFirewall_Config.ini");
+					char *eof_tag = "[END_OF_FILE]";
 
-					TfInstallDefaultConfig(real_filename, false, true, local_thinconfig_buf, "");
+					if (SearchBin(local_thinconfig_buf->Buf, 0, local_thinconfig_buf->Size, eof_tag, StrLen(eof_tag)) != INFINITE)
+					{
+						wchar_t real_filename[MAX_PATH] = CLEAN;
+						CombinePathW(real_filename, sizeof(real_filename), sw->InstallDir, L"ThinFirewall_Config\\ThinFirewall_Config.ini");
+
+						TfInstallDefaultConfig(real_filename, false, true, local_thinconfig_buf, "");
+					}
+
+					FreeBuf(local_thinconfig_buf);
 				}
-
-				FreeBuf(local_thinconfig_buf);
 			}
 		}
 	}

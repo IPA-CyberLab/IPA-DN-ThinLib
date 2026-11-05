@@ -3954,6 +3954,8 @@ UINT DtGetStatus(DS *ds, RPC_DS_STATUS *t)
 
 	t->ThinFwIsConfigFileExists = IsFileExistsW(t->ThinFwConfigFilePath);
 
+	t->IsThinFwAvailable = (ds->ThinFw != NULL);
+
 	return ERR_NO_ERROR;
 #else   // OS_WIN32
 	return ERR_NOT_SUPPORTED;
@@ -5682,7 +5684,7 @@ DS *NewDs(bool is_user_mode, bool force_share_disable)
 	StrToUni(tfs.SettingFileName, sizeof(tfs.SettingFileName), TF_DEFAULT_CONFIG_NAME);
 	Format(tfs.AppTitle, sizeof(tfs.AppTitle), "Thin Firewall System with %s", DESK_PUBLISHER_NAME_ANSI);
 
-	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
+	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false && MsIsAdmin())
 	{
 		ds->ThinFw = TfStartService(&tfs);
 	}

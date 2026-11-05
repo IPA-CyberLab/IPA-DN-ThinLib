@@ -2317,11 +2317,16 @@ void DgMainDlgInit(HWND hWnd, DG *dg)
 	HFONT h, h2;
 	HMENU hMenu;
 	bool debug = true;
+	RPC_DS_STATUS ds_status;
 	// 引数チェック
 	if (hWnd == NULL || dg == NULL)
 	{
 		return;
 	}
+
+	Zero(&ds_status, sizeof(ds_status));
+
+	DtcGetStatus(dg->Rpc, &ds_status);
 
 	if (debug)
 	{
@@ -2395,7 +2400,7 @@ void DgMainDlgInit(HWND hWnd, DG *dg)
 		Hide(hWnd, S_WEBCLIENT);
 	}
 
-	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem"))
+	if (ds_status.IsThinFwAvailable == false)
 	{
 		Hide(hWnd, B_THINFW);
 		Hide(hWnd, S_THINFW);

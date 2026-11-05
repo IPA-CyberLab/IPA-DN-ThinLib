@@ -106,6 +106,7 @@ struct RPC_DS_STATUS
 	wchar_t ThinFwConfigFilePath[MAX_PATH];
 	wchar_t ThinFwLogDirPath[MAX_PATH];
 	bool ThinFwIsConfigFileExists;
+	bool IsThinFwAvailable;
 
 	// ポリシー規制の状態
 	bool EnforceOtp;

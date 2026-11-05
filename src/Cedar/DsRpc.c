@@ -287,6 +287,7 @@ void InRpcDsStatus(RPC_DS_STATUS *t, PACK *p)
 	PackGetUniStr(p, "ThinFwConfigFilePath", t->ThinFwConfigFilePath, sizeof(t->ThinFwConfigFilePath));
 	PackGetUniStr(p, "ThinFwLogDirPath", t->ThinFwLogDirPath, sizeof(t->ThinFwLogDirPath));
 	t->ThinFwIsConfigFileExists = PackGetBool(p, "ThinFwIsConfigFileExists");
+	t->IsThinFwAvailable = PackGetBool(p, "IsThinFwAvailable");
 }
 void OutRpcDsStatus(PACK *p, RPC_DS_STATUS *t)
 {
@@ -347,6 +348,7 @@ void OutRpcDsStatus(PACK *p, RPC_DS_STATUS *t)
 	PackAddUniStr(p, "ThinFwConfigFilePath", t->ThinFwConfigFilePath);
 	PackAddUniStr(p, "ThinFwLogDirPath", t->ThinFwLogDirPath);
 	PackAddBool(p, "ThinFwIsConfigFileExists", t->ThinFwIsConfigFileExists);
+	PackAddBool(p, "IsThinFwAvailable", t->IsThinFwAvailable);
 }
 
 // INTERNET_SETTING
