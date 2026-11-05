@@ -5115,7 +5115,7 @@ S_35					The operation of the thin firewall system can be started, stopped, and 
 IDOK					How to start, stop, and configure the operation of Thin Firewall System
 B_LOG					View &log files
 IDCANCEL				&Close
-S_36					Thin Firewall System was developed in 2023 as a result of a system management need in the Cyber Technology Laboratory of the IPA Industrial Cyber Security Center.
+S_36					Thin Firewall System is a prototype developed by IPA CyberLab to detect and block cyberattacks and malware. It does not guarantee complete protection.
 
 
 PREFIX					D_DG_THINFW_INIT

@@ -5684,7 +5684,7 @@ DS *NewDs(bool is_user_mode, bool force_share_disable)
 	StrToUni(tfs.SettingFileName, sizeof(tfs.SettingFileName), TF_DEFAULT_CONFIG_NAME);
 	Format(tfs.AppTitle, sizeof(tfs.AppTitle), "Thin Firewall System with %s", DESK_PUBLISHER_NAME_ANSI);
 
-	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false && MsIsAdmin())
+	if (Vars_ActivePatch_GetBool("DisableThinFirewallSystem") == false)
 	{
 		ds->ThinFw = TfStartService(&tfs);
 	}
