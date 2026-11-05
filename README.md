@@ -10,11 +10,17 @@
 ** BETA VERSION UNDER DEVELOPMENT, INCOMPLETE AND BUGGY. USE AT YOUR OWN RISK. Ver 1.0 is scheduled to be released during November 2021. We strongly recommend that you wait until Ver 1.0 is released. ** - This Git repository contains the source code and documentation for the open source version of the Thin Telework System which is under development. 2021-10-31 by Daiyuu Nobori.
 
 
-## [Current Version] rc2fix1
+## [Current Version] beta9
 
-## rc3 の機能追加予定 (予告編)
-rc3 には、次の機能を追加予定です。これは、シン・テレワークシステムの一応の完成版のリリース前における、最後の重要な機能追加となる予定です。
+## 今後の機能追加予定 (予告編)
+シン・テレワークシステムには、今後、次の機能を追加予定です。これは、シン・テレワークシステムの一応の完成版のリリース前における、最後の重要な機能追加となる予定です。
 1. ZTTP (Zero Trust Tunneling Protocol) を実装する予定です。ZTTP は、最近のゼロトラスト製品として流行し始めている、クラウド型 HTTPS プロキシサーバー機能 (SSL 通信を中間者攻撃の手法を用いて復号化するもの) において、シン・テレワークシステムの通信が不正な通信であるとみなされて検出され、遮断されてしまうリスクを回避するために、通信内容を二重に SSL で暗号化することにより、外側の SSL が中間的に解読されても、内側の SSL の内容・属性が全く分からないようにするための機能です。これにより、一部の企業で利用されている HTTPS プロキシサーバーにおいて、シン・テレワークシステムの通信がうまく確立しない問題を解決することができます。ZTTP は、デフォルトで OFF になっていますが、ユーザーが選択的に ON にすることができます。
+2. サーバーとクライアントとの間の SSH 鍵を用いた強力なエンドツーエンド暗号化 (E2EE) 機能。
+
+## beta9 - 2026/11/05
+1. これまで開発してきた「シン・ファイアウォール機能」を公開することにしました。
+2. クライアントアプリにおいて、システムモードを用いている場合、Windows 11 の 2026/11 頃のアップデートにおいて、接続先コンピュータ ID が検証できない旨の警告メッセージが表示される問題を解決しました。
+3. OpenSSL のバージョンを OpenSSL 3.0.22 にバージョンアップしました。なお、今後の OpenSSL のバージョン追従について、3.5 系にメジャーバージョンアップするか、3.0.x に重要な脆弱性パッチを当て続けるか、どちらが良いか検討中です。
 
 ## rc2fix1 (rc2 の不具合修正) - 2025/04/13
 1. 中継ゲートウェイの ThinGate.ini の設定で、SaveLog オプションを有効にしているにもかかわらず、TCP リスナー関係のログ (例: DoS 攻撃対策機能の動作状況のログ) がローカルの gate_log に記録されない問題を修正しました。
