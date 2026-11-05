@@ -4781,7 +4781,9 @@ C_ENABLE_RELAX			Enab&le 'relax mode' before starting telework
 C_SHOW_THEEND			Show the "Thank you for your work" screen after finish the session
 C_MULTIDISPLAY			Use the virtual &multi-display feature, if available
 C_LIMITED_FW			Start Strong Isolation Firewall in Government Security Mode
-
+C_AUTH_OVERRIDE_SET     Automatically s&et the registry value to fix an issue where mstsc on Windows 11 displays a connection warning
+S_AUTH_OVERRIDE         Temporarily or permanently sets the "AuthenticationLevelOverride" registry value to fix an issue where mstsc displays a connection warning after the November 2026 update for Windows 11.
+C_AUTH_OVERRIDE_RESTORE Make the above setting temporary and restore the ori&ginal setting when the connection ends
 
 PREFIX					D_DU_DOWNLOAD
 CAPTION					Downloading Remote Desktop Client Software

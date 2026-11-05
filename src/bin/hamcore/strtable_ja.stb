@@ -4789,6 +4789,9 @@ C_ENABLE_RELAX				テレワーク作業開始前の 「リラックス・モー�
 C_SHOW_THEEND				テレワーク作業完了後に 「お疲れさまでした」 画面を表示します(&T)
 C_MULTIDISPLAY			使用可能な場合は、仮想マルチディスプレイ機能を使用(&M)
 C_LIMITED_FW			接続先のサーバーが「行政情報システム適合モード」の場合、「完全閉域化ファイアウォール」を起動
+C_AUTH_OVERRIDE_SET     Windows 11 の mstsc で接続警告が表示される不具合を解消するレジストリ値を自動設定する(&E)
+S_AUTH_OVERRIDE         Windows 11 の 2026 年 11 月更新の mstsc に接続警告が表示される不具合を解消するためのレジストリ値 「AuthenticationLevelOverride」 を一時的/恒久的に設定します。
+C_AUTH_OVERRIDE_RESTORE 上記は一時的な設定にとどめ、接続終了時に設定解除する(&G)
 
 
 PREFIX					D_DU_DOWNLOAD
