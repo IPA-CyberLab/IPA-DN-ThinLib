@@ -1112,6 +1112,7 @@
 #define B_THINFW                        1548
 #define S_THINFW                        1549
 #define S_THINFW_ICON                   1550
+#define S_AUTH_OVERRIDE                 1551
 #define B_ONLINE                        1655
 #define D_NM_CONNECT                    1998
 #define D_NM_MAIN                       1999
@@ -1288,7 +1289,10 @@
 #define C_VER2                          2552
 #define B_DENY                          2553
 #define E_PCID                          2554
+#define C_AUTH_OVERRIDE_SET             2554
 #define E_ADDRESS                       2555
+#define C_NO_FQDN3                      2555
+#define C_AUTH_OVERRIDE_RESTORE         2555
 #define E_PATH                          2556
 #define E_USERAGENT                     2556
 #define E_EULA                          2557
@@ -1496,7 +1500,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        255
 #define _APS_NEXT_COMMAND_VALUE         40111
-#define _APS_NEXT_CONTROL_VALUE         1551
+#define _APS_NEXT_CONTROL_VALUE         1552
 #define _APS_NEXT_SYMED_VALUE           102
 #endif
 #endif

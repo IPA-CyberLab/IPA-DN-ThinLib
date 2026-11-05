@@ -2172,6 +2172,8 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 		UINT urdp_version = 0;
 		bool gov_fw_ok = true;
 		bool need_to_watch_gov_fw = false;
+		bool set_reg_authentication_level_override = false;
+		UINT old_authentication_level_override_value = INFINITE;
 
 		if (MsRegReadInt(REG_CURRENT_USER, DU_REGKEY, DU_ENABLE_RELAX_KEY_NAME) && Vars_ActivePatch_GetBool("ThinTelework_DisableOmakeFunctions") == false)
 		{
@@ -2242,6 +2244,39 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 
 				if (ret == ERR_NO_ERROR)
 				{
+					if (dc->MstscDisableAuthOverrideSet == false)
+					{
+						if (MsRegIsValueEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+							"AuthenticationLevelOverride", false, true) == false)
+						{
+							set_reg_authentication_level_override = true;
+							old_authentication_level_override_value = INFINITE;
+						}
+						else
+						{
+							old_authentication_level_override_value = MsRegReadIntEx2(REG_CURRENT_USER,
+								"Software\\Microsoft\\Terminal Server Client", "AuthenticationLevelOverride",
+								false, true);
+
+							if (old_authentication_level_override_value != 0)
+							{
+								set_reg_authentication_level_override = true;
+							}
+						}
+
+						if (set_reg_authentication_level_override)
+						{
+							if (dc->MstscDisableAuthOverriseRestore == false)
+							{
+								MsRegWriteIntEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+									"DeskClient_Flag_AuthenticationLevelOverrideOriginalValue", old_authentication_level_override_value, false, true);
+							}
+
+							MsRegWriteIntEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+								"AuthenticationLevelOverride", 0, false, true);
+						}
+					}
+
 					process = DcRunMstsc(dc, exe, arg, s->IsShareDisabled, &process_id, &rdp_file_write_failed);
 				}
 			}
@@ -2416,6 +2451,40 @@ void DuConnectMain(HWND hWnd, DU_MAIN *t, char *pcid)
 								DuTheEndDlg(NULL);
 							}
 						}
+					}
+				}
+			}
+
+			if (s->ServiceType == DESK_SERVICE_RDP)
+			{
+				if (dc->MstscDisableAuthOverrideSet == false && dc->MstscDisableAuthOverriseRestore == false)
+				{
+					if (MsRegIsValueEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+						"DeskClient_Flag_AuthenticationLevelOverrideOriginalValue", false, true))
+					{
+						if (MsRegIsValueEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+							"AuthenticationLevelOverride", false, true))
+						{
+							UINT current_value = MsRegReadIntEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+								"AuthenticationLevelOverride", false, true);
+
+							UINT old_state = MsRegReadIntEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+								"DeskClient_Flag_AuthenticationLevelOverrideOriginalValue", false, true);
+
+							if (old_state == INFINITE)
+							{
+								MsRegDeleteValueEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+									"AuthenticationLevelOverride", false, true);
+							}
+							else
+							{
+								MsRegWriteIntEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+									"AuthenticationLevelOverride", old_state, false, true);
+							}
+						}
+
+						MsRegDeleteValueEx2(REG_CURRENT_USER, "Software\\Microsoft\\Terminal Server Client",
+							"DeskClient_Flag_AuthenticationLevelOverrideOriginalValue", false, true);
 					}
 				}
 			}
@@ -2678,6 +2747,9 @@ void DuOptionDlgInit(HWND hWnd, DU_OPTION *t)
 
 	Check(hWnd, C_NO_FQDN, dc->MstscNoFqdn);
 
+	Check(hWnd, C_AUTH_OVERRIDE_SET, !dc->MstscDisableAuthOverrideSet);
+	Check(hWnd, C_AUTH_OVERRIDE_RESTORE, !dc->MstscDisableAuthOverriseRestore);
+
 	Check(hWnd, C_CHECK_CERT, WideGetDontCheckCert(dc->Wide) ? false : true);
 
 	Check(hWnd, C_VER2, dc->EnableVersion2);
@@ -2744,6 +2816,9 @@ void DuOptionDlgUpdate(HWND hWnd, DU_OPTION *t)
 
 	SetEnable(hWnd, E_PARAM, IsChecked(hWnd, C_ADDPARAM));
 	SetEnable(hWnd, S_PARAMS, IsChecked(hWnd, C_ADDPARAM));
+
+	SetEnable(hWnd, C_AUTH_OVERRIDE_RESTORE, IsChecked(hWnd, C_AUTH_OVERRIDE_SET));
+	SetEnable(hWnd, S_AUTH_OVERRIDE, IsChecked(hWnd, C_AUTH_OVERRIDE_SET));
 
 	if (IsChecked(hWnd, C_USERPATH))
 	{
@@ -2850,6 +2925,9 @@ void DuOptionDlgOnOk(HWND hWnd, DU_OPTION *t)
 
 	dc->DisableLimitedFw = !IsChecked(hWnd, C_LIMITED_FW);
 
+	dc->MstscDisableAuthOverrideSet = !IsChecked(hWnd, C_AUTH_OVERRIDE_SET);
+	dc->MstscDisableAuthOverriseRestore = !IsChecked(hWnd, C_AUTH_OVERRIDE_RESTORE);
+
 	DcSaveConfig(dc);
 
 	// お疲れ様でした
@@ -2926,6 +3004,10 @@ UINT DuOptionDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, void *pa
 				FocusEx(hWnd, E_PATH);
 				Free(ret);
 			}
+			break;
+
+		case C_AUTH_OVERRIDE_SET:
+			DuOptionDlgUpdate(hWnd, t);
 			break;
 
 		case IDOK:

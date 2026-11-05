@@ -14829,7 +14829,7 @@ void MsDeleteTempDir()
 			if (UniStrCmpi(data_w.cFileName, L".") != 0 &&
 				UniStrCmpi(data_w.cFileName, L"..") != 0)
 			{
-				if (data_w.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				if (data_w.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && ((data_w.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)) 
 				{
 					if (UniStartWith(data_w.cFileName, L"VPN_") && UniStrLen(data_w.cFileName) == 8)
 					{
@@ -14938,10 +14938,14 @@ void MsDeleteAllFile(char *dir)
 				{
 					DeleteFile(fullpath);
 				}
-				else
+				else if ((data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
 				{
 					MsDeleteAllFile(fullpath);
-					RemoveDirectory(fullpath);
+					RemoveDirectoryA(fullpath);
+				}
+				else
+				{
+					RemoveDirectoryA(fullpath);
 				}
 			}
 		} while (FindNextFile(h, &data));
@@ -14989,9 +14993,13 @@ void MsDeleteAllFileW(wchar_t *dir)
 				{
 					DeleteFileW(fullpath);
 				}
-				else
+				else if ((data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
 				{
 					MsDeleteAllFileW(fullpath);
+					RemoveDirectoryW(fullpath);
+				}
+				else
+				{
 					RemoveDirectoryW(fullpath);
 				}
 			}

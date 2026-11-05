@@ -1768,6 +1768,9 @@ void DcLoadConfig(DC *dc, FOLDER *root)
 	dc->DisableLimitedFw = CfgGetBool(root, "DisableLimitedFw");
 	dc->MstscNoFqdn = CfgGetBool(root, "MstscNoFqdn");
 
+	dc->MstscDisableAuthOverrideSet = CfgGetBool(root, "MstscDisableAuthOverrideSet");
+	dc->MstscDisableAuthOverriseRestore = CfgGetBool(root, "MstscDisableAuthOverriseRestore");
+
 	if (Vars_ActivePatch_GetBool("ThinTelework_EnforceStrongSecurity") == false)
 	{
 		dc->MstscUseShareClipboard = CfgIsItem(root, "MstscUseShareClipboard") ? CfgGetBool(root, "MstscUseShareClipboard") : true;
@@ -1931,6 +1934,9 @@ void DcSaveConfig(DC *dc)
 	CfgAddBool(root, "DisableMultiDisplay", dc->DisableMultiDisplay);
 	CfgAddBool(root, "DisableLimitedFw", dc->DisableLimitedFw);
 	CfgAddBool(root, "MstscNoFqdn", dc->MstscNoFqdn);
+
+	CfgAddBool(root, "MstscDisableAuthOverrideSet", dc->MstscDisableAuthOverrideSet);
+	CfgAddBool(root, "MstscDisableAuthOverriseRestore", dc->MstscDisableAuthOverriseRestore);
 
 	if (Vars_ActivePatch_GetBool("ThinTelework_EnforceStrongSecurity") == false)
 	{

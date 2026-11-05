@@ -252,6 +252,8 @@ struct DC
 	bool EnableVersion2;				// URDP2 を有効にする
 	bool DisableMultiDisplay;			// マルチディスプレイ機能を無効にする
 	bool DisableLimitedFw;				// 完全閉域化ファイアウォールを無効にする
+	bool MstscDisableAuthOverrideSet;	// Windows 11 の mstsc で接続警告が表示される不具合を解消するレジストリ値を自動設定 "しない"
+	bool MstscDisableAuthOverriseRestore; // 「Windows 11 の mstsc で接続警告が表示される不具合を解消するレジストリ値を自動設定」は一時的な設定にとどめ、接続終了時に設定解除する
 };
 
 // 関数プロトタイプ宣言
